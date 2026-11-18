@@ -1,0 +1,67 @@
+import type { SessionNotification } from '@agentclientprotocol/sdk';
+import { selectOptions, type OmpClient } from './acp.js';
+import { updateTurn } from './session-updates.js';
+import { parseUsage, type SavedSession, type Turn } from './state.js';
+
+export function applyNotification(
+  client: OmpClient,
+  session: SavedSession | undefined,
+  current: Turn | undefined,
+  update: SessionNotification['update'],
+  commands: string[],
+  connecting: boolean,
+) {
+  if (update.sessionUpdate === 'config_option_update') client.configOptions = update.configOptions;
+  if (update.sessionUpdate === 'available_commands_update')
+    commands = update.availableCommands.map((command) => command.name);
+  applyUsage(session, update, connecting);
+  if (current) {
+    const model = client.configOptions.find((option) => option.id === 'model')?.currentValue;
+    updateTurn(current, update, commands, typeof model === 'string' ? model : undefined);
+  }
+  return commands;
+}
+
+function applyUsage(
+  session: SavedSession | undefined,
+  update: SessionNotification['update'],
+  connecting: boolean,
+) {
+  if (update.sessionUpdate !== 'usage_update') return;
+  const usage = parseUsage(update);
+  if (session && usage && !connecting) session.usage = usage;
+}
+
+export function connectionPresentation(
+  client: OmpClient | undefined,
+  session: SavedSession | undefined,
+) {
+  return {
+    connected: Boolean(client?.connected),
+    canHistory: Boolean(
+      client?.connected && client.historyAvailable && !session?.historyTransition,
+    ),
+  };
+}
+
+export function sessionPresentation(session: SavedSession | undefined) {
+  return {
+    sessionId: session?.id,
+    session: session?.label ?? 'New Session',
+    turns: session?.turns ?? [],
+    context: session?.usage,
+  };
+}
+
+export function configPresentation(client: OmpClient | undefined) {
+  return (client?.configOptions ?? [])
+    .filter((option) => ['model', 'thinking'].includes(option.id))
+    .map((option) => ({
+      id: option.id,
+      name: option.name,
+      value: option.currentValue,
+      options: selectOptions(option).filter(
+        (choice) => option.id !== 'model' || choice.value.startsWith('github-copilot/'),
+      ),
+    }));
+}

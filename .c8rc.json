@@ -1,0 +1,8 @@
+{
+  "all": true,
+  "src": [".quality-build", "media"],
+  "include": ["**/*.js"],
+  "exclude": ["**/test/**", "**/node_modules/**"],
+  "reporter": ["json", "html", "lcovonly", "text-summary"],
+  "reports-dir": "reports/coverage"
+}

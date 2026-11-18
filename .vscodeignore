@@ -1,0 +1,11 @@
+**
+!package.json
+!README.md
+!LICENSE
+!THIRD_PARTY_NOTICES.txt
+!dist/extension.cjs
+!dist/omp-guard.js
+!dist/review.js
+!dist/webview/*.js
+!dist/webview/*.css
+!dist/webview/*.ttf

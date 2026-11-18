@@ -1,0 +1,22 @@
+.review-hunks {
+  margin: 0 8px 4px 26px;
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+}
+.review-hunks summary {
+  cursor: pointer;
+  padding: 3px 0;
+}
+.review-hunks ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.review-hunks li {
+  display: flex;
+  min-height: 26px;
+  align-items: center;
+  justify-content: space-between;
+  border-left: 1px solid var(--vscode-widget-border);
+  padding-left: 8px;
+}

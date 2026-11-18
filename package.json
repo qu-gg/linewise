@@ -1,0 +1,247 @@
+{
+  "name": "vs-omp",
+  "displayName": "OMP",
+  "description": "A workspace-local OMP coding agent with inspectable changes.",
+  "version": "0.0.1",
+  "private": true,
+  "publisher": "vs-omp-local",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/qu-gg/vs-omp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/qu-gg/vs-omp/issues"
+  },
+  "homepage": "https://github.com/qu-gg/vs-omp#readme",
+  "type": "module",
+  "main": "./dist/extension.cjs",
+  "categories": [
+    "AI",
+    "Other"
+  ],
+  "extensionKind": [
+    "workspace"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false
+    },
+    "virtualWorkspaces": {
+      "supported": false
+    }
+  },
+  "contributes": {
+    "viewsContainers": {
+      "secondarySidebar": [
+        {
+          "id": "omp",
+          "title": "OMP",
+          "icon": "$(comment-discussion)"
+        }
+      ]
+    },
+    "views": {
+      "omp": [
+        {
+          "type": "webview",
+          "id": "omp.chat",
+          "name": "OMP"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "omp.open",
+        "title": "OMP: Open Chat"
+      },
+      {
+        "command": "omp.preflight",
+        "title": "OMP: Check Runtime"
+      },
+      {
+        "command": "omp.newSession",
+        "title": "OMP: New Session",
+        "icon": "$(add)"
+      },
+      {
+        "command": "omp.sessions",
+        "title": "OMP: Switch Session",
+        "icon": "$(history)"
+      },
+      {
+        "command": "omp.stop",
+        "title": "OMP: Stop",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "omp.showOutput",
+        "title": "OMP: Show Output"
+      },
+      {
+        "command": "omp.inspectStorage",
+        "title": "OMP: Inspect Storage"
+      },
+      {
+        "command": "omp.exportSession",
+        "title": "OMP: Export Session"
+      },
+      {
+        "command": "omp.deleteSession",
+        "title": "OMP: Delete Session"
+      },
+      {
+        "command": "omp.applyRetention",
+        "title": "OMP: Apply Retention Plan"
+      },
+      {
+        "command": "omp.cleanupStorage",
+        "title": "OMP: Clean Orphaned Storage"
+      }
+    ],
+    "configuration": {
+      "title": "OMP",
+      "properties": {
+        "omp.executablePath": {
+          "type": "string",
+          "default": "omp",
+          "scope": "machine",
+          "description": "User-installed OMP 18.21.0 executable on the workspace host."
+        },
+        "omp.model": {
+          "type": "string",
+          "default": "",
+          "description": "Preferred OMP github-copilot model ID; empty uses a valid configured Copilot model or gpt-4.1."
+        },
+        "omp.permissions.defaultMode": {
+          "type": "string",
+          "enum": [
+            "rules",
+            "ask"
+          ],
+          "default": "rules",
+          "scope": "machine",
+          "description": "Default command permission mode for each connection. Allow All is available only through the session picker and is never persisted. Workspace overrides are ignored."
+        },
+        "omp.permissions.useDefaultRules": {
+          "type": "boolean",
+          "default": true,
+          "scope": "machine",
+          "description": "Use conservative built-in read-only approvals and sensitive-command prompts. Explicit user rules override these defaults. Workspace overrides are ignored. This is not a sandbox."
+        },
+        "omp.permissions.commandRules": {
+          "type": "array",
+          "default": [],
+          "scope": "machine",
+          "maxItems": 128,
+          "markdownDescription": "User-owned command rules. `deny` blocks; `ask` requires confirmation even in Allow All; `allow` permits matching commands in Command Rules mode. Deny wins over ask, and ask wins over allow, regardless of order. Commands are literal argument arrays, matched at command boundaries, not shell globs or regular expressions. Workspace overrides are ignored. Unknown syntax still prompts; this is not a security boundary.",
+          "items": {
+            "type": "object",
+            "required": [
+              "command",
+              "action"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "command": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 32,
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 1024
+                }
+              },
+              "action": {
+                "type": "string",
+                "enum": [
+                  "allow",
+                  "ask",
+                  "deny"
+                ]
+              },
+              "match": {
+                "type": "string",
+                "enum": [
+                  "prefix",
+                  "exact"
+                ],
+                "default": "prefix"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "engines": {
+    "vscode": "^1.146.0"
+  },
+  "scripts": {
+    "build": "node node_modules/typescript-compiler/bin/tsc -p . && node scripts/build.mjs",
+    "vscode:prepublish": "npm run build",
+    "typecheck": "node node_modules/typescript-compiler/bin/tsc -p . --noEmit",
+    "lint": "node scripts/quality.mjs lint",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check": "node scripts/quality.mjs check",
+    "check:native": "node scripts/quality.mjs native",
+    "check:release": "node scripts/quality.mjs release",
+    "test:quality": "node scripts/quality.mjs selftest",
+    "test:coverage": "node scripts/quality.mjs coverage",
+    "metrics": "node scripts/quality.mjs metrics",
+    "architecture": "node scripts/quality.mjs architecture",
+    "test:extension": "npm run build && node scripts/test-extension.mjs",
+    "test": "node scripts/quality.mjs test",
+    "spike:mutations": "npm run build && node scripts/mutation-spike.mjs",
+    "spike:handshake": "node scripts/acp-spike.mjs",
+    "package": "vsce package --no-dependencies --no-rewrite-relative-links"
+  },
+  "dependencies": {
+    "@agentclientprotocol/sdk": "2.7.0",
+    "@oh-my-pi/pi-natives": "18.21.0",
+    "@vscode/codicons": "^0.0.46-24",
+    "diff": "^8.0.4",
+    "dompurify": "^3.4.18",
+    "marked": "^15.0.12",
+    "shell-quote": "1.12.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@babel/core": "^8.0.0",
+    "@babel/eslint-parser": "8.1.2",
+    "@babel/parser": "^8.0.0",
+    "@eslint/js": "10.0.1",
+    "@types/jsdom": "^30.0.0",
+    "@types/node": "^18.19.130",
+    "@types/shell-quote": "1.7.5",
+    "@types/vscode": "^1.146.0",
+    "@vscode/test-electron": "^2.5.2",
+    "@vscode/vsce": "4.1.1",
+    "c8": "12.0.0",
+    "dependency-cruiser": "18.8.0",
+    "esbuild": "^0.28.2",
+    "eslint": "10.15.0",
+    "eslint-plugin-sonarjs": "4.2.2",
+    "globals": "^16.0.0",
+    "jsdom": "^31.0.1",
+    "playwright-core": "1.65.1",
+    "prettier": "3.10.1",
+    "typescript": "^6.0.0",
+    "typescript-compiler": "npm:typescript@^7.0.2",
+    "typhonjs-escomplex-module": "0.1.0"
+  },
+  "overrides": {
+    "@vscode/vsce": {
+      "minimatch": "^11.0.1"
+    },
+    "eslint-plugin-sonarjs": {
+      "minimatch": "^11.0.1"
+    },
+    "test-exclude": {
+      "glob": "^14.0.2",
+      "minimatch": "^11.0.1"
+    }
+  }
+}

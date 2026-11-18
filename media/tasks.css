@@ -1,0 +1,75 @@
+.dock-section {
+  background: var(--vscode-editor-background, var(--vscode-sideBar-background));
+  border-bottom: 1px solid var(--vscode-widget-border);
+  font-size: 11px;
+}
+.dock-section > summary {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 31px;
+  padding: 3px 6px 3px 8px;
+  color: var(--vscode-descriptionForeground);
+  cursor: pointer;
+}
+.dock-section > summary::before {
+  content: '\eab6';
+  font-family: codicon;
+  font-size: 12px;
+}
+.dock-section[open] > summary::before {
+  transform: rotate(90deg);
+}
+.dock-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+.task-count {
+  color: var(--vscode-descriptionForeground);
+  font-variant-numeric: tabular-nums;
+}
+.task-list ol {
+  list-style: none;
+  margin: 0 0 6px;
+  padding: 0 8px 0 10px;
+  max-height: 136px;
+  overflow: auto;
+}
+.task-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  min-height: 22px;
+  padding: 2px 0;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.task-list li > .codicon {
+  flex: 0 0 16px;
+}
+.task-in_progress > .codicon {
+  color: var(--vscode-progressBar-background);
+}
+.task-completed {
+  color: var(--vscode-descriptionForeground);
+}
+.task-completed > .codicon {
+  color: var(--vscode-testing-iconPassed);
+}
+.visually-hidden {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.plan {
+  background: transparent;
+  border: 0;
+  padding-left: 0;
+}

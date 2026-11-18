@@ -1,0 +1,54 @@
+export interface Provenance {
+  turnId?: string;
+  toolCallId?: string;
+  tool?: 'write' | 'edit';
+}
+
+export interface ReviewOperation extends Provenance {
+  kind: 'create' | 'edit' | 'delete' | 'rename';
+  at: number;
+}
+
+export interface Change {
+  id: string;
+  sessionId: string;
+  path: string;
+  before: string | null;
+  after: string | null;
+  state: 'applying' | 'pending' | 'conflict';
+  updatedAt: number;
+  destination?: { path: string; before: null; after: string };
+  intermediate?: string | null;
+  resolving?: boolean;
+  incomplete?: boolean;
+  hunkIds?: { id: string; signature: string }[];
+  hunkIntent?: { before: string; after: string; hunkIds: { id: string; signature: string }[] };
+  operations?: ReviewOperation[];
+}
+
+export function images(change: Change): Pick<Change, 'path' | 'before' | 'after'>[] {
+  return change.destination ? [change.destination, change] : [change];
+}
+
+export function changeKind(
+  before: string | null,
+  after: string | null,
+  moving = false,
+): ReviewOperation['kind'] {
+  if (moving) return 'rename';
+  if (before === null) return 'create';
+  return after === null ? 'delete' : 'edit';
+}
+
+export function operationHistory(
+  prior: Change | undefined,
+  before: string | null,
+  after: string | null,
+  provenance?: Provenance,
+  moving = false,
+): ReviewOperation[] {
+  return [
+    ...(prior?.operations ?? []),
+    { ...provenance, kind: changeKind(before, after, moving), at: Date.now() },
+  ].slice(-256);
+}

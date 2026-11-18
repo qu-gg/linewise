@@ -1,0 +1,9 @@
+node_modules/
+dist/
+coverage/
+reports/
+.spike/
+.quality-build/
+.local-dev/
+package-lock.json
+*.vsix

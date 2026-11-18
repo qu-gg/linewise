@@ -1,0 +1,179 @@
+{
+  "version": 1,
+  "profile": "unit",
+  "exceptions": {},
+  "coverageFloors": {
+    "media/accessibility.js": {
+      "min": 98.85,
+      "reason": "New production code requires at least eighty percent deterministic line coverage."
+    },
+    "media/approvals.js": {
+      "min": 100,
+      "reason": "New production code requires at least eighty percent deterministic line coverage."
+    },
+    "media/composer.js": {
+      "min": 100,
+      "reason": "New production code requires at least eighty percent deterministic line coverage."
+    },
+    "media/context-info.js": {
+      "min": 100,
+      "reason": "New production code requires at least eighty percent deterministic line coverage."
+    },
+    "media/main.js": {
+      "min": 100,
+      "reason": "Initial measured debt; no increases allowed without explicit review. Native and browser coverage remain separate gates."
+    },
+    "media/review.js": {
+      "min": 100,
+      "reason": "New production code requires at least eighty percent deterministic line coverage."
+    },
+    "media/tasks.js": {
+      "min": 100,
+      "reason": "New production code requires at least eighty percent deterministic line coverage."
+    },
+    "media/toolbar.js": {
+      "min": 100,
+      "reason": "New production code requires at least eighty percent deterministic line coverage."
+    },
+    "src/acp.ts": {
+      "min": 98.61,
+      "reason": "Initial measured debt; no increases allowed without explicit review. Native and browser coverage remain separate gates."
+    },
+    "src/approval-prompts.ts": {
+      "min": 100,
+      "reason": "New production code requires at least eighty percent deterministic line coverage."
+    },
+    "src/approvals.ts": {
+      "min": 100,
+      "reason": "New production code requires at least eighty percent deterministic line coverage."
+    },
+    "src/chat-view.ts": {
+      "min": 100,
+      "reason": "New production code requires at least eighty percent deterministic line coverage."
+    },
+    "src/context.ts": {
+      "min": 98.4,
+      "reason": "New production code requires at least eighty percent deterministic line coverage."
+    },
+    "src/conversation.ts": {
+      "min": 96.42,
+      "reason": "New production code requires at least eighty percent deterministic line coverage."
+    },
+    "src/extension.ts": {
+      "min": 98.99,
+      "reason": "Initial measured debt; no increases allowed without explicit review. Native and browser coverage remain separate gates."
+    },
+    "src/file-policy.ts": {
+      "min": 98.63,
+      "reason": "New production code requires at least eighty percent deterministic line coverage."
+    },
+    "src/follow-ups.ts": {
+      "min": 100,
+      "reason": "New production code requires at least eighty percent deterministic line coverage."
+    },
+    "src/history.ts": {
+      "min": 100,
+      "reason": "Initial measured debt; no increases allowed without explicit review. Native and browser coverage remain separate gates."
+    },
+    "src/host-activation.ts": {
+      "min": 92.72,
+      "reason": "New production code requires at least eighty percent deterministic line coverage."
+    },
+    "src/host-operations.ts": {
+      "min": 100,
+      "reason": "New production code requires at least eighty percent deterministic line coverage."
+    },
+    "src/host-tools.ts": {
+      "min": 99.72,
+      "reason": "New production code requires at least eighty percent deterministic line coverage."
+    },
+    "src/host-view.ts": {
+      "min": 98.22,
+      "reason": "New production code requires at least eighty percent deterministic line coverage."
+    },
+    "src/mutations.ts": {
+      "min": 94.91,
+      "reason": "New production code requires at least eighty percent deterministic line coverage."
+    },
+    "src/native-edit.ts": {
+      "min": 100,
+      "reason": "New production code requires at least eighty percent deterministic line coverage."
+    },
+    "src/omp-guard.ts": {
+      "min": 100,
+      "reason": "Initial measured debt; no increases allowed without explicit review. Native and browser coverage remain separate gates."
+    },
+    "src/path-guard.ts": {
+      "min": 100,
+      "reason": "New production code requires at least eighty percent deterministic line coverage."
+    },
+    "src/retention.ts": {
+      "min": 100,
+      "reason": "New production code requires at least eighty percent deterministic line coverage."
+    },
+    "src/review-hunks.ts": {
+      "min": 100,
+      "reason": "New production code requires at least eighty percent deterministic line coverage."
+    },
+    "src/review-presentation.ts": {
+      "min": 100,
+      "reason": "New production code requires at least eighty percent deterministic line coverage."
+    },
+    "src/review-types.ts": {
+      "min": 100,
+      "reason": "New production code requires at least eighty percent deterministic line coverage."
+    },
+    "src/review.ts": {
+      "min": 100,
+      "reason": "Initial measured debt; no increases allowed without explicit review. Native and browser coverage remain separate gates."
+    },
+    "src/session-presentation.ts": {
+      "min": 100,
+      "reason": "New production code requires at least eighty percent deterministic line coverage."
+    },
+    "src/session-prompt.ts": {
+      "min": 96.7,
+      "reason": "New production code requires at least eighty percent deterministic line coverage."
+    },
+    "src/session-start.ts": {
+      "min": 93.52,
+      "reason": "New production code requires at least eighty percent deterministic line coverage."
+    },
+    "src/session-updates.ts": {
+      "min": 100,
+      "reason": "New production code requires at least eighty percent deterministic line coverage."
+    },
+    "src/state.ts": {
+      "min": 99.76,
+      "reason": "Initial measured debt; no increases allowed without explicit review. Native and browser coverage remain separate gates."
+    },
+    "src/storage-files.ts": {
+      "min": 100,
+      "reason": "New production code requires at least eighty percent deterministic line coverage."
+    },
+    "src/storage-policy.ts": {
+      "min": 100,
+      "reason": "New production code requires at least eighty percent deterministic line coverage."
+    },
+    "src/storage-view.ts": {
+      "min": 100,
+      "reason": "New production code requires at least eighty percent deterministic line coverage."
+    },
+    "src/storage.ts": {
+      "min": 100,
+      "reason": "New production code requires at least eighty percent deterministic line coverage."
+    },
+    "src/terminal-policy.ts": {
+      "min": 96.95,
+      "reason": "New production code requires at least eighty percent deterministic line coverage."
+    },
+    "src/terminal.ts": {
+      "min": 99.02,
+      "reason": "New production code requires at least eighty percent deterministic line coverage."
+    },
+    "src/workspace.ts": {
+      "min": 100,
+      "reason": "Initial measured debt; no increases allowed without explicit review. Native and browser coverage remain separate gates."
+    }
+  }
+}
