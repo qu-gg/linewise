@@ -28,6 +28,11 @@ withdrawn upstream on 2026-11-18; fresh full and production audits report zero
 findings without dependency changes or suppressions. The audit remains a required
 gate for every candidate and publication; do not use `npm audit fix --force` blindly.
 
+Hosted candidate and preflight jobs pin Ubuntu 24.04, matching the accepted host's
+glibc 2.39 baseline. A moving runner can produce a PTY addon requiring a newer
+glibc even when Node-API is compatible. Changing this build baseline requires
+fresh exact-package acceptance on the intended local host.
+
 Local acceptance must run the full native release gate and extracted-VSIX tests
 against the exact candidate commit and package checksum. Native tests use the
 installed workbench/runtime and disposable fixture providers, not paid inference.

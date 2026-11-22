@@ -262,6 +262,7 @@ test('release workflow is manual-only, audit-blocked and isolates write permissi
   assert.equal(jobs.publish.needs, 'preflight');
   assert.ok(jobs.preflight.if.includes('inputs.approve_publication'));
   for (const name of ['candidate', 'preflight']) {
+    assert.equal(jobs[name]['runs-on'], 'ubuntu-24.04');
     assert.ok(jobs[name].if.includes("github.ref == 'refs/heads/main'"));
     assert.ok(jobs[name].steps.some((step) => step.run === 'npm audit --audit-level=moderate'));
     assert.ok(!jobs[name].permissions);
