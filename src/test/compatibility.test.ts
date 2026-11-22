@@ -137,6 +137,7 @@ test('runtime probe pins supported OMP and host routes session selection and adv
   assert.equal(host.status()!.sessionId, id);
   await host.request({ type: 'permissions' });
   assert.equal(host.status()!.permissions, 'rules');
+  await assert.rejects(host.request({ type: 'terminals' }), /No active prompt owns/);
   await transport.client!.handlers.update({
     sessionId: transport.client!.sessionId,
     update: {
@@ -151,4 +152,42 @@ test('runtime probe pins supported OMP and host routes session selection and adv
   await host.request({ type: 'inspectContext' });
   assert.match(prompt, /\/context/);
   assert.equal(host.status()!.busy, false);
+});
+
+test('workspace-root changes cancel the active prompt before accepting more host work', async (context) => {
+  const host = await setup(context);
+  await host.request({ type: 'connect' });
+  let release!: () => void;
+  let entered!: () => void;
+  let cancellations = 0;
+  const started = new Promise<void>((resolve) => {
+    entered = resolve;
+  });
+  transport.onPrompt = async () => {
+    await new Promise<void>((resolve) => {
+      release = resolve;
+      entered();
+    });
+  };
+  transport.onCancel = () => {
+    cancellations++;
+    release();
+  };
+  const pending = host.request({ type: 'prompt', text: 'Wait for root transition' });
+  await started;
+  try {
+    fixture.roots = [];
+    for (const listener of fixture.rootListeners) await listener();
+    assert.equal(cancellations, 1);
+    await pending;
+    assert.equal(host.status()!.busy, false);
+    assert.equal(host.status()!.turns.at(-1)!.status, 'cancelled');
+    await assert.rejects(
+      host.request({ type: 'prompt', text: 'No root' }),
+      /trusted workspace root is no longer available/,
+    );
+  } finally {
+    release();
+    await pending;
+  }
 });

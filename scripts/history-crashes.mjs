@@ -7,6 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { chromium } from 'playwright-core';
+import { ensureTestDisplay } from './test-display.mjs';
 
 function signalFile(target) {
   return new Promise((resolve, reject) => {
@@ -60,6 +61,7 @@ function launchCrashHost(current, workspace, userData, stage) {
       '--new-window',
       '--no-sandbox',
       '--disable-gpu',
+      '--password-store=basic',
       '--skip-welcome',
       '--skip-release-notes',
       '--disable-workspace-trust',
@@ -67,6 +69,8 @@ function launchCrashHost(current, workspace, userData, stage) {
       '--remote-debugging-port=0',
       '--user-data-dir',
       userData,
+      '--shared-data-dir',
+      path.join(current, 'shared-data'),
       '--extensions-dir',
       path.join(current, 'extensions'),
     ],
@@ -93,6 +97,10 @@ async function crashCase(directory, stage) {
   const userData = path.join(current, 'user-data');
   await mkdir(workspace, { recursive: true });
   await mkdir(userData);
+  await cp(path.join(process.cwd(), 'dist/playwright'), path.join(current, 'playwright'), {
+    recursive: true,
+  });
+  await cp(path.join(process.cwd(), 'dist/pty'), path.join(current, 'pty'), { recursive: true });
   await cp(
     path.join(process.cwd(), 'dist/test/crash-host'),
     path.join(current, 'extensions', 'vs-omp-fixture.vs-omp-crash-test-0.0.0'),
@@ -157,8 +165,10 @@ const allStages = [
 ];
 
 export async function runHistoryCrashes(stages = allStages) {
+  await ensureTestDisplay();
   const directory = await mkdtemp(path.join(os.tmpdir(), 'vs-omp-crashes-'));
   const results = [];
+  let passed = false;
   try {
     for (const stage of stages) {
       assert.ok(allStages.includes(stage), `Unknown crash stage: ${stage}`);
@@ -167,8 +177,10 @@ export async function runHistoryCrashes(stages = allStages) {
     }
     await mkdir('reports', { recursive: true });
     await writeFile('reports/history-crashes.json', JSON.stringify({ results }, null, 2));
+    passed = true;
   } finally {
-    await rm(directory, { recursive: true, force: true });
+    if (passed) await rm(directory, { recursive: true, force: true });
+    else console.error(`Retained failed crash-fixture evidence: ${directory}`);
   }
 }
 

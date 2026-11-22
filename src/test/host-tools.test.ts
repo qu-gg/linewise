@@ -2,11 +2,12 @@ import test from 'node:test';
 import type { TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import { register } from 'node:module';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { exchangeMutations, stagePermit } from '../mutations.js';
+import { PathGuard, ReviewJournal } from '../review.js';
 import type { RequestApproval } from '../approvals.js';
 import { fixture, reset, Uri } from './vscode-fixture.js';
 
@@ -341,8 +342,68 @@ test('host prompt brokers native images and permits only the exact one-shot call
       (await tools.permission({ ...request, options: [] })).outcome.outcome,
       'cancelled',
     );
+    const shellId = `call_${randomUUID()}|../../${'opaque/+'.repeat(70)}`;
+    const command = 'ls -la';
+    await stagePermit(directory, shellId, JSON.stringify({ command }));
+    assert.ok(
+      (await readdir(directory))
+        .filter((file) => file.startsWith('permit-'))
+        .every((file) => /^permit-[a-f0-9]{64}\.json$/.test(file)),
+    );
+    const shell = {
+      ...request,
+      toolCall: {
+        toolCallId: shellId,
+        rawInput: { command, timeout: null, cwd, pty: false },
+      },
+    };
+    assert.deepEqual((await tools.permission(shell)).outcome, {
+      outcome: 'selected',
+      optionId: 'once',
+    });
+    assert.equal((await tools.permission(shell)).outcome.outcome, 'cancelled');
   });
   await assert.rejects(exchangeMutations(directory, []), /ENOENT/);
+});
+
+test('outside read authorization includes directories and is consumed once by text reads', async (context) => {
+  const { scope, cwd } = await setup(context);
+  const outside = await mkdtemp(path.join(os.tmpdir(), 'omp-outside-read-'));
+  context.after(() => rm(outside, { recursive: true, force: true }));
+  const target = path.join(outside, 'arbitrary.extension');
+  await writeFile(target, 'outside text');
+  await mkdir(path.join(outside, 'folder'));
+  let allowed = false;
+  const approvals: string[] = [];
+  const journal = new ReviewJournal(
+    { read: (target) => readFile(target, 'utf8'), replace: async () => {} },
+    new PathGuard([cwd]),
+    async (operation) => {
+      approvals.push(operation.path);
+      return allowed;
+    },
+    async () => {},
+  );
+  const directory = path.join(cwd, 'private', 'mutations');
+  const tools = new HostTools(
+    { normalize: async (_target, content) => content },
+    journal,
+    directory,
+  );
+  await tools.run(scope, async () => {
+    await assert.rejects(
+      exchangeMutations(directory, [{ op: 'access', path: outside }]),
+      /not approved/,
+    );
+    allowed = true;
+    await exchangeMutations(directory, [{ op: 'access', path: path.join(outside, 'folder') }]);
+    await exchangeMutations(directory, [{ op: 'access', path: target }]);
+    assert.equal(await tools.read({ sessionId: scope.sessionId, path: target }), 'outside text');
+    assert.equal(approvals.length, 3);
+    allowed = false;
+    await assert.rejects(tools.read({ sessionId: scope.sessionId, path: target }), /not approved/);
+  });
+  await assert.rejects(tools.read({ sessionId: scope.sessionId, path: target }), /active prompt/);
 });
 
 test('host brokers read/delete/move preimages and rejects executable side effects and missing adapters', async (context) => {

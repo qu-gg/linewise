@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { readdirSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
+import { ensureTestDisplay } from './test-display.mjs';
 
 const [major, minor] = process.versions.node.split('.').map(Number);
 if (major < 24 || (major === 24 && minor < 11)) {
@@ -20,15 +21,35 @@ const tasks = {
   lint: () => run('node_modules/eslint/bin/eslint.js', ['.', '--max-warnings', '0']),
   format: () => run('node_modules/prettier/bin/prettier.cjs', ['--check', '.']),
   typecheck: () => run('node_modules/typescript-compiler/bin/tsc', ['-p', '.', '--noEmit']),
-  selftest: () => run('--test', ['quality/metrics.test.mjs', 'quality/architecture.test.mjs']),
+  selftest: () =>
+    run('--test', [
+      'quality/metrics.test.mjs',
+      'quality/architecture.test.mjs',
+      'quality/release.test.mjs',
+      'quality/live.test.mjs',
+      'quality/live-transport.test.mjs',
+      'quality/customization.test.mjs',
+      'quality/test-display.test.mjs',
+    ]),
   coverage: () => run('scripts/coverage.mjs'),
   metrics: () => run('quality/metrics.mjs'),
   architecture: () => run('quality/architecture.mjs'),
 };
 
 function nativeTests() {
+  run('--test', ['quality/test-display.test.mjs', 'quality/test-display.integration.mjs']);
   run('node_modules/typescript-compiler/bin/tsc', ['-p', '.']);
   run('scripts/build.mjs');
+  run('--test', ['quality/live-transport.test.mjs', 'quality/customization.test.mjs'], {
+    ...process.env,
+    VS_OMP_NATIVE_TRANSPORT_TESTS: '1',
+    VS_OMP_NATIVE_CUSTOMIZATION_TESTS: '1',
+  });
+  run('scripts/search-probe.mjs');
+  run('scripts/test-provider.mjs');
+  run('scripts/terminal-probe.mjs');
+  run('scripts/terminal-lifecycle.mjs');
+  run('dist/test/browser.integration.js');
   run('scripts/acp-spike.mjs', [], {
     ...process.env,
     OMP_SPIKE_TERMINALS: '1',
@@ -36,7 +57,7 @@ function nativeTests() {
     OMP_SPIKE_PROMPT: '0',
     OMP_SPIKE_CONTEXT: '0',
   });
-  run('scripts/test-extension.mjs');
+  run('scripts/test-extension.mjs', [], { ...process.env, VS_OMP_LIVE_TESTS: undefined });
   run('scripts/history-crashes.mjs', [], { ...process.env, VS_OMP_CRASH_STAGES: undefined });
   run('scripts/acp-spike.mjs', [], {
     ...process.env,
@@ -67,11 +88,18 @@ function check() {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const command = process.argv[2] ?? 'check';
+  if (['native', 'release', 'live'].includes(command)) await ensureTestDisplay();
   if (tasks[command]) tasks[command]();
   else if (command === 'test') unitTests();
   else if (command === 'check') check();
   else if (command === 'native') nativeTests();
-  else if (command === 'release') {
+  else if (command === 'live') {
+    const { liveSettings } = await import('./live-guard.mjs');
+    liveSettings();
+    run('node_modules/typescript-compiler/bin/tsc', ['-p', '.']);
+    run('scripts/build.mjs');
+    run('scripts/test-extension.mjs');
+  } else if (command === 'release') {
     check();
     nativeTests();
   } else throw new Error(`Unknown quality command: ${command}`);

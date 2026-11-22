@@ -146,6 +146,39 @@ async function recoveryFixture(context: TestContext, stage: Stage) {
   return { host, fault, sent, source, document, target };
 }
 
+test('successful fork returns the selected prompt as a draft without generation or file/review changes', async (context) => {
+  const { host, sent, document, target } = await recoveryFixture(context, 'archive');
+  const before = host.storedState!();
+  const original = before.sessions.find((session) => session.id === before.activeSessionId)!;
+  const disk = structuredClone(fixture.disk.get(target));
+  const dirty = document.text;
+  const posted = context.mock.method(view.webview, 'postMessage');
+  const selected = host.status()!.turns[1]!;
+  await host.request({ type: 'forkTurn', id: selected.id, boundary: 'before' });
+  const saved = host.storedState!();
+  assert.notEqual(saved.activeSessionId, original.id);
+  assert.deepEqual(
+    saved.sessions.find((session) => session.id === original.id)!.turns,
+    original.turns,
+  );
+  assert.deepEqual(
+    host.status()!.turns.map((turn) => turn.prompt),
+    ['past'],
+  );
+  assert.deepEqual(sent, ['past', 'future']);
+  assert.deepEqual(saved.changes, before.changes);
+  assert.deepEqual(fixture.disk.get(target), disk);
+  assert.equal(document.text, dirty);
+  assert.equal(document.isDirty, true);
+  assert.ok(
+    posted.mock.calls.some(
+      (call) =>
+        JSON.stringify(call.arguments[0]) ===
+        JSON.stringify({ v: 1, type: 'draft', text: 'future' }),
+    ),
+  );
+});
+
 for (const stage of stages) {
   test(`history interruption at ${stage} reopens without replay or file/review changes`, async (context) => {
     const current = await recoveryFixture(context, stage);

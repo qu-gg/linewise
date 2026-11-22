@@ -52,13 +52,18 @@ test('permission control reflects host mode, requests the native picker and disa
     ['rules', 'Rules'],
     ['ask', 'Ask'],
     ['all', 'Allow All'],
+    ['yolo', 'YOLO'],
   ]) {
     update({ permissions });
     assert.equal(element('[data-action="permissions"]').textContent, label);
+    assert.equal(
+      element('[data-action="permissions"]').title,
+      `Command Permissions: ${permissions === 'all' ? 'Allow All Except Restrictions' : label}`,
+    );
     click('permissions');
     assert.deepEqual(messages.at(-1), { v: 1, type: 'permissions' });
   }
-  assert.match(element('[data-action="permissions"]').title, /Except Restrictions/);
+  assert.match(element('[data-action="permissions"]').title, /YOLO/);
   for (const status of [
     { busy: true },
     { busy: false, connected: false },
@@ -66,6 +71,21 @@ test('permission control reflects host mode, requests the native picker and disa
   ]) {
     update(status);
     assert.equal(element<HTMLButtonElement>('[data-action="permissions"]').disabled, true);
+  }
+});
+
+test('terminal picker focus restoration refuses stale, idle and disconnected messages', () => {
+  update({ connected: true, busy: true, sessionId: 'owner' });
+  element('#prompt').focus();
+  message({ type: 'focusTerminals', sessionId: 'foreign' });
+  assert.equal(dom.window.document.activeElement, element('#prompt'));
+  message({ type: 'focusTerminals', sessionId: 'owner' });
+  assert.equal(dom.window.document.activeElement, element('[data-action="terminals"]'));
+  for (const status of [{ busy: false }, { busy: true, connected: false }]) {
+    update(status);
+    element('#prompt').focus();
+    message({ type: 'focusTerminals', sessionId: 'owner' });
+    assert.notEqual(dom.window.document.activeElement, element('[data-action="terminals"]'));
   }
 });
 
@@ -153,6 +173,26 @@ test('model Markdown and prompt metadata cannot inject HTML, script links or eve
   assert.ok(element('time').getAttribute('datetime'));
 });
 
+test('Markdown tables retain semantic headers, rows, inline formatting and safe links', () => {
+  update({
+    turns: [
+      turn([
+        {
+          id: 'table',
+          kind: 'text',
+          text: '| Item | Status |\n| --- | --- |\n| **First** | [Ready](https://example.com) |\n| Second | Pending |',
+        },
+      ]),
+    ],
+  });
+  assert.equal(dom.window.document.querySelectorAll('.markdown table').length, 1);
+  assert.equal(dom.window.document.querySelectorAll('.markdown thead th').length, 2);
+  assert.equal(dom.window.document.querySelectorAll('.markdown tbody tr').length, 2);
+  assert.equal(element('.markdown td strong').textContent, 'First');
+  element<HTMLAnchorElement>('.markdown td a').click();
+  assert.deepEqual(messages.at(-1), { v: 1, type: 'link', href: 'https://example.com' });
+});
+
 test('history editing retains failed drafts, prevents duplicate send, and acknowledges success', () => {
   update({ turns: [turn()] });
   click('forkBefore');
@@ -226,7 +266,7 @@ test('disclosure clicks persist their state and historical prompts submit with E
   assert.equal(messages.at(-1)!.type, 'editPrompt');
 });
 
-test('hunk controls send opaque identities, escape provenance and disable mutation during work', () => {
+test('chat review remains file-level even when granular editor review data is available', () => {
   update({
     changes: [
       {
@@ -236,19 +276,36 @@ test('hunk controls send opaque identities, escape provenance and disable mutati
         kind: 'edit',
         added: 2,
         removed: 1,
-        hunks: [{ id: 'first', newStart: 10 }],
+        hunks: [
+          {
+            id: 'first',
+            oldStart: 9,
+            newStart: 10,
+            preview: [
+              ' context',
+              '-old',
+              '+<img src=x onerror=alert(1)>',
+              '\\ No newline at end of file',
+            ],
+            truncated: true,
+          },
+        ],
         operations: [{ kind: '<edit>', tool: '<script>', turn: 1, toolCallId: 'native-call' }],
       },
     ],
   });
-  for (const type of ['hunkReview', 'hunkKeep', 'hunkDiscard']) {
-    click(type);
-    assert.deepEqual(messages.at(-1), { v: 1, type, id: 'file', hunkId: 'first' });
-  }
+  assert.equal(
+    dom.window.document.querySelector('.inline-diff, .review-hunks, [data-hunk-id]'),
+    null,
+  );
   assert.equal(dom.window.document.querySelector('script, edit'), null);
-  assert.match(element('[data-disclosure="operations-file"]').textContent!, /Turn 1/);
+  assert.match(element('.file-counts').textContent!, /\+2-1/);
+  click('review');
+  assert.deepEqual(messages.at(-1), { v: 1, type: 'review', id: 'file' });
+  click('keep');
+  assert.deepEqual(messages.at(-1), { v: 1, type: 'keep', id: 'file' });
   update({ busy: true });
-  for (const type of ['hunkKeep', 'hunkDiscard'])
+  for (const type of ['keep', 'discard'])
     assert.equal(element<HTMLButtonElement>(`[data-action="${type}"]`).disabled, true);
 });
 
@@ -307,9 +364,42 @@ test('explicit context controls inspect and remove opaque snapshots without inje
     { v: 1, type: 'removeAttachment', id: 'snapshot' },
   ]);
   assert.equal(dom.window.document.querySelector('Problems'), null);
+  update({
+    attachments: [
+      { id: 'pixels', kind: 'image', label: '<chart.png>', uri: 'file:///workspace/chart.png' },
+    ],
+  });
+  assert.ok(dom.window.document.querySelector('.attachment-inspect .codicon-file-media'));
+  assert.equal(dom.window.document.querySelector('chart'), null);
+  click('inspectAttachment');
+  assert.deepEqual(messages.at(-1), { v: 1, type: 'inspectAttachment', id: 'pixels' });
   update({ busy: true });
   assert.equal(element<HTMLButtonElement>('[data-action="attachContext"]').disabled, true);
   assert.equal(element<HTMLButtonElement>('[data-action="removeAttachment"]').disabled, true);
+});
+
+test('active file context offer is explicit, escaped, dismissible and blocked during work', () => {
+  update({ contextOffer: { id: 'offer', uri: 'file:///workspace/long.txt', label: '<long>.txt' } });
+  assert.equal(element('.context-offer [data-action="attachOffer"]').textContent, '<long>.txt');
+  assert.equal(dom.window.document.querySelector('.context-offer long'), null);
+  assert.equal(messages.length, 0);
+  click('attachOffer');
+  click('dismissOffer');
+  assert.deepEqual(messages, [
+    { v: 1, type: 'attachOffer', id: 'offer' },
+    { v: 1, type: 'dismissOffer', id: 'offer' },
+  ]);
+  assert.equal(dom.window.document.activeElement, element('#prompt'));
+  element('[data-action="attachOffer"]').focus();
+  element('[data-action="attachOffer"]').dispatchEvent(
+    new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+  );
+  assert.deepEqual(messages.at(-1), { v: 1, type: 'dismissOffer', id: 'offer' });
+  assert.equal(dom.window.document.activeElement, element('#prompt'));
+  update({ busy: true });
+  assert.equal(element<HTMLButtonElement>('[data-action="attachOffer"]').disabled, true);
+  update({ contextOffer: undefined, busy: false });
+  assert.equal(dom.window.document.querySelector('.context-offer'), null);
 });
 
 test('thinking auto-closes when activity advances and terminal failures remain visible', () => {

@@ -6,6 +6,11 @@
 !dist/extension.cjs
 !dist/omp-guard.js
 !dist/review.js
+!dist/playwright/**
+!dist/pty/**
 !dist/webview/*.js
 !dist/webview/*.css
 !dist/webview/*.ttf
+!dist/webview/monaco-LICENSE.txt
+!dist/webview/monaco-ThirdPartyNotices.txt
+!dist/webview/monaco-marked-LICENSE.txt

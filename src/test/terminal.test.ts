@@ -448,6 +448,27 @@ test(
   },
 );
 
+test('managed output waits for data, process close or its own bounded deadline', async (context) => {
+  const { manager } = await fixture(context);
+  const delayed = {
+    sessionId: 'owner',
+    ...(await manager.create(command('setTimeout(()=>process.stderr.write("ready"),80);'))),
+  };
+  assert.equal((await manager.waitForOutput(delayed, 2000)).output, 'ready');
+  await manager.waitForExit(delayed);
+  await manager.release(delayed);
+  const silent = { sessionId: 'owner', ...(await manager.create(command(''))) };
+  assert.equal((await manager.waitForOutput(silent, 2000)).exitStatus?.exitCode, 0);
+  await manager.release(silent);
+  const running = {
+    sessionId: 'owner',
+    ...(await manager.create(command('setInterval(()=>{},1000);'), null)),
+  };
+  assert.equal((await manager.waitForOutput(running, 10)).output, '');
+  assert.throws(() => manager.waitForOutput(running, -1));
+  await manager.release(running);
+});
+
 test('cancellation during cwd preparation never opens an approval prompt', async (context) => {
   let approvals = 0;
   const { manager, abort } = await fixture(context, {

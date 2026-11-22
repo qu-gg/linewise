@@ -82,9 +82,10 @@ test('journal policies reject direct writes, namespace/default imports and sync 
 
 test('tool safety policy cannot silently enable an unmediated mutation tool', () => {
   const safe =
-    "const allowedTools = ['read', 'write', 'todo', 'retain', 'recall', 'memory_edit', 'edit', 'bash'];";
+    "const allowedTools = ['read', 'write', 'todo', 'retain', 'recall', 'memory_edit', 'edit', 'bash', 'editor', 'ask', 'browser', 'rename', 'task', 'fetch', 'code_action', 'notebook_edit'];";
   assert.deepEqual(toolPolicyViolations(safe), []);
   assert.equal(toolPolicyViolations(safe.replace("'read'", "'bash'")).length, 1);
+  assert.equal(toolPolicyViolations(safe.replace("'editor'", "'unmediated_browser'")).length, 1);
   assert.equal(toolPolicyViolations('const allowedTools = otherTools;').length, 1);
 });
 
@@ -117,6 +118,10 @@ test('only the terminal adapter gains process ownership, not domains or arbitrar
   const report = await fixture({
     'src/terminal.ts': 'import "node:child_process";',
     'src/host-tools.ts': 'import "vscode";',
+    'src/host-inspect.ts': 'import "vscode";',
+    'src/host-tasks.ts': 'import "vscode";',
+    'src/host-notebook.ts': 'import "vscode";',
+    'src/host-image-context.ts': 'import "vscode";',
     'src/storage-view.ts': 'import "vscode";',
     'src/host-view.ts': 'import "vscode";',
     'src/host-activation.ts': 'import "vscode";',
@@ -124,7 +129,8 @@ test('only the terminal adapter gains process ownership, not domains or arbitrar
     'src/retention.ts': 'import "./storage-view.js";',
     'src/storage-policy.ts': 'import "./host-activation.js";',
     'src/other.ts': 'import "node:child_process";',
-    'src/state.ts': 'import "./terminal.js"; import "./host-tools.js";',
+    'src/state.ts':
+      'import "./terminal.js"; import "./host-tools.js"; import "./host-tasks.js"; import "./host-fetch.js"; import "./host-code-actions.js"; import "./host-notebook.js"; import "./host-image-context.js";',
   });
   assert.ok(
     report.summary.violations.some((item) => item.rule.name === 'domain-not-host-or-transport'),
@@ -137,6 +143,17 @@ test('only the terminal adapter gains process ownership, not domains or arbitrar
     ['src/other.ts'],
   );
   assert.ok(!report.summary.violations.some((item) => item.from === 'src/host-tools.ts'));
+  assert.ok(!report.summary.violations.some((item) => item.from === 'src/host-inspect.ts'));
+  assert.ok(!report.summary.violations.some((item) => item.from === 'src/host-tasks.ts'));
+  assert.ok(!report.summary.violations.some((item) => item.from === 'src/host-image-context.ts'));
+  assert.ok(
+    report.summary.violations.some(
+      (item) =>
+        item.from === 'src/state.ts' &&
+        item.to === 'src/host-image-context.ts' &&
+        item.rule.name === 'domain-not-host-or-transport',
+    ),
+  );
   assert.ok(!report.summary.violations.some((item) => item.from === 'src/storage-view.ts'));
   assert.ok(!report.summary.violations.some((item) => item.from === 'src/host-view.ts'));
   assert.ok(!report.summary.violations.some((item) => item.from === 'src/host-activation.ts'));

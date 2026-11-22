@@ -3,40 +3,158 @@ import type { TextFiles } from './review.js';
 import { contextSnapshot } from './context.js';
 import type { Attachment } from './state.js';
 import type { Change } from './review-types.js';
-import { reviewImages, reviewSummary } from './review-presentation.js';
+import { reviewImages } from './review-presentation.js';
 import { reviewHunks } from './review-hunks.js';
 import path from 'node:path';
+import { ImageSnapshots, pickImageContext, pickedImage } from './host-image-context.js';
+import { InlineReviewView, type EditorReviewHost } from './inline-review-view.js';
+
+export class ReviewEditor implements vscode.CodeLensProvider, vscode.Disposable {
+  private readonly changed = new vscode.EventEmitter<void>();
+  readonly onDidChangeCodeLenses = this.changed.event;
+  private available = false;
+  private inline?: InlineReviewView;
+
+  constructor(
+    private readonly files: WorkspaceFiles,
+    private readonly host: EditorReviewHost,
+  ) {}
+
+  register(extensionUri: vscode.Uri): vscode.Disposable[] {
+    this.inline = new InlineReviewView(extensionUri, this.files, this.host, () => this.refresh());
+    return [
+      this,
+      ...this.inline.register(),
+      vscode.languages.registerCodeLensProvider({ scheme: 'omp-review' }, this),
+      vscode.commands.registerCommand('omp.reviewHunk', (request: unknown) =>
+        this.host.dispatch(request),
+      ),
+      ...(['Previous', 'Next', 'Keep', 'Discard'] as const).map((action) =>
+        vscode.commands.registerCommand(`omp.review${action}`, () => this.atCursor(action)),
+      ),
+    ];
+  }
+
+  private current(document: vscode.TextDocument) {
+    if (!this.host.available() || document.uri.scheme !== 'omp-review') return;
+    return this.host
+      .changes()
+      .find(
+        (item) =>
+          document.uri.path === reviewImages(item)[1]!.path &&
+          this.files.reviewSnapshots.has(document.uri.toString()),
+      );
+  }
+
+  provideCodeLenses(document: vscode.TextDocument): vscode.CodeLens[] {
+    const change = this.current(document);
+    if (!change || change.state !== 'pending') return [];
+    return reviewHunks(change).flatMap((hunk) => {
+      const line = Math.min(Math.max(0, hunk.newStart - 1), Math.max(0, document.lineCount - 1));
+      const range = new vscode.Range(line, 0, line, 0);
+      return (['Keep', 'Discard'] as const).map((title) => ({
+        range,
+        isResolved: true,
+        command: {
+          title: `${title} Change`,
+          command: 'omp.reviewHunk',
+          arguments: [
+            {
+              v: 1,
+              type: title === 'Keep' ? 'hunkKeep' : 'hunkDiscard',
+              id: change.id,
+              hunkId: hunk.id,
+            },
+          ],
+        },
+      }));
+    });
+  }
+
+  async atCursor(action: 'Previous' | 'Next' | 'Keep' | 'Discard'): Promise<void> {
+    if (await this.inline?.atCursor(action)) return;
+    await this.nativeCursor(action);
+  }
+
+  private async nativeCursor(action: 'Previous' | 'Next' | 'Keep' | 'Discard'): Promise<void> {
+    const editor = vscode.window.activeTextEditor;
+    const change = editor && this.current(editor.document);
+    const hunks = change?.state === 'pending' ? reviewHunks(change) : [];
+    if (!editor || !change || !hunks.length)
+      throw new Error('Select an idle, current OMP change to review.');
+    const index = hunks.reduce(
+      (selected, hunk, position) =>
+        hunk.newStart <= editor.selection.active.line + 1 ? position : selected,
+      0,
+    );
+    if (['Previous', 'Next'].includes(action)) {
+      const direction = action === 'Previous' ? -1 : 1;
+      const hunk = hunks[(index + direction + hunks.length) % hunks.length]!;
+      await this.files.review(change, hunk.id);
+    } else {
+      await this.host.dispatch({
+        v: 1,
+        type: action === 'Keep' ? 'hunkKeep' : 'hunkDiscard',
+        id: change.id,
+        hunkId: hunks[index]!.id,
+      });
+    }
+  }
+
+  refresh(): void {
+    this.inline?.refresh();
+    for (const change of this.host.changes()) {
+      const uri = vscode.Uri.from({ scheme: 'omp-review', path: reviewImages(change)[1]!.path });
+      if (this.files.reviewSnapshots.has(uri.toString())) this.files.updateReview(change);
+    }
+    const available = Boolean(this.inline?.available || this.lensAvailable());
+    if (available !== this.available) {
+      this.available = available;
+      void vscode.commands.executeCommand('setContext', 'omp.reviewAvailable', available);
+    }
+    this.changed.fire();
+  }
+
+  private lensAvailable(): boolean {
+    const document = vscode.window.activeTextEditor?.document;
+    const active = document && this.current(document);
+    return Boolean(active?.state === 'pending' && reviewHunks(active).length);
+  }
+
+  dispose(): void {
+    this.inline?.dispose();
+    this.changed.dispose();
+  }
+}
 
 export class WorkspaceFiles implements TextFiles {
   readonly reviewSnapshots = new Map<string, string>();
+  readonly reviewSelections = new Map<string, string | undefined>();
+  readonly reviewRequested = new vscode.EventEmitter<{ uri: vscode.Uri; hunkId?: string }>();
+  readonly reviewChanges = new vscode.EventEmitter<vscode.Uri>();
+  readonly imageSnapshots = new ImageSnapshots();
   constructor(private readonly host: vscode.Uri) {}
+
+  updateReview(change: Change): vscode.Uri[] {
+    return reviewImages(change).map((image) => {
+      const uri = vscode.Uri.from({ scheme: 'omp-review', path: image.path });
+      const key = uri.toString();
+      const previous = this.reviewSnapshots.get(key);
+      this.reviewSnapshots.set(key, image.text);
+      if (previous !== undefined && previous !== image.text) this.reviewChanges.fire(uri);
+      return uri;
+    });
+  }
 
   async review(change: Change, hunkId?: string): Promise<void> {
     const hunk = reviewHunks(change).find((candidate) => candidate.id === hunkId);
     if (hunkId && !hunk) throw new Error('Review hunk is stale or no longer available.');
-    const images = reviewImages(change).map((image) => {
-      const uri = vscode.Uri.from({ scheme: 'omp-review', path: image.path });
-      this.reviewSnapshots.set(uri.toString(), image.text);
-      return uri;
+    const images = this.updateReview(change);
+    this.reviewSelections.set(images[1]!.toString(), hunkId);
+    this.reviewRequested.fire({ uri: images[1]!, hunkId });
+    await vscode.commands.executeCommand('vscode.openWith', images[1]!, 'omp.inlineReview', {
+      preview: true,
     });
-    await vscode.commands.executeCommand(
-      'vscode.diff',
-      ...images,
-      `${reviewSummary(change, path.basename).name} (OMP Changes)`,
-      {
-        preview: true,
-        ...(hunk
-          ? {
-              selection: new vscode.Range(
-                Math.max(0, hunk.newStart - 1),
-                0,
-                Math.max(0, hunk.newStart - 1),
-                0,
-              ),
-            }
-          : {}),
-      },
-    );
   }
 
   editorContext(): Attachment {
@@ -57,6 +175,7 @@ export class WorkspaceFiles implements TextFiles {
       [
         { label: '$(selection) Active Editor or Selection', value: 'editor' },
         { label: '$(files) Files...', value: 'files' },
+        { label: '$(file-media) Images...', value: 'images' },
         { label: '$(file-text) Open Text Resources...', value: 'resources' },
         { label: '$(warning) Workspace Problems', value: 'diagnostics' },
       ],
@@ -66,28 +185,52 @@ export class WorkspaceFiles implements TextFiles {
     if (picked.value === 'editor') return [this.editorContext()];
     if (picked.value === 'diagnostics') return [this.diagnosticsContext()];
     if (picked.value === 'resources') return this.resourceContexts();
+    if (picked.value === 'images') return pickImageContext(this.host);
+    return this.fileContexts();
+  }
+
+  private async fileContexts(): Promise<Attachment[]> {
     const uris = await vscode.window.showOpenDialog({
       canSelectMany: true,
       canSelectFolders: false,
       openLabel: 'Attach',
     });
     const snapshots: Attachment[] = [];
-    for (const uri of uris ?? []) {
-      if (uri.scheme !== this.host.scheme || uri.authority !== this.host.authority)
-        throw new Error('Choose a file on the active workspace host.');
-      const text = await this.read(uri.fsPath);
-      if (text === null) throw new Error('The selected file no longer exists.');
-      snapshots.push(contextSnapshot('file', path.basename(uri.path), uri.toString(), text));
-    }
+    for (const uri of uris ?? []) snapshots.push(await this.fileContext(uri));
     return snapshots;
   }
 
+  acceptsContext(uri: vscode.Uri): boolean {
+    return (
+      uri.scheme === 'untitled' ||
+      (uri.scheme === this.host.scheme && uri.authority === this.host.authority)
+    );
+  }
+
+  async fileContext(uri: vscode.Uri): Promise<Attachment> {
+    if (uri.scheme === 'untitled') {
+      const document = vscode.workspace.textDocuments.find(
+        (item) => item.uri.toString() === uri.toString(),
+      );
+      if (!document) throw new Error('The selected unsaved resource is no longer open.');
+      return contextSnapshot(
+        'resource',
+        path.basename(uri.path),
+        uri.toString(),
+        document.getText(),
+      );
+    }
+    if (!this.acceptsContext(uri)) throw new Error('Choose a file on the active workspace host.');
+    if (/\.(png|jpe?g|webp)$/i.test(uri.path))
+      return (await pickedImage(this.host, uri, 1_048_576)).snapshot;
+    const text = await this.read(uri.fsPath);
+    if (text === null) throw new Error('The selected file no longer exists.');
+    return contextSnapshot('file', path.basename(uri.path), uri.toString(), text);
+  }
+
   private async resourceContexts(): Promise<Attachment[]> {
-    const resources = vscode.workspace.textDocuments.filter(
-      (document) =>
-        document.uri.scheme === 'untitled' ||
-        (document.uri.scheme === this.host.scheme &&
-          document.uri.authority === this.host.authority),
+    const resources = vscode.workspace.textDocuments.filter((document) =>
+      this.acceptsContext(document.uri),
     );
     const selected = await vscode.window.showQuickPick(
       resources.map((document) => ({
@@ -127,6 +270,14 @@ export class WorkspaceFiles implements TextFiles {
   }
 
   async inspectContext(attachment: Attachment): Promise<void> {
+    if (attachment.image) {
+      await vscode.commands.executeCommand(
+        'vscode.open',
+        this.imageSnapshots.capture(attachment.image),
+        { preview: true },
+      );
+      return;
+    }
     const document = await vscode.workspace.openTextDocument({
       content: attachment.text,
       language: 'plaintext',
@@ -154,7 +305,7 @@ export class WorkspaceFiles implements TextFiles {
     );
     try {
       const text = await this.diskText(uri);
-      return document?.getText() ?? text;
+      return this.bufferedText(target, text, document);
     } catch (error) {
       if (error instanceof vscode.FileSystemError && error.code === 'FileNotFound')
         return document?.isDirty ? document.getText() : null;
@@ -164,9 +315,11 @@ export class WorkspaceFiles implements TextFiles {
 
   async replace(target: string, expected: string | null, content: string | null): Promise<void> {
     const uri = this.uri(target);
+    this.assertNotebookClean(uri);
     if ((await this.read(target)) !== expected)
       throw new Error('File or editor buffer changed before the operation could be applied.');
     const edit = await this.replacement(uri, expected, content);
+    this.assertNotebookClean(uri);
     if (!(await vscode.workspace.applyEdit(edit)))
       throw new Error('VS Code rejected the file operation.');
     if (content !== null) {
@@ -180,6 +333,7 @@ export class WorkspaceFiles implements TextFiles {
 
   async preflightDelete(target: string): Promise<void> {
     const uri = this.uri(target);
+    this.assertNotebookClean(uri);
     if (
       vscode.workspace.textDocuments.some(
         (document) => document.uri.toString() === uri.toString() && document.isDirty,
@@ -206,6 +360,20 @@ export class WorkspaceFiles implements TextFiles {
     if (!(await vscode.workspace.applyEdit(edit)))
       throw new Error('VS Code rejected the file operation.');
     if (expected !== content) await this.replace(destination, expected, content);
+  }
+
+  private assertNotebookClean(uri: vscode.Uri): void {
+    if (
+      vscode.workspace.notebookDocuments.some(
+        (document) => document.uri.toString() === uri.toString() && document.isDirty,
+      )
+    )
+      throw new Error('Save or close the dirty notebook before changing its serialized file.');
+  }
+
+  private bufferedText(target: string, text: string, document?: vscode.TextDocument): string {
+    if (target.endsWith('.ipynb') && !document?.isDirty) return text;
+    return document?.getText() ?? text;
   }
 
   private async diskText(uri: vscode.Uri): Promise<string> {
@@ -237,6 +405,8 @@ export class WorkspaceFiles implements TextFiles {
         throw new Error('This feasibility build only writes UTF-8 files without a BOM.');
       if (expected === null) edit.createFile(uri, { overwrite: false });
       const document = expected === null ? undefined : await vscode.workspace.openTextDocument(uri);
+      if (document && document.getText() !== expected)
+        throw new Error('Text buffer changed before preparing the file operation.');
       const end = document?.positionAt(document.getText().length) ?? new vscode.Position(0, 0);
       edit.replace(uri, new vscode.Range(new vscode.Position(0, 0), end), content);
     }

@@ -1,10 +1,10 @@
-import { readFile } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { z } from 'zod';
 import type { EditStore, EditWriteRequest } from '@oh-my-pi/pi-natives';
 import * as nativeRuntime from '@oh-my-pi/pi-natives';
-import { checkedPath } from './file-policy.js';
+import { checkedPath, pathReason, readTarget } from './file-policy.js';
 import { cleanupPermit, exchangeMutations, stagePermit } from './mutations.js';
 import type { Mutation } from './mutations.js';
 
@@ -28,12 +28,12 @@ export interface NativeEditApi {
     name: string;
     label: string;
     description: string;
-    parameters: z.ZodType;
+    parameters: Record<string, unknown>;
     defaultInactive: boolean;
-    approval: 'write';
+    approval: 'read' | 'write';
     execute(
       id: string,
-      params: { input: string },
+      params: unknown,
       signal: AbortSignal | undefined,
       update: unknown,
       context: Context,
@@ -130,13 +130,19 @@ async function recordRead(
   snapshots: () => EditStore,
 ): Promise<void> {
   if (!['read', 'write'].includes(result.toolName) || result.isError) return;
-  const target = await checkedPath(String(result.input.path), context.cwd);
+  const plain = readTarget(result.input.path);
+  if (pathReason(plain)) return;
+  const target = await checkedPath(plain, context.cwd).catch(() => undefined);
+  if (!target) return;
+  const metadata = await stat(target);
+  if (!metadata.isFile() || metadata.size > 1024 * 1024) return;
   const current = snapshots();
   const tag = current.recordSnapshotFile(target, result.toolName === 'read' ? [0] : undefined);
   if (tag)
-    for (const block of result.content)
+    result.content.forEach((block) => {
       if (block.type === 'text' && block.text)
         current.recordSeenLinesFromBody(target, tag, block.text);
+    });
 }
 
 function getStore(native: Runtime, stores: Map<string, EditStore>, context: Context): EditStore {
@@ -169,7 +175,7 @@ export async function installNativeEdit(api: NativeEditApi, runtime?: Runtime): 
     approval: 'write',
     defaultInactive: true,
     description: native.editDescription('hashline'),
-    parameters,
+    parameters: z.toJSONSchema(parameters),
     async execute(toolCallId, input, signal, _update, context) {
       signal?.throwIfAborted();
       const params = parameters.parse(input);

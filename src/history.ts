@@ -13,6 +13,10 @@ export function assertPromptAllowed(text: string): void {
 }
 
 const entryId = z.string().min(1).max(128);
+const contextUsageSchema = z.object({
+  tokens: z.number().nonnegative(),
+  contextWindow: z.number().int().positive(),
+});
 export const historySnapshotSchema = z
   .object({
     sessionId: entryId,
@@ -21,6 +25,7 @@ export const historySnapshotSchema = z
       .regex(/^[\w.-]+\.jsonl$/)
       .optional(),
     leafId: entryId.nullable(),
+    contextUsage: contextUsageSchema.optional(),
     entries: z.array(
       z
         .object({
@@ -67,6 +72,7 @@ export const historyResponseSchema = z.discriminatedUnion('ok', [
 
 interface HistoryContext {
   isIdle(): boolean;
+  getContextUsage?(): unknown;
   navigateTree(targetId: string, options: { summarize: false }): Promise<{ cancelled: boolean }>;
   switchSession?(file: string): Promise<{ cancelled: boolean }>;
   sessionManager: {
@@ -118,12 +124,23 @@ export async function exchangeHistory(
   }
 }
 
+function nativeContextUsage(context: HistoryContext) {
+  try {
+    const parsed = contextUsageSchema.safeParse(context.getContextUsage?.());
+    return parsed.success ? parsed.data : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function snapshot(context: HistoryContext): HistorySnapshot {
   const file = context.sessionManager.getSessionFile?.();
+  const contextUsage = nativeContextUsage(context);
   return historySnapshotSchema.parse({
     sessionId: context.sessionManager.getSessionId(),
     fileName: file ? path.basename(file) : undefined,
     leafId: context.sessionManager.getLeafId(),
+    ...(contextUsage ? { contextUsage } : {}),
     entries: context.sessionManager.getBranch().map((entry) => ({
       id: entry.id,
       parentId: entry.parentId,

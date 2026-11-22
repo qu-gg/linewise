@@ -11,7 +11,7 @@ import { initializeStorage } from './storage-view.js';
 import {
   artifactsDirectory,
   resumeArtifact,
-  startupArguments,
+  startSessionClient,
   startupConfig,
   selectCopilotModel,
   createConnection,
@@ -29,6 +29,7 @@ import {
 import { HostView, type SidebarRequest } from './host-view.js';
 import { HostOperations, type Operation } from './host-operations.js';
 import { registerHostCommands, testSurface } from './host-activation.js';
+import { assertSessionResumable } from './sessions.js';
 
 const execute = promisify(execFile);
 let application: OmpView | undefined;
@@ -48,7 +49,7 @@ export async function activate(context: vscode.ExtensionContext) {
   registerHostCommands(context, output, application);
   return {
     status: () => application?.snapshot(),
-    ...testSurface(context, storage, application),
+    ...testSurface(context, storage, application, application.attach),
   };
 }
 
@@ -96,20 +97,18 @@ class OmpView extends HostOperations implements vscode.WebviewViewProvider {
       busy: () => this.busy,
       available: () => !this.operation,
       drain: () => this.drainQueue(),
+      disconnect: () => this.disconnect(),
+      resume: (session) => this.connect(false, session),
     });
   }
 
-  initialize(): Promise<void> {
-    return this.view.initialize();
-  }
+  initialize = () => this.view.initialize();
 
-  resolveWebviewView(view: vscode.WebviewView): void {
-    this.view.chat.resolve(view);
-  }
+  resolveWebviewView = (view: vscode.WebviewView) => this.view.chat.resolve(view);
 
-  async dispatch(message: unknown): Promise<void> {
-    return this.view.dispatch(message);
-  }
+  dispatch = (message: unknown): Promise<void> => this.view.dispatch(message);
+
+  attach = (snapshots: Attachment[]) => this.view.addSnapshots(snapshots);
 
   private async route(request: SidebarRequest): Promise<void> {
     switch (request.type) {
@@ -156,6 +155,8 @@ class OmpView extends HostOperations implements vscode.WebviewViewProvider {
           await this.tools.pickPermissions();
         });
         break;
+      case 'terminals':
+        return this.tools?.pickTerminal(this.view.chat.focusTerminals);
       case 'config': {
         await this.configure(request.id, request.value);
         break;
@@ -168,7 +169,6 @@ class OmpView extends HostOperations implements vscode.WebviewViewProvider {
         break;
     }
   }
-
   async perform(action: () => Promise<void>): Promise<void> {
     try {
       await action();
@@ -188,14 +188,16 @@ class OmpView extends HostOperations implements vscode.WebviewViewProvider {
   }
 
   async connect(fresh = false, selected?: SavedSession): Promise<void> {
+    const saved = selected ?? (fresh ? undefined : this.view.active());
+    assertSessionResumable(saved);
     const operation = this.beginOperation('connect');
     this.commands = [];
     try {
       await this.finishTools();
       await this.client?.stop();
-      const saved = selected ?? (fresh ? undefined : this.view.active());
       const root = this.view.root(saved);
-      const artifacts = await artifactsDirectory(this.store.directory);
+      const directory = this.store.directory;
+      const artifacts = await artifactsDirectory(directory);
       const sessionFile = await resumeArtifact(artifacts, saved);
       const result = await execute(
         this.executable(),
@@ -206,11 +208,8 @@ class OmpView extends HostOperations implements vscode.WebviewViewProvider {
         this.context.extensionMode === vscode.ExtensionMode.Test
           ? process.env.VS_OMP_TEST_FIXTURE
           : undefined;
-      const config = await startupConfig(
-        this.store.directory,
-        JSON.parse(result.stdout).value,
-        fixture,
-      );
+      const config = await startupConfig(directory, JSON.parse(result.stdout).value, fixture);
+      this.view.assertRoot(root);
       const { tools, client } = createConnection(
         this.view.files,
         this.view.journal,
@@ -220,33 +219,37 @@ class OmpView extends HostOperations implements vscode.WebviewViewProvider {
           update: (notification) => this.update(notification),
           closed: (closed, owned) => this.clientClosed(closed, owned),
           log: (message) => this.output.append(message),
+          questions: this.view.chat.requestQuestions,
         },
       );
       this.tools = tools;
       this.client = client;
-      await client.start({
-        executable: this.executable(),
-        cwd: root.uri.fsPath,
-        artifacts,
-        sessionFile,
-        args: startupArguments(
-          config,
-          vscode.Uri.joinPath(this.context.extensionUri, 'dist', 'omp-guard.js').fsPath,
+      await startSessionClient(
+        client,
+        {
+          executable: this.executable(),
+          cwd: root.uri.fsPath,
           artifacts,
+          sessionFile,
+          config,
+          storage: directory,
+          guard: vscode.Uri.joinPath(this.context.extensionUri, 'dist', 'omp-guard.js').fsPath,
           fixture,
-        ),
-      });
-      if (!client.sessionId) throw new Error('OMP did not return a session identifier.');
+        },
+        (target) => this.view.journal.inspect(target),
+      );
       await selectCopilotModel(
         client,
         vscode.workspace.getConfiguration('omp').get<string>('model', ''),
       );
+      this.view.assertRoot(root);
       if (
         await bindConnectedSession(
           this.store,
           client,
           { uri: root.uri.toString(), name: root.name },
           saved,
+          this.view.attachments,
         )
       ) {
         this.error =
@@ -254,6 +257,7 @@ class OmpView extends HostOperations implements vscode.WebviewViewProvider {
       }
       await this.view.journal.refresh();
       await this.store.save();
+      this.view.assertRoot(root);
     } catch (error) {
       await this.client?.stop();
       throw error;
@@ -263,18 +267,8 @@ class OmpView extends HostOperations implements vscode.WebviewViewProvider {
   }
 
   async switchSession(): Promise<void> {
-    const picked = await this.idleOperation('select', async () =>
-      vscode.window.showQuickPick(
-        this.store.data.sessions.map((session) => ({
-          label: session.label,
-          description: vscode.Uri.parse(session.root).fsPath,
-          detail: session.id,
-          session,
-        })),
-        { title: 'OMP Sessions' },
-      ),
-    );
-    if (picked) await this.connect(false, picked.session);
+    await vscode.commands.executeCommand('omp.chat.focus');
+    this.view.chat.post({ v: 1, type: 'showSessions' });
   }
 
   private async sessionCommand(command: 'compact' | 'context'): Promise<void> {
@@ -282,13 +276,13 @@ class OmpView extends HostOperations implements vscode.WebviewViewProvider {
       throw new Error(`OMP has not advertised /${command} for this session.`);
     if (this.operation)
       throw new Error('Wait for the current operation before running a session command.');
+    const usage = command === 'compact' ? this.view.active()?.usage : undefined;
+    if (usage) usage.stale = true;
     this.compacting = command === 'compact';
     this.publish();
     try {
       await this.prompt(`/${command}`, false);
     } finally {
-      const usage = command === 'compact' ? this.view.active()?.usage : undefined;
-      if (usage) usage.stale = true;
       this.compacting = false;
       this.publish();
       if (usage) await this.store.save();
@@ -305,6 +299,7 @@ class OmpView extends HostOperations implements vscode.WebviewViewProvider {
     const { selected } = target;
     const operation = this.beginOperation('history');
     try {
+      await this.closeBrowser();
       const cloned = await branchConversation(
         this.store,
         target,
@@ -413,25 +408,30 @@ class OmpView extends HostOperations implements vscode.WebviewViewProvider {
       this.busy;
   }
 
+  closeBrowser = () => this.tools?.closeBrowser() ?? Promise.resolve();
+
   async cancel(): Promise<void> {
     if (this.operation && !this.busy) throw new Error('Wait for the current operation to finish.');
     this.view.followUps.clear(true);
+    const cancelled = this.client?.cancel();
     this.turnAbort?.abort();
     try {
-      await this.finishTools();
+      await cancelled;
     } finally {
-      await this.client?.cancel();
+      await this.finishTools();
     }
   }
   private async disconnect(): Promise<void> {
     if (this.busy) this.operation = undefined;
     await this.idleOperation('disconnect', async () => {
+      const client = this.client;
+      const stopped = client?.stop();
       this.turnAbort?.abort();
       try {
-        await this.finishTools();
-        await this.client?.cancel();
+        await stopped;
+        await client?.cancel();
       } finally {
-        await this.client?.stop();
+        await this.finishTools();
       }
     });
   }
@@ -439,12 +439,13 @@ class OmpView extends HostOperations implements vscode.WebviewViewProvider {
     this.view.chat.dispose();
     this.view.followUps.clear();
     this.operation = { kind: 'shutdown' };
-    this.turnAbort?.abort();
     try {
-      await this.finishTools();
+      const stopped = this.client?.stop(true);
+      this.turnAbort?.abort();
+      await stopped;
     } finally {
       try {
-        await this.client?.stop();
+        await this.finishTools();
       } finally {
         await this.store.save();
       }
@@ -476,21 +477,19 @@ class OmpView extends HostOperations implements vscode.WebviewViewProvider {
       cancellable: this.busy,
       historyChanging: this.historyChanging,
       ...sessionPresentation(this.view.active()),
-      sessionIds: this.view.sessionIds(),
+      ...this.view.sessionPresentation(),
       canCompact: this.commands.includes('compact'),
       canInspectContext: this.commands.includes('context'),
       host: vscode.env.remoteName ?? 'Local',
       workspace: vscode.workspace.workspaceFolders?.[0]?.name ?? '',
       error: this.error,
-      ...this.view.chat.approvals.snapshot(),
-      ...this.view.attachments.presentation(this.view.owner()),
+      ...this.view.chat.presentation(),
+      ...this.view.contextPresentation(),
       ...this.view.followUps.snapshot(this.view.owner()),
       configs: configPresentation(this.client),
       changes: this.view.changes(),
     };
   }
 
-  private publish(): void {
-    this.view.chat.publish();
-  }
+  private publish = () => this.view.chat.publish();
 }

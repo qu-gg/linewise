@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { promptBlocks, safeError } from './acp.js';
 import type { HostTools } from './host-tools.js';
 import type { HistorySnapshot } from './history.js';
+import { applyCompactionUsage } from './session-presentation.js';
 import { assertNativeBudget } from './storage-files.js';
 import {
   bindTurnHistory,
@@ -47,6 +48,7 @@ async function finishHistory(run: PromptRun, before: HistorySnapshot | undefined
   if (!before || !client.connected || !run.valid()) return;
   try {
     const after = await client.history();
+    if (run.valid()) applyCompactionUsage(session, current, before, after);
     bindTurnHistory(current, before, after);
     session.sessionFile = after.fileName;
   } catch (error) {

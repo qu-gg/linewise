@@ -4,11 +4,114 @@ import { mkdir, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { setup } from './extension-setup.js';
 import { OmpClient, transport } from './acp-fixture.js';
-import { fixture } from './vscode-fixture.js';
+import { fixture, Uri } from './vscode-fixture.js';
 
 const { StateStore } = await import('../state.js');
 const { MutationBroker } = await import('../mutations.js');
 const { HostTools } = await import('../host-tools.js');
+
+test('Close Owned Browser command revokes an idle connection without disconnecting', async (context) => {
+  const host = await setup(context);
+  await host.request({ type: 'connect' });
+  let closed = 0;
+  context.mock.method(HostTools.prototype, 'closeBrowser', async () => {
+    closed++;
+  });
+  await fixture.commands.get('omp.closeBrowser')!();
+  assert.equal(closed, 1);
+  assert.equal(host.status()!.connected, true);
+  assert.equal(host.status()!.busy, false);
+  assert.deepEqual(host.storedState!().changes, []);
+});
+
+test('workspace folder events revoke retained browser pages even between prompts', async (context) => {
+  const host = await setup(context);
+  await host.request({ type: 'connect' });
+  let closed = 0;
+  context.mock.method(HostTools.prototype, 'closeBrowser', async () => {
+    closed++;
+  });
+  assert.equal(fixture.rootListeners.length, 1);
+  await fixture.rootListeners[0]!();
+  assert.equal(closed, 1);
+  assert.equal(host.status()!.connected, true);
+});
+
+test('workspace folder events retain browser revocation when cancellation fails', async (context) => {
+  const host = await setup(context);
+  await host.request({ type: 'connect' });
+  let closed = 0;
+  context.mock.method(HostTools.prototype, 'closeBrowser', async () => {
+    closed++;
+  });
+  transport.onCancel = () => {
+    throw new Error('Fixture cancellation failure');
+  };
+  await fixture.rootListeners[0]!();
+  assert.equal(closed, 2);
+  assert.match(host.status()!.error, /Fixture cancellation failure/);
+  assert.equal(host.status()!.busy, false);
+  transport.onCancel = () => {};
+});
+
+for (const loss of ['removed', 'replaced', 'trust'] as const)
+  test(`workspace root ${loss} cannot publish an in-flight connection`, async (context) => {
+    const host = await setup(context);
+    const roots = fixture.roots;
+    const start = OmpClient.prototype.start;
+    let release!: () => void;
+    let entered!: () => void;
+    const started = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const mocked = context.mock.method(
+      OmpClient.prototype,
+      'start',
+      async function (this: OmpClient, options: Parameters<OmpClient['start']>[0]) {
+        await start.call(this, options);
+        await new Promise<void>((resolve) => {
+          release = resolve;
+          entered();
+        });
+      },
+    );
+    const connecting = host.request({ type: 'connect' });
+    void connecting.catch(() => {});
+    await started;
+    try {
+      if (loss === 'trust') fixture.trusted = false;
+      else
+        fixture.roots =
+          loss === 'removed'
+            ? []
+            : [{ ...roots[0]!, uri: Uri.file(path.join(host.root, 'replacement')) }];
+      await fixture.rootListeners[0]!();
+      release();
+      await assert.rejects(connecting, /workspace/);
+      assert.equal(host.status()!.connected, false);
+      assert.equal(host.status()!.connecting, false);
+      assert.deepEqual(host.storedState!().sessions, []);
+      assert.deepEqual(host.storedState!().changes, []);
+      mocked.mock.restore();
+      fixture.roots = roots;
+      fixture.trusted = true;
+      await host.request({ type: 'connect' });
+      assert.equal(host.status()!.connected, true);
+    } finally {
+      release();
+      await Promise.allSettled([connecting]);
+    }
+  });
+
+test('connection diagnostics reach OMP output without becoming conversation content', async (context) => {
+  const host = await setup(context);
+  await host.request({ type: 'connect' });
+  const diagnostic = 'Fixture startup diagnostic';
+  transport.client!.log(diagnostic);
+  assert.ok(fixture.logs.some((entry) => entry.includes(diagnostic)));
+  assert.equal(JSON.stringify(host.status()).includes(diagnostic), false);
+  assert.equal(JSON.stringify(host.storedState!()).includes(diagnostic), false);
+});
 
 test('fresh-user authentication errors keep login guidance but redact credentials in UI and logs', async (context) => {
   const host = await setup(context);
@@ -126,6 +229,89 @@ function promptPause() {
     },
   };
 }
+
+for (const action of ['deactivation', 'disconnect'])
+  test(
+    `${action} stops upstream before local cleanup and records cancellation without replay`,
+    { timeout: 5000 },
+    async (context) => {
+      const host = await setup(context);
+      await host.request({ type: 'connect' });
+      const { started, release, hold } = promptPause();
+      const events: string[] = [];
+      let sent = 0;
+      transport.onPrompt = async () => {
+        sent++;
+        await hold();
+        throw new Error('Owned child stopped');
+      };
+      context.mock.method(transport.client!, 'stop', async (immediate?: boolean) => {
+        if (!events.length) assert.equal(Boolean(immediate), action === 'deactivation');
+        events.push('stop');
+        transport.client!.connected = false;
+        release();
+      });
+      const finish = HostTools.prototype.finish;
+      context.mock.method(
+        HostTools.prototype,
+        'finish',
+        async function (this: InstanceType<typeof HostTools>) {
+          events.push('cleanup');
+          assert.equal(events[0], 'stop');
+          await finish.call(this);
+        },
+      );
+      const pending = host.request({ type: 'prompt', text: 'Interrupted on reload' });
+      await started;
+      await host.request({ type: 'queuePrompt', text: 'Must not replay' });
+      const { deactivate } = await import('../extension.js');
+      await Promise.all([
+        action === 'deactivation' ? deactivate() : host.request({ type: 'disconnect' }),
+        pending,
+      ]);
+      assert.equal(sent, 1);
+      assert.equal(events[0], 'stop');
+      assert.ok(events.includes('cleanup'));
+      assert.equal(host.status()!.turns.at(-1)!.status, 'cancelled');
+      assert.equal(host.status()!.connected, false);
+      assert.deepEqual(host.status()!.queued, []);
+      assert.deepEqual(host.storedState!().changes, []);
+    },
+  );
+
+test('Stop sends upstream cancellation before releasing local held tools', async (context) => {
+  const host = await setup(context);
+  await host.request({ type: 'connect' });
+  const { started, release, hold } = promptPause();
+  const events: string[] = [];
+  transport.onPrompt = async () => {
+    await hold();
+    throw new Error('Owned prompt stopped');
+  };
+  transport.onCancel = () => {
+    events.push('cancel');
+    release();
+  };
+  const finish = HostTools.prototype.finish;
+  context.mock.method(
+    HostTools.prototype,
+    'finish',
+    async function (this: InstanceType<typeof HostTools>) {
+      events.push('cleanup');
+      assert.equal(events[0], 'cancel');
+      await finish.call(this);
+    },
+  );
+  const pending = host.request({ type: 'prompt', text: 'Hold without provider continuation' });
+  await started;
+  await host.request({ type: 'queuePrompt', text: 'Must not replay' });
+  await Promise.all([host.request({ type: 'cancel' }), pending]);
+  assert.equal(events[0], 'cancel');
+  assert.ok(events.includes('cleanup'));
+  assert.equal(host.status()!.turns.at(-1)!.status, 'cancelled');
+  assert.equal(host.status()!.connected, true);
+  assert.deepEqual(host.status()!.queued, []);
+});
 
 for (const phase of ['broker', 'history', 'pre-send', 'provider', 'cleanup', 'final-save']) {
   test(

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -248,6 +248,54 @@ test('history recovery accepts only unchanged prefixes with linked bookkeeping, 
   const altered = structuredClone(before);
   altered.entries[0]!.type = 'branch_summary';
   assert.throws(() => reconcileHistory(structuredClone(base), altered), /ambiguous/);
+});
+
+test('image attachment bytes survive private state reload and malformed image payloads fail without overwrite', async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'vs-omp-image-state-'));
+  try {
+    const store = new StateStore(directory);
+    await store.load();
+    const image = {
+      mimeType: 'image/png' as const,
+      data: Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).toString('base64'),
+    };
+    const attachment = {
+      id: 'image',
+      kind: 'image' as const,
+      uri: 'file:///no-longer-present.png',
+      label: 'Original snapshot',
+      text: 'Untrusted image',
+      image,
+    };
+    store.data.sessions.push({
+      id: 'image-owner',
+      root: 'file:///workspace',
+      label: 'Images',
+      turns: [
+        {
+          id: 'turn',
+          prompt: 'Inspect snapshot',
+          startedAt: 100,
+          status: 'completed',
+          blocks: [],
+          attachment,
+          attachments: [attachment],
+        },
+      ],
+    });
+    await store.save();
+    const restored = new StateStore(directory);
+    await restored.load();
+    assert.deepEqual(restored.data.sessions, store.data.sessions);
+    const data = JSON.parse(await readFile(path.join(directory, 'state.json'), 'utf8'));
+    data.sessions[0].turns[0].attachments[0].image.data = 'invalid base64';
+    const corrupted = JSON.stringify(data);
+    await writeFile(path.join(directory, 'state.json'), corrupted);
+    await assert.rejects(new StateStore(directory).load(), /not been overwritten/);
+    assert.equal(await readFile(path.join(directory, 'state.json'), 'utf8'), corrupted);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 });
 
 test('pending snapshots survive reload with private permissions and corrupt state is not overwritten', async () => {

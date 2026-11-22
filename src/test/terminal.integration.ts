@@ -6,9 +6,11 @@ import path from 'node:path';
 import { HostTools } from '../host-tools.js';
 import { PathGuard, ReviewJournal } from '../review.js';
 import { WorkspaceFiles } from '../workspace.js';
-import { nativeSession } from './native-session.js';
+import { nativeManagedWait, nativeSession } from './native-session.js';
 import { ChatView } from '../chat-view.js';
 import { webviewMessage } from '../state.js';
+import { askQuestions } from '../host-questions.js';
+import { questionRequest } from '../question-policy.js';
 
 function fileSignal(target: string): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -38,7 +40,16 @@ function fileSignal(target: string): Promise<void> {
   });
 }
 
+async function dialogPhase(cwd: string, scenario: string, phase: string) {
+  await writeFile(
+    path.join(cwd, 'native-dialog-phase.json'),
+    JSON.stringify({ scenario, phase, time: Date.now() }),
+    { mode: 0o600 },
+  );
+}
+
 async function dialogCase(tools: HostTools, cwd: string, scenario: string): Promise<void> {
+  await dialogPhase(cwd, scenario, 'starting');
   const abort = new AbortController();
   const marker = path.join(cwd, `native-${scenario}.txt`);
   const session = await nativeSession(tools, cwd, scenario, abort);
@@ -71,14 +82,18 @@ async function dialogCase(tools: HostTools, cwd: string, scenario: string): Prom
         await session.client.cancel();
       } else if (scenario === 'disconnect-running') await session.client.stop();
       else process.kill(session.pid, 'SIGKILL');
+      await dialogPhase(cwd, scenario, 'interrupted');
       await rejected;
+      await dialogPhase(cwd, scenario, 'settled');
       assert.throws(() => process.kill(pid, 0), { code: 'ESRCH' });
     } else {
       await assert.rejects(execution);
       await assert.rejects(readFile(marker), { code: 'ENOENT' });
     }
   } finally {
+    await dialogPhase(cwd, scenario, 'cleanup');
     await session.client.stop();
+    await dialogPhase(cwd, scenario, 'closed');
   }
   await stopped;
   if (scenario === 'cancel-late') await writeFile(path.join(cwd, 'native-cancelled'), 'cancelled');
@@ -152,6 +167,43 @@ async function policyCase(
   }
 }
 
+async function yoloCases(tools: HostTools, cwd: string): Promise<void> {
+  const config = vscode.workspace.getConfiguration('omp');
+  await tools.pickPermissions();
+  assert.equal(tools.permissions, 'all');
+  await tools.pickPermissions();
+  assert.equal(tools.permissions, 'yolo');
+  await policyCase(
+    tools,
+    cwd,
+    'printf NATIVE_TERMINAL_OUTPUT > yolo-native-output.txt; cat yolo-native-output.txt',
+  );
+  assert.equal(
+    Buffer.from(
+      await vscode.workspace.fs.readFile(
+        vscode.Uri.joinPath(vscode.Uri.file(cwd), 'yolo-native-output.txt'),
+      ),
+    ).toString('utf8'),
+    'NATIVE_TERMINAL_OUTPUT',
+  );
+  await policyCase(tools, cwd, 'wipefs --help', true);
+  await config.update(
+    'permissions.commandRules',
+    [{ command: ['printf'], action: 'deny' }],
+    vscode.ConfigurationTarget.Global,
+  );
+  await policyCase(tools, cwd, 'printf NATIVE_TERMINAL_OUTPUT', true);
+  await config.update(
+    'permissions.commandRules',
+    [{ command: ['printf'], action: 'ask' }],
+    vscode.ConfigurationTarget.Global,
+  );
+  await policyCase(tools, cwd, 'printf NATIVE_TERMINAL_OUTPUT', true);
+  console.log(
+    'PASS: installed OMP YOLO cancellation, confirmation, shell redirection, known-danger deny and explicit deny/ask.',
+  );
+}
+
 async function permissionCases(tools: HostTools, cwd: string): Promise<void> {
   const config = vscode.workspace.getConfiguration('omp');
   await policyCase(tools, cwd, 'pwd');
@@ -178,11 +230,66 @@ async function permissionCases(tools: HostTools, cwd: string): Promise<void> {
   );
   await policyCase(tools, cwd, 'printf NATIVE_TERMINAL_OUTPUT', true);
   await config.update('permissions.commandRules', [], vscode.ConfigurationTarget.Global);
+  await yoloCases(tools, cwd);
+  await config.update('permissions.commandRules', [], vscode.ConfigurationTarget.Global);
   await tools.pickPermissions();
   assert.equal(tools.permissions, 'rules');
   console.log(
     'PASS: installed OMP command rules, Allow All exceptions and native permission revocation.',
   );
+}
+
+async function questionCases(cwd: string): Promise<void> {
+  const ask = async (header: string, extra = {}) =>
+    JSON.parse(
+      await askQuestions(
+        questionRequest.parse({
+          questions: [
+            {
+              header,
+              question: 'Choose the fixture answer',
+              allowFreeformInput: false,
+              options: [{ label: 'JSON' }, { label: 'Text' }],
+              ...extra,
+            },
+          ],
+        }),
+        new AbortController().signal,
+      ),
+    );
+  const single = await ask('Parity Choice');
+  assert.deepEqual(single.answers['Parity Choice'].selected, ['JSON']);
+  const many = await ask('Parity Many', {
+    multiSelect: true,
+    options: [{ label: 'Diagnostics' }, { label: 'References' }, { label: 'Tests' }],
+  });
+  assert.deepEqual(many.answers['Parity Many'].selected, ['Diagnostics', 'Tests']);
+  const text = await ask('Parity Text', { options: null, allowFreeformInput: true });
+  assert.equal(text.answers['Parity Text'].freeText, 'Exact native user answer');
+  assert.equal((await ask('Parity Dismiss')).status, 'cancelled');
+  const abort = new AbortController();
+  const stopped = fileSignal(path.join(cwd, 'native-question-stop')).then(() =>
+    abort.abort(new Error('Stopped native question')),
+  );
+  const rejected = assert.rejects(
+    askQuestions(
+      questionRequest.parse({
+        questions: [
+          {
+            header: 'Parity Stop',
+            question: 'Stop this question',
+            options: [{ label: 'Never choose this' }],
+            allowFreeformInput: false,
+          },
+        ],
+      }),
+      abort.signal,
+    ),
+    /Stopped native question/,
+  );
+  await stopped;
+  await rejected;
+  console.log('PASS: native question choices, multiple selection, text, dismissal and Stop.');
 }
 
 async function runNativeDialogs(context: vscode.ExtensionContext): Promise<void> {
@@ -221,6 +328,15 @@ async function runNativeDialogs(context: vscode.ExtensionContext): Promise<void>
   assert.ok(await vscode.workspace.applyEdit(edit));
   const dirtyText = dirty.getText();
   try {
+    for (const scenario of ['stop', 'disconnect', 'exit', 'complete'] as const) {
+      await nativeManagedWait(root.fsPath, files, journal, scenario);
+      assert.deepEqual(journal.list(), pending);
+      assert.equal(await readFile(protectedFile, 'utf8'), 'pending reviewed change\n');
+      assert.equal(dirty.getText(), dirtyText);
+      assert.ok(dirty.isDirty);
+    }
+    await writeFile(path.join(root.fsPath, 'native-ui-ready'), 'ready');
+    await questionCases(root.fsPath);
     await permissionCases(tools, root.fsPath);
     for (const scenario of [
       'reject',

@@ -5,7 +5,7 @@ import type { SavedSession, StateStore, Turn } from '../state.js';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { setup } from './extension-setup.js';
-import { fixture, Uri, window } from './vscode-fixture.js';
+import { fixture, Uri } from './vscode-fixture.js';
 import { transport } from './acp-fixture.js';
 
 function saved(id: string): SavedSession {
@@ -24,10 +24,36 @@ test('empty storage inventory is exact, non-destructive and never schedules dele
   assert.equal(inventory.protectedSessionCount, 0);
   assert.equal(inventory.turnCount, 0);
   assert.equal(inventory.attachmentTextBytes, 0);
+  assert.equal(inventory.attachmentImageBytes, 0);
   assert.equal(inventory.reviewTextBytes, 0);
   assert.equal(inventory.retention, 'manual');
   assert.equal(inventory.automaticDeletion, false);
   assert.deepEqual(inventory.missingSessionIds, []);
+});
+
+test('image storage accounts decoded pixels once per logical attachment and serialized base64 without exposing either', () => {
+  const source = saved('image-owner');
+  const attached = {
+    id: 'image-id',
+    kind: 'image' as const,
+    uri: 'file:///image.png',
+    label: 'image.png',
+    text: 'Image snapshot',
+    image: {
+      mimeType: 'image/png' as const,
+      data: Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).toString('base64'),
+    },
+  };
+  source.turns = [{ ...turn(), attachment: attached, attachments: [attached] }];
+  const data = { version: 1 as const, sessions: [source], changes: [] };
+  const inventory = inspectStorage(data);
+  assert.equal(inventory.attachmentCount, 1);
+  assert.equal(inventory.attachmentImageBytes, 8);
+  assert.equal(inventory.sessions[0]!.attachmentImageBytes, 8);
+  assert.equal(inventory.serializedStateBytes, Buffer.byteLength(JSON.stringify(data)));
+  assert.equal(inventory.attachmentTextBytes, Buffer.byteLength(attached.text));
+  assert.ok(!JSON.stringify(inventory).includes(attached.image.data));
+  assert.ok(!JSON.stringify(inventory).includes(attached.text));
 });
 
 test('removal planning rejects protected, stale, duplicate and ambiguous session requests atomically', () => {
@@ -250,13 +276,11 @@ test('inspection retains protected session metadata after missing native history
   const original = host.storedState!();
   const stateFile = path.join(host.storage, 'state.json');
   const committed = await readFile(stateFile, 'utf8');
-  context.mock.method(
-    window,
-    'showQuickPick',
-    async (items: Parameters<typeof window.showQuickPick>[0]) => items[0],
-  );
   await fixture.commands.get('omp.sessions')!();
-  assert.match(host.status()!.error, /native session file is unavailable/);
+  await assert.rejects(
+    host.request({ type: 'resumeSession', id: original.activeSessionId }),
+    /native session file is unavailable/,
+  );
   assert.equal(host.status()!.connected, false);
   await fixture.commands.get('omp.inspectStorage')!();
   const report = JSON.parse(fixture.documents.at(-1)!.getText());

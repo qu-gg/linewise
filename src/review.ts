@@ -2,10 +2,10 @@ import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { PathGuard } from './path-guard.js';
 import { hunkIdentities, resolveHunk, reviewHunks } from './review-hunks.js';
-import type { Change, Provenance } from './review-types.js';
+import type { Approval, Change, Provenance } from './review-types.js';
 import { images, operationHistory } from './review-types.js';
 export { PathGuard } from './path-guard.js';
-export type { Change } from './review-types.js';
+export type { Approval, Change } from './review-types.js';
 
 export interface TextFiles {
   read(target: string): Promise<string | null>;
@@ -15,17 +15,6 @@ export interface TextFiles {
 }
 
 type Image = Pick<Change, 'path' | 'before' | 'after'>;
-
-export type Approval = (
-  operation: {
-    kind: 'read' | 'write' | 'delete' | 'move';
-    path: string;
-    before?: string | null;
-    after?: string | null;
-    destination?: string;
-  },
-  signal?: AbortSignal,
-) => Promise<boolean>;
 
 export class ReviewJournal {
   private changes: Change[];
@@ -47,21 +36,31 @@ export class ReviewJournal {
       .map((change) => structuredClone(change));
   }
 
-  async read(target: string, signal?: AbortSignal): Promise<string> {
-    const content = await this.inspect(target, signal);
+  async read(target: string, signal?: AbortSignal, approvedPath?: string): Promise<string> {
+    const content = await this.inspect(target, signal, approvedPath);
     if (content === null) throw new Error('File does not exist.');
     return content;
   }
 
-  async inspect(target: string, signal?: AbortSignal): Promise<string | null> {
-    signal?.throwIfAborted();
-    const scope = await this.guard.resolve(target);
-    if (!scope.inside && !(await this.approve({ kind: 'read', path: scope.path }, signal))) {
-      throw new Error('Outside-workspace read was not approved.');
-    }
-    signal?.throwIfAborted();
-    await this.revalidate(target, scope.path);
-    return this.files.read(scope.path);
+  async authorizeRead(
+    target: string,
+    signal?: AbortSignal,
+    approvedPath?: string,
+  ): Promise<string> {
+    return this.guard.authorizeRead(
+      target,
+      (path) => this.approve({ kind: 'read', path }, signal),
+      signal,
+      approvedPath,
+    );
+  }
+
+  async inspect(
+    target: string,
+    signal?: AbortSignal,
+    approvedPath?: string,
+  ): Promise<string | null> {
+    return this.files.read(await this.authorizeRead(target, signal, approvedPath));
   }
 
   write(

@@ -127,7 +127,11 @@ test('host mediates streamed prompts, attachments and review without losing dirt
   assert.equal(host.storedState!().changes[0]!.before, 'unsaved user work');
   const change = host.status()!.changes[0]!;
   await host.request({ type: 'review', id: change.id });
-  assert.ok(fixture.commandCalls.some((call) => call.id === 'vscode.diff'));
+  assert.ok(
+    fixture.commandCalls.some(
+      (call) => call.id === 'vscode.openWith' && call.args[1] === 'omp.inlineReview',
+    ),
+  );
   await host.request({ type: 'discard', id: change.id });
   assert.equal(fixture.documents[0]!.text, 'unsaved user work');
   assert.deepEqual(host.status()!.changes, []);
@@ -321,8 +325,11 @@ test('host native delete and paired move show operation-aware review and restore
     const change = host.status()!.changes[0]!;
     assert.match(change.name, op === 'delete' ? /Deleted/ : /renamed.txt/);
     await host.request({ type: 'review', id: change.id });
-    const diff = [...fixture.commandCalls].reverse().find((call) => call.id === 'vscode.diff')!;
-    assert.equal((diff.args[1] as Uri).scheme, 'omp-review');
+    const review = [...fixture.commandCalls]
+      .reverse()
+      .find((call) => call.id === 'vscode.openWith')!;
+    assert.equal((review.args[0] as Uri).scheme, 'omp-review');
+    assert.equal(review.args[1], 'omp.inlineReview');
     await host.request({ type: 'discard', id: change.id });
     assert.equal(host.status()!.changes.length, 0);
   }

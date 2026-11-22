@@ -20,10 +20,19 @@ function configs(state, { escape, working }) {
 
 function attachments(state, { button, itemButton, escape, icon, working }) {
   const snapshots = state.attachments ?? [];
+  const icons = { diagnostics: 'warning', image: 'file-media' };
   const add = button('attachContext', 'add', 'Add Context', working() ? 'disabled' : '');
+  const offer = activeEditorOffer(state, { itemButton, escape, icon, working });
   if (!snapshots.length)
-    return `<div class="prompt-context">${add}<span class="workspace-tag" title="${escape(state.attachment ?? state.workspace)}">${icon(state.attachment ? 'file-code' : 'folder')}${escape(state.attachment ?? state.workspace ?? '')}</span></div>`;
-  return `<div class="prompt-context">${add}<ul class="attachments" aria-label="Attached Context">${snapshots.map((snapshot) => `<li><button type="button" class="attachment-inspect" data-action="inspectAttachment" data-id="${escape(snapshot.id)}" title="${escape(snapshot.uri)}">${icon(snapshot.kind === 'diagnostics' ? 'warning' : 'file-code')}<span>${escape(snapshot.label)}</span></button>${itemButton('removeAttachment', 'close', `Remove ${snapshot.label}`, snapshot.id, working())}</li>`).join('')}</ul></div>`;
+    return `<div class="prompt-context">${add}<span class="workspace-tag" title="${escape(state.attachment ?? state.workspace)}">${icon(state.attachment ? 'file-code' : 'folder')}${escape(state.attachment ?? state.workspace ?? '')}</span>${offer}</div>`;
+  return `<div class="prompt-context">${add}<ul class="attachments" aria-label="Attached Context">${snapshots.map((snapshot) => `<li><button type="button" class="attachment-inspect" data-action="inspectAttachment" data-id="${escape(snapshot.id)}" title="${escape(snapshot.uri)}">${icon(icons[snapshot.kind] ?? 'file-code')}<span>${escape(snapshot.label)}</span></button>${itemButton('removeAttachment', 'close', `Remove ${snapshot.label}`, snapshot.id, working())}</li>`).join('')}</ul>${offer}</div>`;
+}
+
+function activeEditorOffer(state, { itemButton, escape, icon, working }) {
+  const offer = state.contextOffer;
+  if (!offer) return '';
+  const label = escape(offer.label);
+  return `<span class="context-offer"><button type="button" data-action="attachOffer" data-id="${escape(offer.id)}" aria-label="Add ${label} as Context" title="Add ${label} as Context" ${working() ? 'disabled' : ''}>${icon('file-code')}<span>${label}</span>${icon('add')}</button>${itemButton('dismissOffer', 'close', 'Dismiss Active File', offer.id, working())}</span>`;
 }
 
 function sendButton(state, draft, { button, icon }) {

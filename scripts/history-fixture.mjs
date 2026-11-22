@@ -3,6 +3,11 @@ import { randomUUID } from 'node:crypto';
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { nativeInput, nativePlans } from './native-plans.mjs';
+import { installFixtureGuard } from './fixture-guard.mjs';
+
+function toolIdentity() {
+  return `call_${randomUUID()}|${'opaque/signature+'.repeat(26)}`;
+}
 
 function nativeMutation(context) {
   const userIndex = context.messages.findLastIndex((message) => message.role === 'user');
@@ -25,13 +30,13 @@ function nativeMutation(context) {
   if (position < targets.length)
     return {
       type: 'toolCall',
-      id: randomUUID(),
+      id: toolIdentity(),
       name: 'read',
       arguments: { path: targets[position], i: 'inspect fixture' },
     };
   return {
     type: 'toolCall',
-    id: randomUUID(),
+    id: toolIdentity(),
     name: 'edit',
     arguments: {
       i: 'probe native mediation',
@@ -42,6 +47,26 @@ function nativeMutation(context) {
 
 function requestedWrite(latest) {
   const fixtures = [
+    {
+      marker: 'NATIVE_UX_INLINE_REVIEW_FIXTURE',
+      path: 'review-sample.ts',
+      content: [
+        "export function formatHeader(value = '') {",
+        '  return `HEADER: ${value}`;',
+        '}',
+        '',
+        'export const sampleRows = [',
+        ...'one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen'
+          .split(' ')
+          .map((word) => `  '${word}',`),
+        '];',
+        '',
+        "export function formatFooter(value = '') {",
+        '  return `FOOTER: ${value}`;',
+        '}',
+        '',
+      ].join('\n'),
+    },
     { marker: 'WRITE_FIXTURE', path: 'history.txt', content: 'agent version\n' },
     { marker: 'HISTORY_CREATE_FIXTURE', path: 'history-created.txt', content: 'created\n' },
     { marker: 'HISTORY_EDIT_FIXTURE', path: 'history-created.txt', content: 'edited\n' },
@@ -49,6 +74,95 @@ function requestedWrite(latest) {
   const selected = fixtures.find((entry) => latest.includes(entry.marker));
   if (selected)
     return { name: 'write', arguments: { path: selected.path, content: selected.content } };
+}
+
+function repositoryReadout(latest) {
+  if (latest.includes('NATIVE_UX_QUESTION_FIXTURE')) return questionTool();
+  const variant = latest.match(/REPOSITORY_READOUT_FIXTURE (\w+)/)?.[1];
+  const cwd = process.cwd();
+  const calls = {
+    root: { name: 'read', arguments: { path: '.' } },
+    absolute: { name: 'read', arguments: { path: cwd } },
+    slash: { name: 'read', arguments: { path: `${cwd}/` } },
+    text: { name: 'read', arguments: { path: 'repository-readout.md' } },
+    range: { name: 'read', arguments: { path: 'repository-readout.md:1-1' } },
+    nested: { name: 'read', arguments: { path: 'readout/nested/arbitrary.policy' } },
+    large: { name: 'read', arguments: { path: 'readout/nested/large.txt:220001-220001' } },
+    shell: {
+      name: 'bash',
+      arguments: { command: 'ls -la', timeout: null, cwd: null, pty: false },
+    },
+    nullable: {
+      name: 'bash',
+      arguments: { command: 'ls -la', timeout: null, cwd: null, pty: null },
+    },
+    cwd: {
+      name: 'bash',
+      arguments: { command: 'ls -la', timeout: null, cwd, pty: false },
+    },
+    zero: { name: 'bash', arguments: { command: 'ls', timeout: 0, cwd, pty: null } },
+  };
+  return calls[variant];
+}
+
+function managedWait(context) {
+  const userIndex = context.messages.findLastIndex((message) => message.role === 'user');
+  if (!JSON.stringify(context.messages[userIndex] ?? {}).includes('MANAGED_WAIT_FIXTURE'))
+    return null;
+  const directory = process.env.VS_OMP_FIXTURE_WAIT_DIR;
+  if (!directory) throw new Error('Managed wait fixture directory is required.');
+  const replies = context.messages
+    .slice(userIndex + 1)
+    .filter((message) => message.role === 'toolResult');
+  const gate = JSON.stringify(join(directory, 'release'));
+  const script =
+    'import fs from "node:fs"; import path from "node:path"; ' +
+    `fs.writeFileSync(${JSON.stringify(join(directory, 'pid'))},String(process.pid)); ` +
+    `const gate=${gate}; const finish=()=>{` +
+    'if(fs.existsSync(gate)){watcher.close();console.log("NATIVE_TERMINAL_OUTPUT");process.exitCode=7;}}; ' +
+    'const watcher=fs.watch(path.dirname(gate),finish);finish();';
+  let request;
+  if (replies.length === 0) request = { action: 'start', runtime: 'node', command: script };
+  else if (replies.length === 1)
+    request = { runtime: 'node', command: 'console.log("OTHER_SAFE_WORK")' };
+  else if (replies.length < 5) {
+    const first = replies[0].content.find((block) => block.type === 'text');
+    const { jobId } = JSON.parse(first.text);
+    if (typeof jobId !== 'string') throw new Error('Managed wait fixture needs the actual job ID.');
+    request = { action: replies.length === 4 ? 'stop' : 'wait', jobId };
+  }
+  if (request) return { type: 'toolCall', id: toolIdentity(), name: 'bash', arguments: request };
+}
+
+function questionTool() {
+  return {
+    name: 'ask',
+    arguments: {
+      questions: [
+        {
+          header: 'Output',
+          question: 'Choose output formats',
+          multiSelect: true,
+          allowFreeformInput: true,
+          options: [{ label: 'JSON', recommended: true }, { label: 'Text' }],
+        },
+        {
+          header: 'Scope',
+          question: 'Choose the scope',
+          multiSelect: false,
+          allowFreeformInput: false,
+          options: [{ label: 'Small' }, { label: 'Large' }],
+        },
+        {
+          header: 'Notes',
+          question: 'Add final notes',
+          multiSelect: false,
+          allowFreeformInput: true,
+          options: null,
+        },
+      ],
+    },
+  };
 }
 
 function requestedTool(context) {
@@ -61,6 +175,8 @@ function requestedTool(context) {
   )
     return;
   const latest = JSON.stringify(context.messages[userIndex]);
+  const repository = repositoryReadout(latest);
+  if (repository) return { type: 'toolCall', id: toolIdentity(), ...repository };
   let tool;
   if (latest.includes('HUNK_REVIEW_FIXTURE'))
     tool = {
@@ -78,7 +194,7 @@ function requestedTool(context) {
     if (!tool && latest.includes('BASH_FIXTURE') && process.env.VS_OMP_FIXTURE_BASH)
       tool = { name: 'bash', arguments: { command: process.env.VS_OMP_FIXTURE_BASH } };
   }
-  if (tool) return { type: 'toolCall', id: randomUUID(), ...tool };
+  if (tool) return { type: 'toolCall', id: toolIdentity(), ...tool };
 }
 
 async function fixtureSessionStart() {
@@ -91,8 +207,8 @@ const fixtureModels = [
     id: 'history',
     name: 'Local history fixture',
     reasoning: false,
-    input: ['text'],
-    contextWindow: 128000,
+    input: ['text', 'image'],
+    contextWindow: process.env.VS_OMP_FIXTURE_AUTO_COMPACTION === '1' ? 64000 : 128000,
     maxTokens: 1024,
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
   },
@@ -153,6 +269,12 @@ function fixtureInterrupted(stream, message, signal) {
 }
 
 function fixtureText(context) {
+  const latest = context.messages.findLast((message) => message.role === 'user');
+  if (
+    context.tools?.length &&
+    JSON.stringify(latest?.content).includes('NATIVE_CONTEXT_CAPTURE_VALIDATION')
+  )
+    return 'FIXTURE_REPLY\n\n| Format | State |\n| --- | --- |\n| JSON | Ready |\n| Text | Available |';
   if (!JSON.stringify(context.messages).includes('FUTURE_SENTINEL')) return 'FIXTURE_REPLY';
   return `FIXTURE_REPLY ${context.tools?.length ? 'FUTURE_SENTINEL' : 'SUMMARY_ONLY_FUTURE_SENTINEL'}`;
 }
@@ -188,6 +310,7 @@ function fixtureControl(stream, message, context, signal) {
 }
 
 export default function installFixture(api) {
+  installFixtureGuard(api);
   fixtureLifecycle(api);
   api.registerProvider('vs-omp-fixture', {
     baseUrl: 'http://127.0.0.1:1',
@@ -196,7 +319,9 @@ export default function installFixture(api) {
     streamSimple(model, context, options) {
       const stream = new AssistantMessageEventStream();
       const usage = fixtureUsage(context);
-      const toolCall = context.tools?.length ? requestedTool(context) : undefined;
+      const toolCall = context.tools?.length
+        ? (managedWait(context) ?? requestedTool(context))
+        : undefined;
       const message = {
         role: 'assistant',
         api: model.api,

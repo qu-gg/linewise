@@ -1,13 +1,45 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { watch } from 'node:fs';
 import { lstat, mkdir, readFile, realpath, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { z } from 'zod';
+import { shellRequest, shellPermission } from './shell-policy.js';
+import { editorRequest } from './editor-policy.js';
+import { questionRequest } from './question-policy.js';
+import { browserRequest } from './browser-policy.js';
+import { renameRequest } from './rename-policy.js';
+import { taskRequest } from './task-policy.js';
+import { fetchRequest } from './fetch-policy.js';
+import { codeActionRequest } from './code-action-policy.js';
+import { notebookRequest } from './notebook-policy.js';
 
 export const mutationCommand = 'vs-omp-mutation';
+export function permissionInput(input: Record<string, unknown>): string | undefined {
+  if (Object.keys(input).length === 1 && typeof input.input === 'string') return input.input;
+  for (const schema of [renameRequest, taskRequest, codeActionRequest, notebookRequest]) {
+    const parsed = schema.safeParse(input);
+    if (parsed.success) return JSON.stringify(parsed.data);
+  }
+  return shellPermission(input);
+}
+
 const text = z.string().max(1024 * 1024);
 const target = z.string().min(1).max(4096);
+const toolIdentity = z
+  .string()
+  .min(1)
+  .max(16 * 1024);
 export const mutationSchema = z.discriminatedUnion('op', [
+  z.object({ op: z.literal('notebook_edit'), request: notebookRequest }).strict(),
+  z.object({ op: z.literal('code_action'), request: codeActionRequest }).strict(),
+  z.object({ op: z.literal('fetch'), request: fetchRequest }).strict(),
+  z.object({ op: z.literal('task'), request: taskRequest }).strict(),
+  z.object({ op: z.literal('rename'), request: renameRequest }).strict(),
+  z.object({ op: z.literal('browser'), request: browserRequest }).strict(),
+  z.object({ op: z.literal('questions'), request: questionRequest }).strict(),
+  z.object({ op: z.literal('editor'), request: editorRequest }).strict(),
+  z.object({ op: z.literal('shell'), request: shellRequest }).strict(),
+  z.object({ op: z.literal('access'), path: target }).strict(),
   z.object({ op: z.literal('read'), path: target }).strict(),
   z
     .object({ op: z.literal('write'), path: target, before: text.nullable(), content: text })
@@ -24,17 +56,22 @@ export const mutationSchema = z.discriminatedUnion('op', [
     .strict(),
 ]);
 export type Mutation = z.infer<typeof mutationSchema>;
+export function isReviewedService(
+  mutation: Mutation,
+): mutation is Extract<Mutation, { op: 'rename' | 'code_action' | 'notebook_edit' }> {
+  return ['rename', 'code_action', 'notebook_edit'].includes(mutation.op);
+}
 const requestSchema = z
   .object({
     id: z.uuid(),
     scope: z.uuid().optional(),
-    toolCallId: z.string().min(1).max(200).optional(),
+    toolCallId: toolIdentity.optional(),
     mutations: z.array(mutationSchema).max(8),
   })
   .strict();
 const scopeSchema = z.object({ id: z.uuid() }).strict();
 const permitSchema = z
-  .object({ id: z.uuid(), scope: z.uuid(), input: z.string().max(128 * 1024) })
+  .object({ id: toolIdentity, scope: z.uuid(), input: z.string().max(128 * 1024) })
   .strict();
 const responseSchema = z.discriminatedUnion('ok', [
   z.object({ id: z.uuid(), ok: z.literal(true), text: text.nullable() }).strict(),
@@ -75,16 +112,15 @@ export async function stageMutation(
   await rename(`${target}.tmp`, target);
 }
 
-export async function cleanupMutation(directory: string, id: string): Promise<void> {
+export async function cleanupMutation(
+  directory: string,
+  id: string,
+  owner: 'caller' | 'broker' = 'caller',
+): Promise<void> {
   if (!z.uuid().safeParse(id).success) throw new Error('Invalid mutation identity.');
-  await Promise.all(
-    [
-      `request-${id}.json`,
-      `request-${id}.json.tmp`,
-      `response-${id}.json`,
-      `response-${id}.json.tmp`,
-    ].map((file) => rm(path.join(directory, file), { force: true })),
-  );
+  const files = [`request-${id}.json`, `request-${id}.json.tmp`, `response-${id}.json`];
+  if (owner === 'broker') files.push(`response-${id}.json.tmp`);
+  await Promise.all(files.map((file) => rm(path.join(directory, file), { force: true })));
 }
 
 export async function completeMutation(directory: string, id: string): Promise<string | null> {
@@ -121,9 +157,7 @@ export async function exchangeMutation(
     if (!result.ok) throw new Error(result.error);
     return result.text;
   } finally {
-    await Promise.all(
-      [request, response, `${response}.tmp`].map((file) => rm(file, { force: true })),
-    );
+    await cleanupMutation(directory, id);
   }
 }
 
@@ -205,9 +239,10 @@ export class MutationBroker {
   }
 
   async permit(id: string, input: unknown): Promise<boolean> {
-    if (this.closed || !z.uuid().safeParse(id).success || typeof input !== 'string') return false;
+    if (this.closed || !toolIdentity.safeParse(id).success || typeof input !== 'string')
+      return false;
     this.signal.throwIfAborted();
-    const target = path.join(this.directory, `permit-${id}.json`);
+    const target = permitPath(this.directory, id);
     try {
       const permit = permitSchema.parse(await readEnvelope(target));
       if (permit.id !== id || permit.scope !== this.id || permit.input !== input) return false;
@@ -251,8 +286,8 @@ export class MutationBroker {
   }
 
   private trackPermit(file: string | null): boolean {
-    const id = /^permit-([a-f0-9-]+)\.json$/.exec(file ?? '')?.[1];
-    if (!id || !z.uuid().safeParse(id).success) return false;
+    const id = /^permit-([a-f0-9]{64})\.json$/.exec(file ?? '')?.[1];
+    if (!id) return false;
     if (this.permits.size >= 256) {
       this.failure = new Error('Permission request limit reached.');
       this.closed = true;
@@ -267,17 +302,28 @@ export class MutationBroker {
     const scope = await readEnvelope(active).catch(() => undefined);
     if (scopeSchema.safeParse(scope).data?.id === this.id) await rm(active);
     await this.pending;
-    await Promise.all([...this.received].map((id) => cleanupMutation(this.directory, id)));
-    await Promise.all([...this.permits].map((id) => cleanupPermit(this.directory, id)));
+    await Promise.all(
+      [...this.received].map((id) => cleanupMutation(this.directory, id, 'broker')),
+    );
+    await Promise.all(
+      [...this.permits].map((id) =>
+        rm(path.join(this.directory, `permit-${id}.json`), { force: true }),
+      ),
+    );
     if (this.failure)
       throw new Error('Native mutation broker failed closed.', { cause: this.failure });
   }
 }
 
+function permitPath(directory: string, id: string): string {
+  const key = createHash('sha256').update(toolIdentity.parse(id)).digest('hex');
+  return path.join(directory, `permit-${key}.json`);
+}
+
 export async function stagePermit(directory: string, id: string, input: string): Promise<void> {
   const scope = scopeSchema.parse(await readEnvelope(path.join(directory, 'active.json')));
   const permit = permitSchema.parse({ id, scope: scope.id, input });
-  await writeFile(path.join(directory, `permit-${permit.id}.json`), JSON.stringify(permit), {
+  await writeFile(permitPath(directory, permit.id), JSON.stringify(permit), {
     mode: 0o600,
     flag: 'wx',
   });
@@ -291,8 +337,7 @@ export async function stagePermit(directory: string, id: string, input: string):
 }
 
 export async function cleanupPermit(directory: string, id: string): Promise<void> {
-  if (!z.uuid().safeParse(id).success) throw new Error('Invalid mutation identity.');
-  await rm(path.join(directory, `permit-${id}.json`), { force: true });
+  await rm(permitPath(directory, id), { force: true });
 }
 
 export async function exchangeMutations(
@@ -301,11 +346,19 @@ export async function exchangeMutations(
   signal?: AbortSignal,
   toolCallId?: string,
 ): Promise<void> {
+  await exchangeResult(directory, mutations, signal, toolCallId);
+}
+
+export async function exchangeResult(
+  directory: string,
+  mutations: Mutation[],
+  signal?: AbortSignal,
+  toolCallId?: string,
+): Promise<string | null> {
   signal?.throwIfAborted();
   const scope = scopeSchema.parse(await readEnvelope(path.join(directory, 'active.json')));
   const id = randomUUID();
-  const waiting = AbortSignal.any([AbortSignal.timeout(120_000), ...(signal ? [signal] : [])]);
-  const watcher = watch(directory, { signal: waiting });
+  const watcher = watch(directory, { signal });
   try {
     const active = path.join(directory, 'active.json');
     const assertScope = async () => {
@@ -326,7 +379,7 @@ export async function exchangeMutations(
     };
     await Promise.all([publish(), completed]);
     signal?.throwIfAborted();
-    await completeMutation(directory, id);
+    return await completeMutation(directory, id);
   } finally {
     watcher.close();
     await cleanupMutation(directory, id);

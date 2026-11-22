@@ -1,0 +1,27 @@
+{
+  "version": "1.1.0",
+  "files": {
+    "node_modules/node-addon-api/LICENSE.md": "89024017b88a9f2b763f79b941a4f2db3b4428edfcacdc0b23866b2da633ad0c",
+    "node_modules/node-pty/LICENSE": "a3d60eaf32d2fb09c9d82ef39f14bd6e2c0f3ca7de30daa827486c0d6f8b6e9f",
+    "node_modules/node-pty/lib/conpty_console_list_agent.js": "0d010879bb6680a0253d44363183d53e631f42972594eb6dcb1fb842c8c85e52",
+    "node_modules/node-pty/lib/eventEmitter2.js": "f1c14613aa90c10def4ca7238329270871997eb26f919f7074dc25533e3e75dd",
+    "node_modules/node-pty/lib/eventEmitter2.test.js": "9cd06569c14d4cd180031ed4df914b817e75ceb104ac10ef65cae6815f46c568",
+    "node_modules/node-pty/lib/index.js": "c1b82c92c4c63aaa8e8441fc5a291c4727cd3f3550666d2fec7250e0f6d4b173",
+    "node_modules/node-pty/lib/interfaces.js": "56e4173f09aad26173f9d4c79800fda0b808c34424f987ef8d671cc931119a0a",
+    "node_modules/node-pty/lib/shared/conout.js": "6ae3b0532616da11aa2a11b4506bb89b0d40be005a9ea9fb369fb59eefdbda47",
+    "node_modules/node-pty/lib/terminal.js": "5ed5cd66a766afba4a04093284e999f8516d41936501839055800b10eca5d304",
+    "node_modules/node-pty/lib/terminal.test.js": "6f6ae435c9c6e93d8146fa7a79fe155ec3291880aa4de68fbad7ed8891e4f87b",
+    "node_modules/node-pty/lib/testUtils.test.js": "eb13d8ffc04ef385604b37170bafa9914736d5c5be8bca857c9f32958f6fe7ec",
+    "node_modules/node-pty/lib/types.js": "408bf8287717b6322cc380ea66caf1b5e366dcf697707ae2f3cc454e08f3b151",
+    "node_modules/node-pty/lib/unixTerminal.js": "a62e3a60c3bc1b0e7261f58284856df748dcee6761a2bc7a5a5ba98b22660473",
+    "node_modules/node-pty/lib/unixTerminal.test.js": "608d6c9bcfa07873440ed813b499d347e3e79dace1cc58ea3bd61b53356f0937",
+    "node_modules/node-pty/lib/utils.js": "f75ad341c13fbf1a9a6605d7ee42dff5bbc5d43b7b381e413fb97eb1b8300beb",
+    "node_modules/node-pty/lib/windowsConoutConnection.js": "1440f70908fb1f55911ac8e936a1230f68a9c00c03096fcef6788eac6aad9d62",
+    "node_modules/node-pty/lib/windowsPtyAgent.js": "8636d16b38266112204061a22b135734177c242837982fd3a4055be726efa64a",
+    "node_modules/node-pty/lib/windowsPtyAgent.test.js": "4c83dd76ec446031876dc81869e4c204715f72c0ba7ba3389e10b390b6d08da1",
+    "node_modules/node-pty/lib/windowsTerminal.js": "c3a65716f53fed0135a8a633373d5f9c2ab092544d651f27ef0a67096dd3bcd9",
+    "node_modules/node-pty/lib/windowsTerminal.test.js": "325567d8d6b461df3d3b7990a51bac09f662733988df653de7ee9113880e67a3",
+    "node_modules/node-pty/lib/worker/conoutSocketWorker.js": "3e4bac095ac3870c3248a7302f5d10217de625f30c32b7000fe48a34788e47ac",
+    "node_modules/node-pty/package.json": "f8b6a14f7022c14f1cd5d109486f5dacd32bffb63a9a63e38eced37dacb47439"
+  }
+}

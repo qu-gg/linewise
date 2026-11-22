@@ -153,13 +153,67 @@ test('pre-execution policy rejects unreviewable mutation routes and allows plain
     undefined,
   );
   assert.equal(guardReason({ toolName: 'read', input: { path: 'README.md' } }), undefined);
+  assert.equal(guardReason({ toolName: 'read', input: { path: '.' } }), undefined);
   assert.equal(
     guardReason({ toolName: 'edit', input: { input: '[file.txt#ABCD]\nREM' } }),
     undefined,
   );
-  for (const option of ['async', 'pty', 'name', 'ready', 'cwd', 'timeout'])
+  for (const option of ['async', 'name', 'ready', 'cwd', 'timeout'])
     assert.ok(guardReason({ toolName: 'bash', input: { command: 'true', [option]: true } }));
   assert.equal(guardReason({ toolName: 'bash', input: { command: 'true' } }), undefined);
+});
+
+test('question guard admits bounded choices and rejects unknown or invalid question input', () => {
+  assert.equal(
+    guardReason({
+      toolName: 'ask',
+      input: {
+        questions: [
+          { header: 'Format', question: 'Choose a format', options: [{ label: 'JSON' }] },
+        ],
+      },
+    }),
+    undefined,
+  );
+  assert.match(
+    guardReason({ toolName: 'ask', input: { questions: [] } })!,
+    /Invalid bounded question/,
+  );
+  assert.ok(
+    guardReason({
+      toolName: 'ask',
+      input: { questions: [{ header: 'Run', question: 'Run?', command: 'arbitrary' }] },
+    }),
+  );
+});
+
+test('shell guard accepts strict defaults and explicit PTY without enabling detached modes', () => {
+  for (const input of [
+    { command: 'pwd && ls -la', timeout: null, cwd: null, pty: true },
+    { command: 'ls -la', timeout: null, cwd: null, pty: null },
+    { command: 'ls -la', timeout: null, cwd: '/workspace', pty: false },
+    { command: 'ls', timeout: 0, cwd: '/workspace', pty: null },
+    { command: 'ls', timeout: 120, cwd: '.', pty: false },
+    { command: 'ls', timeout: 5, cwd: '', i: 'Listing repository entries' },
+  ])
+    assert.equal(guardReason({ toolName: 'bash', input }), undefined);
+  for (const input of [
+    { timeout: -1 },
+    { timeout: 121 },
+    { timeout: NaN },
+    { timeout: Infinity },
+    { timeout: '10' },
+    { cwd: 1 },
+    { cwd: 'file:///workspace' },
+    { cwd: '../outside' },
+    { visibility: 'unknown' },
+    { pty: 'false' },
+    { async: false },
+    { name: null },
+    { ready: {} },
+    { unknown: null },
+  ])
+    assert.ok(guardReason({ toolName: 'bash', input: { command: 'ls', ...input } }));
 });
 
 async function unavailableHistory(directory: string, send: (text: string) => Promise<void>) {
@@ -255,6 +309,140 @@ test('private history control validates targets, refuses stale/busy operations, 
   }
 });
 
+test('default guard registers mediated edit and shell tools and validates owned jobs', async () => {
+  const registered: string[] = [];
+  let before!: (event: { systemPrompt: string }) => { systemPrompt: string } | undefined;
+  await installGuard({
+    registerTool: (tool) => registered.push(tool.name),
+    on: (event: string, handler: unknown) => {
+      if (event === 'before_agent_start') before = handler as typeof before;
+    },
+    registerCommand: () => {},
+    appendEntry: () => {},
+    setActiveTools: async () => {},
+  });
+  assert.deepEqual(registered, [
+    'edit',
+    'bash',
+    'editor',
+    'ask',
+    'browser',
+    'rename',
+    'task',
+    'fetch',
+    'code_action',
+    'notebook_edit',
+  ]);
+  const prompt = before({ systemPrompt: 'Existing instructions.' })!.systemPrompt;
+  assert.ok(prompt.startsWith('Existing instructions.'));
+  assert.match(prompt, /approval and execution have no elapsed-time deadline by default/i);
+  assert.equal(before({ systemPrompt: prompt }), undefined);
+  for (const action of ['output', 'wait']) {
+    const input = { action, jobId: randomUUID() };
+    assert.equal(guardReason({ toolName: 'bash', input }), undefined);
+  }
+  for (const input of [
+    { action: 'wait', jobId: 'foreign' },
+    { action: 'wait', jobId: randomUUID(), waitMs: 1 },
+    { action: 'wait', jobId: randomUUID(), timeout: 1 },
+    { action: 'wait', jobId: randomUUID(), command: 'pwd' },
+  ])
+    assert.ok(guardReason({ toolName: 'bash', input }));
+  assert.ok(guardReason({ toolName: 'bash', input: { action: 'stop', jobId: 'foreign' } }));
+  assert.equal(guardReason({ toolName: 'editor', input: { action: 'diagnostics' } }), undefined);
+  assert.ok(
+    guardReason({ toolName: 'editor', input: { action: 'execute', command: 'arbitrary' } }),
+  );
+});
+
+test('read guard accepts local filesystem targets and native line selectors', () => {
+  for (const target of [
+    'src/nested/file.ts:59-260',
+    'src/nested/file.ts:raw',
+    'assets/icon.png',
+    'state.sqlite',
+    'data.zip',
+    'src/file#name.[x]',
+    '../outside',
+  ])
+    assert.equal(guardReason({ toolName: 'read', input: { path: target } }), undefined, target);
+  for (const target of ['', '\0', 'https://example.com/file', 'omp://session'])
+    assert.ok(guardReason({ toolName: 'read', input: { path: target } }), target);
+});
+
+async function directoryReads(directory: string, read: (target: string) => Promise<unknown>) {
+  await mkdir(path.join(directory, 'folder.txt'));
+  await writeFile(path.join(directory, 'folder.txt', 'nested.bin'), 'arbitrary text extension');
+  await writeFile(path.join(directory, 'binary.bin'), 'not an admitted mutation type');
+  await mkdir(path.join(directory, '.omp/agent/sessions'), { recursive: true });
+  await writeFile(path.join(directory, '.omp/agent/sessions/local.md'), 'workspace-owned history');
+  for (const target of [
+    '.',
+    directory,
+    `${directory}/`,
+    'folder.txt',
+    'binary.bin',
+    'folder.txt/nested.bin:1-2',
+    '.omp/agent/sessions/local.md',
+  ])
+    assert.equal(await read(target), undefined);
+  await symlink(path.dirname(directory), path.join(directory, 'outside'));
+  for (const target of ['private', 'alias.txt', 'outside', path.dirname(directory)])
+    assert.ok(await read(target));
+}
+
+type ToolGuard = (
+  event: GuardEvent,
+  context: { cwd: string },
+) => Promise<{ block: true; reason: string } | undefined>;
+
+async function scopedShell(directory: string, guard: ToolGuard) {
+  const invoke = (target: string) =>
+    guard({ toolName: 'read', input: { path: target } }, { cwd: directory });
+  const call = {
+    toolName: 'bash',
+    toolCallId: `call_${randomUUID()}|${'opaque/+'.repeat(70)}`,
+    input: { command: 'true' },
+  };
+  assert.equal((await guard(call, { cwd: directory }))?.block, true);
+  let redirect: (() => Promise<void>) | undefined;
+  const broker = new MutationBroker(
+    path.join(directory, 'private', 'mutations'),
+    async () => {
+      await redirect?.();
+      return null;
+    },
+    new AbortController().signal,
+  );
+  await broker.start();
+  try {
+    assert.equal(await invoke(path.dirname(directory)), undefined);
+    redirect = async () => {
+      await rm(path.join(directory, 'outside'));
+      await symlink(directory, path.join(directory, 'outside'));
+    };
+    assert.match((await invoke('outside'))!.reason, /changed after approval/);
+    redirect = undefined;
+    assert.equal(await guard(call, { cwd: directory }), undefined);
+    assert.equal(await broker.permit(call.toolCallId, JSON.stringify(call.input)), true);
+    assert.equal(
+      (await guard({ ...call, toolCallId: undefined }, { cwd: directory }))?.block,
+      true,
+    );
+    assert.equal(
+      await guard(
+        { toolName: 'edit', input: { input: '[normal.txt#ABCD]\nREM' } },
+        { cwd: directory },
+      ),
+      undefined,
+    );
+  } finally {
+    await broker.close();
+  }
+  delete process.env.VS_OMP_ARTIFACTS_ROOT;
+  assert.equal((await guard(call, { cwd: directory }))?.block, true);
+}
+
 test('installed guard pins tools and refuses private artifacts, symlink aliases and invalid reads', async (context) => {
   const directory = await mkdtemp(path.join(tmpdir(), 'omp-guard-'));
   const original = process.env.VS_OMP_ARTIFACTS_ROOT;
@@ -288,7 +476,12 @@ test('installed guard pins tools and refuses private artifacts, symlink aliases 
     async () => {},
   );
   await start();
-  assert.deepEqual(tools, 'read,write,todo,retain,recall,memory_edit,edit,bash'.split(','));
+  assert.deepEqual(
+    tools,
+    'read,write,todo,retain,recall,memory_edit,edit,bash,editor,ask,browser,rename,task,fetch,code_action,notebook_edit'.split(
+      ',',
+    ),
+  );
   const invoke = (toolName: string, target: string) =>
     guard({ toolName, input: { path: target, content: 'text' } }, { cwd: directory });
   await writeFile(path.join(artifacts, 'history.txt'), 'private');
@@ -297,38 +490,11 @@ test('installed guard pins tools and refuses private artifacts, symlink aliases 
     assert.equal((await invoke('write', target))?.block, true);
   await writeFile(path.join(directory, 'normal.txt'), 'text');
   assert.equal(await invoke('read', 'normal.txt'), undefined);
-  await mkdir(path.join(directory, 'folder.txt'));
-  assert.equal((await invoke('read', 'folder.txt'))?.block, true);
+  await directoryReads(directory, (target) => invoke('read', target));
   await writeFile(path.join(directory, 'large.txt'), 'x'.repeat(1024 * 1024 + 1));
-  assert.equal((await invoke('read', 'large.txt'))?.block, true);
+  assert.equal(await invoke('read', 'large.txt'), undefined);
   assert.equal((await invoke('bash', 'normal.txt'))?.block, true);
   assert.equal(await invoke('todo', ''), undefined);
-  const call = { toolName: 'bash', toolCallId: randomUUID(), input: { command: 'true' } };
-  assert.equal((await guard(call, { cwd: directory }))?.block, true);
-  const broker = new MutationBroker(
-    path.join(artifacts, 'mutations'),
-    async () => null,
-    new AbortController().signal,
-  );
-  await broker.start();
-  try {
-    assert.equal(await guard(call, { cwd: directory }), undefined);
-    assert.equal(await broker.permit(call.toolCallId, JSON.stringify(call.input)), true);
-    assert.equal(
-      (await guard({ ...call, toolCallId: undefined }, { cwd: directory }))?.block,
-      true,
-    );
-    assert.equal(
-      await guard(
-        { toolName: 'edit', input: { input: '[normal.txt#ABCD]\nREM' } },
-        { cwd: directory },
-      ),
-      undefined,
-    );
-  } finally {
-    await broker.close();
-  }
-  delete process.env.VS_OMP_ARTIFACTS_ROOT;
-  assert.equal((await guard(call, { cwd: directory }))?.block, true);
+  await scopedShell(directory, guard);
   assert.equal((await invoke('write', 'normal.txt'))?.block, true);
 });

@@ -4,6 +4,22 @@ import path from 'node:path';
 export class PathGuard {
   constructor(private readonly roots: readonly string[]) {}
 
+  async authorizeRead(
+    target: string,
+    approve: (target: string) => Promise<boolean>,
+    signal?: AbortSignal,
+    approvedPath?: string,
+  ): Promise<string> {
+    signal?.throwIfAborted();
+    const scope = await this.resolve(target);
+    if (!scope.inside && scope.path !== approvedPath && !(await approve(scope.path)))
+      throw new Error('Outside-workspace read was not approved.');
+    signal?.throwIfAborted();
+    if ((await this.resolve(target)).path !== scope.path)
+      throw new Error('Filesystem target changed during read approval.');
+    return scope.path;
+  }
+
   async resolve(target: string): Promise<{ path: string; inside: boolean }> {
     if (!path.isAbsolute(target) || target.includes('\0') || target.split(/[\\/]/).includes('..')) {
       throw new Error('Only absolute filesystem paths without traversal are supported.');

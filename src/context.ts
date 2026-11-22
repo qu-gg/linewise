@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { Attachment, Turn } from './state.js';
+import { imageSchema, decodeImage, type ImagePayload } from './image-policy.js';
 
 type ContextRequest =
   | { type: 'attach' }
@@ -31,8 +32,58 @@ export function contextSnapshot(
   return { id: randomUUID(), kind, label, uri, text };
 }
 
+export function imageContextSnapshot(label: string, uri: string, image: ImagePayload): Attachment {
+  return {
+    ...contextSnapshot('image', label, uri, 'Untrusted image snapshot: ' + label),
+    image: imageSchema.parse(image),
+  };
+}
+
+function validatedSnapshot(snapshot: Attachment): Attachment {
+  if (snapshot.kind === 'image') {
+    if (!snapshot.image) throw new Error('Image attachment payload is missing.');
+    return imageContextSnapshot(snapshot.label, snapshot.uri, snapshot.image);
+  }
+  if (snapshot.image) throw new Error('Image payload requires an image attachment.');
+  return contextSnapshot(snapshot.kind ?? 'file', snapshot.label, snapshot.uri, snapshot.text);
+}
+
 export class ContextAttachments {
   private readonly drafts = new Map<string, Attachment[]>();
+  private readonly dismissed = new Map<string, string>();
+  private offered: { id: string; owner: string; uri: string; label: string } | undefined;
+
+  offer(owner: string, resource?: { uri: string; label: string }) {
+    if (
+      !resource ||
+      this.dismissed.get(owner) === resource.uri ||
+      this.list(owner).some((item) => item.uri === resource.uri)
+    ) {
+      this.offered = undefined;
+      return;
+    }
+    if (this.offered?.owner !== owner || this.offered.uri !== resource.uri)
+      this.offered = { ...resource, owner, id: randomUUID() };
+    const { id, uri, label } = this.offered;
+    return { id, uri, label };
+  }
+
+  offeredUri(owner: string, id: string): string {
+    if (this.offered?.owner !== owner || this.offered.id !== id)
+      throw new Error('The active-editor context offer is stale.');
+    return this.offered.uri;
+  }
+
+  dismissOffer(owner: string, id: string): void {
+    this.dismissed.set(owner, this.offeredUri(owner, id));
+    this.offered = undefined;
+  }
+
+  bindSession(owner: string, previousOwner?: string, resumed = false): void {
+    if (previousOwner || resumed) return;
+    this.add(owner, this.list('new'));
+    this.clear('new');
+  }
 
   list(owner: string): Attachment[] {
     return structuredClone(this.drafts.get(owner) ?? []);
@@ -75,12 +126,7 @@ export class ContextAttachments {
   add(owner: string, snapshots: Attachment[]): void {
     const pending = this.list(owner);
     for (const snapshot of snapshots) {
-      const validated = contextSnapshot(
-        snapshot.kind ?? 'file',
-        snapshot.label,
-        snapshot.uri,
-        snapshot.text,
-      );
+      const validated = validatedSnapshot(snapshot);
       const index = pending.findIndex(
         (entry) =>
           entry.uri === snapshot.uri &&
@@ -95,6 +141,12 @@ export class ContextAttachments {
       pending.reduce((total, entry) => total + Buffer.byteLength(entry.text, 'utf8'), 0) > 128_000
     )
       throw new Error('Attach at most eight snapshots and 128 KB in total.');
+    const imageBytes = pending.reduce(
+      (total, snapshot) => total + (snapshot.image ? decodeImage(snapshot.image).byteLength : 0),
+      0,
+    );
+    if (imageBytes > 1_048_576)
+      throw new Error('Attach at most 1 MiB of image snapshots in total.');
     this.drafts.set(owner, pending);
   }
 
@@ -121,5 +173,7 @@ export class ContextAttachments {
 
   clear(owner: string): void {
     this.drafts.delete(owner);
+    this.dismissed.delete(owner);
+    if (this.offered?.owner === owner) this.offered = undefined;
   }
 }

@@ -41,7 +41,10 @@ export class OmpClient {
       options: [{ name: 'GPT-4.1', value: 'github-copilot/gpt-4.1' }],
     },
   ];
-  constructor(readonly handlers: ClientHandlers) {
+  constructor(
+    readonly handlers: ClientHandlers,
+    readonly log: (message: string) => void = () => {},
+  ) {
     transport.client = this;
   }
   async start(options: Parameters<ActualClient['start']>[0]) {

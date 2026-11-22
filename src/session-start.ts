@@ -2,8 +2,15 @@ import { mkdir, readdir, realpath, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { selectOptions, OmpClient } from './acp.js';
 import { HostTools, toolConfiguration } from './host-tools.js';
+import {
+  instructionArguments,
+  workspaceInstructions,
+  withInstructionSnapshot,
+} from './workspace-instructions.js';
+import { checkedReadPath } from './file-policy.js';
 import { reconcileHistory, type SavedSession, type StateStore } from './state.js';
 import type { SessionNotification } from '@agentclientprotocol/sdk';
+import type { ContextAttachments } from './context.js';
 
 export function createConnection(
   files: ConstructorParameters<typeof HostTools>[0],
@@ -14,9 +21,16 @@ export function createConnection(
     update: (notification: SessionNotification) => void;
     closed: (client: OmpClient, tools: HostTools) => void;
     log: (message: string) => void;
+    questions?: ConstructorParameters<typeof HostTools>[4];
   },
 ) {
-  const tools = new HostTools(files, journal, path.join(artifacts, 'mutations'), approval);
+  const tools = new HostTools(
+    files,
+    journal,
+    path.join(artifacts, 'mutations'),
+    approval,
+    handlers.questions,
+  );
   const client = new OmpClient(
     {
       update: async (notification) => handlers.update(notification),
@@ -36,13 +50,16 @@ export async function bindConnectedSession(
   client: OmpClient,
   root: { uri: string; name: string },
   saved?: SavedSession,
+  attachments?: ContextAttachments,
 ) {
   if (!client.sessionId) throw new Error('OMP did not return a session identifier.');
+  const previousOwner = store.data.activeSessionId;
   if (!saved)
     store.data.sessions.push({ id: client.sessionId, root: root.uri, label: root.name, turns: [] });
   store.data.activeSessionId = saved?.id ?? client.sessionId;
   const active = store.data.sessions.find((session) => session.id === store.data.activeSessionId)!;
   if (client.historyAvailable) active.sessionFile = (await client.history()).fileName;
+  attachments?.bindSession(active.id, previousOwner, Boolean(saved));
   if (!saved?.historyTransition) return false;
   reconcileHistory(saved, await client.history());
   return true;
@@ -116,10 +133,12 @@ export function startupArguments(
   guard: string,
   artifacts: string,
   fixture?: string,
+  instructions?: string,
 ) {
   return [
     '--config',
     config,
+    ...instructionArguments(instructions),
     '--no-extensions',
     '--extension',
     guard,
@@ -133,6 +152,29 @@ export function startupArguments(
     '--approval-mode',
     'write',
   ];
+}
+
+export async function startSessionClient(
+  client: OmpClient,
+  options: Omit<Parameters<OmpClient['start']>[0], 'args'> & {
+    config: string;
+    storage: string;
+    guard: string;
+    fixture?: string;
+  },
+  read: (target: string) => Promise<string | null>,
+): Promise<void> {
+  const { storage, config, guard, fixture, ...start } = options;
+  const instructions = await workspaceInstructions(start.cwd, async (target) =>
+    read(await checkedReadPath(target, start.cwd, storage)),
+  );
+  await withInstructionSnapshot(storage, instructions, (snapshot) =>
+    client.start({
+      ...start,
+      args: startupArguments(config, guard, start.artifacts, fixture, snapshot),
+    }),
+  );
+  if (!client.sessionId) throw new Error('OMP did not return a session identifier.');
 }
 
 export async function selectCopilotModel(client: OmpClient, preferred: string): Promise<void> {

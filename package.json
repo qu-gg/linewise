@@ -2,7 +2,7 @@
   "name": "vs-omp",
   "displayName": "OMP",
   "description": "A workspace-local OMP coding agent with inspectable changes.",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "private": true,
   "publisher": "vs-omp-local",
   "license": "MIT",
@@ -32,6 +32,18 @@
     }
   },
   "contributes": {
+    "customEditors": [
+      {
+        "viewType": "omp.inlineReview",
+        "displayName": "OMP Inline Review",
+        "selector": [
+          {
+            "filenamePattern": "**/after/*"
+          }
+        ],
+        "priority": "option"
+      }
+    ],
     "viewsContainers": {
       "secondarySidebar": [
         {
@@ -79,6 +91,36 @@
         "title": "OMP: Show Output"
       },
       {
+        "command": "omp.addFileContext",
+        "title": "Add File as Context to OMP",
+        "icon": "$(add)"
+      },
+      {
+        "command": "omp.reviewPrevious",
+        "title": "OMP: Previous Change",
+        "icon": "$(arrow-up)"
+      },
+      {
+        "command": "omp.reviewNext",
+        "title": "OMP: Next Change",
+        "icon": "$(arrow-down)"
+      },
+      {
+        "command": "omp.reviewKeep",
+        "title": "OMP: Keep Change at Cursor",
+        "icon": "$(check)"
+      },
+      {
+        "command": "omp.reviewDiscard",
+        "title": "OMP: Discard Change at Cursor",
+        "icon": "$(discard)"
+      },
+      {
+        "command": "omp.closeBrowser",
+        "title": "OMP: Close Owned Browser",
+        "icon": "$(close-all)"
+      },
+      {
         "command": "omp.inspectStorage",
         "title": "OMP: Inspect Storage"
       },
@@ -99,9 +141,91 @@
         "title": "OMP: Clean Orphaned Storage"
       }
     ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "omp.reviewKeep",
+          "when": "resourceScheme == omp-review && omp.reviewAvailable",
+          "group": "navigation@1"
+        },
+        {
+          "command": "omp.reviewDiscard",
+          "when": "resourceScheme == omp-review && omp.reviewAvailable",
+          "group": "navigation@2"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "omp.addFileContext",
+          "when": "isWorkspaceTrusted && !explorerResourceIsFolder && (resourceScheme == file || resourceScheme == vscode-remote)",
+          "group": "navigation@9"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "omp.addFileContext",
+          "when": "isWorkspaceTrusted && (resourceScheme == file || resourceScheme == vscode-remote || resourceScheme == untitled)",
+          "group": "navigation@9"
+        }
+      ],
+      "editor/title/context": [
+        {
+          "command": "omp.addFileContext",
+          "when": "isWorkspaceTrusted && (resourceScheme == file || resourceScheme == vscode-remote || resourceScheme == untitled)",
+          "group": "navigation@9"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "omp.closeBrowser",
+          "when": "view == omp.chat",
+          "group": "navigation@3"
+        }
+      ]
+    },
     "configuration": {
       "title": "OMP",
       "properties": {
+        "omp.notifications.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show native workbench notifications for OMP attention and successful workflow completion."
+        },
+        "omp.notifications.approval": {
+          "type": "boolean",
+          "default": true,
+          "description": "Notify when an OMP action needs approval."
+        },
+        "omp.notifications.questions": {
+          "type": "boolean",
+          "default": true,
+          "description": "Notify when OMP has questions awaiting an answer."
+        },
+        "omp.notifications.finished": {
+          "type": "boolean",
+          "default": true,
+          "description": "Notify after a successful OMP workflow, coalescing queued follow-ups."
+        },
+        "omp.notifications.focus": {
+          "type": "string",
+          "enum": [
+            "background",
+            "always"
+          ],
+          "default": "background",
+          "description": "Notify only while OMP chat or its window is in the background, or regardless of focus. Workbench notification suppression still applies."
+        },
+        "omp.context.activeEditorOffer": {
+          "type": "boolean",
+          "default": true,
+          "description": "Offer the active editor as optional context beside the composer. File contents are captured only after an explicit click."
+        },
+        "omp.browser.executablePath": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "description": "Absolute user-configured Chromium/Chrome/Brave executable for fresh OMP-owned Playwright pages. Empty uses an already-installed Playwright Chromium. No browser is downloaded automatically; workspace overrides are ignored."
+        },
         "omp.executablePath": {
           "type": "string",
           "default": "omp",
@@ -121,20 +245,20 @@
           ],
           "default": "rules",
           "scope": "machine",
-          "description": "Default command permission mode for each connection. Allow All is available only through the session picker and is never persisted. Workspace overrides are ignored."
+          "description": "Default command permission mode for each connection. Allow All and YOLO are available only through the confirmed session picker and are never persisted. Workspace overrides are ignored."
         },
         "omp.permissions.useDefaultRules": {
           "type": "boolean",
           "default": true,
           "scope": "machine",
-          "description": "Use conservative built-in read-only approvals and sensitive-command prompts. Explicit user rules override these defaults. Workspace overrides are ignored. This is not a sandbox."
+          "description": "Use conservative built-in read-only approvals and sensitive-command prompts. Explicit user rules override these defaults. YOLO skips conservative prompts but retains its known-dangerous-command denylist. Workspace overrides are ignored. This is not a sandbox."
         },
         "omp.permissions.commandRules": {
           "type": "array",
           "default": [],
           "scope": "machine",
           "maxItems": 128,
-          "markdownDescription": "User-owned command rules. `deny` blocks; `ask` requires confirmation even in Allow All; `allow` permits matching commands in Command Rules mode. Deny wins over ask, and ask wins over allow, regardless of order. Commands are literal argument arrays, matched at command boundaries, not shell globs or regular expressions. Workspace overrides are ignored. Unknown syntax still prompts; this is not a security boundary.",
+          "markdownDescription": "User-owned command rules. `deny` blocks; `ask` requires confirmation even in Allow All or YOLO; `allow` permits matching commands in Command Rules mode. Deny wins over ask, and ask wins over allow, regardless of order. Commands are literal argument arrays, matched at recognizable command boundaries, not shell globs or regular expressions. Workspace overrides are ignored. Unknown syntax prompts except in YOLO. YOLO's known-dangerous-command denylist cannot be overridden by allow rules. Matching is best effort, not a security boundary.",
           "items": {
             "type": "object",
             "required": [
@@ -179,6 +303,7 @@
     "vscode": "^1.146.0"
   },
   "scripts": {
+    "build:pty": "node scripts/pty-runtime.mjs rebuild",
     "build": "node node_modules/typescript-compiler/bin/tsc -p . && node scripts/build.mjs",
     "vscode:prepublish": "npm run build",
     "typecheck": "node node_modules/typescript-compiler/bin/tsc -p . --noEmit",
@@ -188,15 +313,19 @@
     "check": "node scripts/quality.mjs check",
     "check:native": "node scripts/quality.mjs native",
     "check:release": "node scripts/quality.mjs release",
+    "setup:test-display": "node scripts/setup-test-display.mjs",
+    "test:display": "node --test quality/test-display.test.mjs quality/test-display.integration.mjs",
     "test:quality": "node scripts/quality.mjs selftest",
     "test:coverage": "node scripts/quality.mjs coverage",
     "metrics": "node scripts/quality.mjs metrics",
     "architecture": "node scripts/quality.mjs architecture",
     "test:extension": "npm run build && node scripts/test-extension.mjs",
+    "test:live": "node scripts/quality.mjs live",
     "test": "node scripts/quality.mjs test",
     "spike:mutations": "npm run build && node scripts/mutation-spike.mjs",
     "spike:handshake": "node scripts/acp-spike.mjs",
-    "package": "vsce package --no-dependencies --no-rewrite-relative-links"
+    "package": "vsce package --no-dependencies --no-rewrite-relative-links",
+    "release:accept": "node scripts/release-accept.mjs"
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "2.7.0",
@@ -204,7 +333,14 @@
     "@vscode/codicons": "^0.0.46-24",
     "diff": "^8.0.4",
     "dompurify": "^3.4.18",
+    "ignore": "7.0.14",
+    "jsonc-parser": "3.3.1",
     "marked": "^15.0.12",
+    "minimatch": "11.0.5",
+    "ml-matrix": "6.12.1",
+    "monaco-editor": "0.57.0",
+    "node-pty": "1.1.0",
+    "playwright-core": "1.65.1",
     "shell-quote": "1.12.0",
     "zod": "^4.6.7"
   },
@@ -226,13 +362,20 @@
     "eslint-plugin-sonarjs": "4.2.2",
     "globals": "^16.0.0",
     "jsdom": "^31.0.1",
-    "playwright-core": "1.65.1",
+    "node-gyp": "13.1.0",
     "prettier": "3.10.1",
     "typescript": "^6.0.0",
     "typescript-compiler": "npm:typescript@^7.0.2",
-    "typhonjs-escomplex-module": "0.1.0"
+    "typhonjs-escomplex-module": "0.1.0",
+    "xml2js": "0.5.0",
+    "yaml": "2.9.1",
+    "yauzl": "3.4.0",
+    "yazl": "2.5.1"
   },
   "overrides": {
+    "monaco-editor": {
+      "dompurify": "$dompurify"
+    },
     "@vscode/vsce": {
       "minimatch": "^11.0.1"
     },

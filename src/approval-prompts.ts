@@ -3,6 +3,7 @@ import { createTwoFilesPatch } from 'diff';
 import type { ApprovalPrompt } from './approvals.js';
 import type { Approval } from './review.js';
 import type { TerminalCommand } from './terminal.js';
+import type { BrowserRequest } from './browser-policy.js';
 
 export function visible(text: string): string {
   return text.replace(/[\p{Cc}\p{Cf}]/gu, (character) => {
@@ -43,6 +44,21 @@ export function commandApproval(command: Readonly<TerminalCommand>): ApprovalPro
       'Commands can change files outside the workspace, access host credentials or send data. They are not sandboxed. File and external side effects are not covered by Keep/Discard or conversation rewind. Review resulting files in Source Control.',
       'Only ordinary path/home/user/locale/terminal/temp variables are inherited. Explicit shell arguments can run arbitrary scripts. Approval applies once to this command only.',
     ].join('\n\n'),
+  };
+}
+
+export function browserApproval(request: BrowserRequest, executablePath?: string): ApprovalPrompt {
+  return {
+    kind: 'command',
+    title: 'Allow Owned Browser Action?',
+    summary: `Browser: ${request.action}`,
+    details: JSON.stringify({
+      executable: executablePath || 'Playwright-managed Chromium',
+      request,
+    }),
+    notice:
+      'Isolated OMP-owned browser only, not existing tabs or profiles. Pages, site state and background network activity persist between prompts in this session until Close Owned Browser, Stop, disconnect or ownership changes. Page content is untrusted. Host network/web side effects are not sandboxed or restored by review.',
+    configurable: false,
   };
 }
 

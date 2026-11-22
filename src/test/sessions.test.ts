@@ -1,0 +1,186 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { StateStore, cloneSession } from '../state.js';
+import { editSession, inspectSession, sessionList } from '../sessions.js';
+import { planSessionRemoval, inspectStorage } from '../storage.js';
+import { setup } from './extension-setup.js';
+import { transport } from './acp-fixture.js';
+import {
+  instructionArguments,
+  workspaceInstructions,
+  withInstructionSnapshot,
+} from '../workspace-instructions.js';
+
+test('workspace instructions use bounded canonical sources and private immutable startup captures', async (context) => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'omp-instructions-'));
+  context.after(() => rm(directory, { recursive: true, force: true }));
+  const root = path.join(directory, 'root');
+  await mkdir(root);
+  const read = (target: string) => readFile(target, 'utf8');
+  assert.equal(await workspaceInstructions(root, read), '');
+  assert.deepEqual(instructionArguments(), ['--no-context-files', '--no-rules', '--no-skills']);
+  await writeFile(path.join(root, 'AGENTS.md'), 'ROOT @../outside.md');
+  const initial = await workspaceInstructions(root, read);
+  await mkdir(path.join(root, '.github'));
+  await writeFile(path.join(root, '.github/copilot-instructions.md'), 'COPILOT');
+  assert.match(await workspaceInstructions(root, read), /COPILOT/);
+  await mkdir(path.join(root, '.omp'));
+  const native = path.join(root, '.omp/AGENTS.md');
+  await writeFile(native, 'NATIVE');
+  assert.match(await workspaceInstructions(root, read), /NATIVE/);
+  assert.equal(await workspaceInstructions(root, async () => null), '');
+  let capture = '';
+  await withInstructionSnapshot(directory, initial, async (file) => {
+    capture = file;
+    assert.equal((await stat(file)).mode & 0o777, 0o600);
+    assert.deepEqual(instructionArguments(file), [
+      '--no-context-files',
+      '--no-rules',
+      '--no-skills',
+      '--append-system-prompt',
+      file,
+    ]);
+    await writeFile(path.join(root, 'AGENTS.md'), 'CHANGED');
+    assert.equal(await readFile(file, 'utf8'), initial);
+  });
+  await assert.rejects(stat(capture), { code: 'ENOENT' });
+  await assert.rejects(
+    withInstructionSnapshot(directory, '', async (file) => {
+      capture = file;
+      throw new Error('startup refused');
+    }),
+    /startup refused/,
+  );
+  await assert.rejects(stat(capture), { code: 'ENOENT' });
+  await writeFile(native, 'x'.repeat(65537));
+  await assert.rejects(workspaceInstructions(root, read), /64 KiB/);
+  await writeFile(native, 'NATIVE');
+  await assert.rejects(
+    workspaceInstructions(root, async () => 'x'.repeat(65537)),
+    /64 KiB/,
+  );
+  await rm(native);
+  await mkdir(native);
+  await assert.rejects(workspaceInstructions(root, read), /regular/);
+  await rm(native, { recursive: true });
+  const outside = path.join(directory, 'outside.md');
+  await writeFile(outside, 'OUTSIDE');
+  await symlink(outside, native);
+  await assert.rejects(workspaceInstructions(root, read), /outside/);
+  await rm(native);
+  await symlink(path.join(directory, 'missing.md'), native);
+  assert.match(await workspaceInstructions(root, read), /COPILOT/);
+  await assert.rejects(
+    workspaceInstructions(root, async () => {
+      throw new Error('read refused');
+    }),
+    /read refused/,
+  );
+});
+
+test('legacy sessions gain reversible archive and title metadata without changing conversation or native identity', async (context) => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'omp-session-metadata-'));
+  context.after(() => rm(directory, { recursive: true, force: true }));
+  const original = {
+    id: 'original',
+    label: 'Original label',
+    root: 'file:///workspace',
+    sessionFile: 'original.jsonl',
+    turns: [],
+  };
+  await writeFile(
+    path.join(directory, 'state.json'),
+    JSON.stringify({ version: 1, sessions: [original], changes: [] }),
+  );
+  const store = new StateStore(directory);
+  await store.load();
+  assert.equal(sessionList(store.data)[0]!.archived, false);
+  await editSession(store, 'original', 'renameSession', '  Renamed session  ');
+  await inspectSession(store, 'original');
+  assert.equal(store.data.activeSessionId, 'original');
+  await editSession(store, 'original', 'archiveSession');
+  assert.equal(store.data.activeSessionId, undefined);
+  const reopened = new StateStore(directory);
+  await reopened.load();
+  assert.equal(reopened.data.sessions[0]!.title, 'Renamed session');
+  assert.equal(sessionList(reopened.data)[0]!.archived, true);
+  assert.throws(() => planSessionRemoval(reopened.data, ['original']), /protected/);
+  assert.deepEqual(inspectStorage(reopened.data).sessions[0]!.protectedBy, ['user-archive']);
+  await editSession(reopened, 'original', 'restoreSession');
+  assert.deepEqual(
+    { ...reopened.data.sessions[0], title: undefined, archivedAt: undefined },
+    { ...original, title: undefined, archivedAt: undefined },
+  );
+  const cloned = cloneSession(
+    { ...original, title: 'Source title', archivedAt: 1 },
+    'copy',
+    { sessionId: 'native', fileName: 'copy.jsonl', entries: [], leafId: null },
+    0,
+    'Recovery copy',
+  );
+  assert.equal(cloned.title, undefined);
+  assert.equal(cloned.archivedAt, undefined);
+  assert.equal(cloned.label, 'Recovery copy');
+});
+
+test('session manager archives idle owners, inspects without generation and requires explicit restore/resume', async (context) => {
+  const host = await setup(context);
+  await host.request({ type: 'connect' });
+  const id = host.status()!.sessionId!;
+  await host.request({ type: 'renameSession', id, title: 'Custom title' });
+  assert.equal(host.status()!.session, 'Custom title');
+  let generations = 0;
+  transport.onPrompt = async () => {
+    generations++;
+  };
+  await host.request({ type: 'archiveSession', id });
+  assert.equal(host.status()!.connected, false);
+  assert.equal(host.status()!.sessionId, undefined);
+  assert.equal(host.status()!.sessions[0]!.archived, true);
+  await assert.rejects(host.request({ type: 'resumeSession', id }), /Restore/);
+  await host.request({ type: 'openSession', id });
+  assert.equal(host.status()!.sessionId, id);
+  assert.equal(host.status()!.connected, false);
+  assert.equal(generations, 0);
+  await assert.rejects(host.request({ type: 'connect' }), /Restore/);
+  assert.equal(host.status()!.sessionId, id);
+  assert.equal(host.status()!.connected, false);
+  await host.request({ type: 'restoreSession', id });
+  await host.request({ type: 'resumeSession', id });
+  assert.equal(host.status()!.connected, true);
+  assert.equal(generations, 0);
+  await assert.rejects(host.request({ type: 'openSession', id: 'foreign' }), /no longer exists/);
+});
+
+test('session metadata writes validate titles and owner IDs and roll back on persistence failure', async (context) => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'omp-session-metadata-failure-'));
+  context.after(() => rm(directory, { recursive: true, force: true }));
+  const store = new StateStore(directory, 1);
+  store.data.sessions = [
+    { id: 'original', label: 'Original', root: 'file:///workspace', turns: [] },
+  ];
+  const previous = store.data.sessions;
+  store.data.activeSessionId = 'original';
+  await assert.rejects(editSession(store, 'missing', 'archiveSession'), /no longer exists/);
+  for (const title of ['', 'x'.repeat(201), 'line\nbreak'])
+    await assert.rejects(editSession(store, 'original', 'renameSession', title));
+  await assert.rejects(editSession(store, 'original', 'archiveSession'), /storage budget/);
+  assert.equal(store.data.sessions, previous);
+  assert.equal(store.data.activeSessionId, 'original');
+  await assert.rejects(inspectSession(store, 'missing'), /no longer exists/);
+  store.data.activeSessionId = undefined;
+  await assert.rejects(inspectSession(store, 'original'), /storage budget/);
+  assert.equal(store.data.activeSessionId, undefined);
+  assert.equal(sessionList(store.data)[0]!.archived, false);
+  store.data.sessions[0]!.turns.push({
+    id: 'turn',
+    prompt: 'Running',
+    status: 'running',
+    startedAt: 1,
+    blocks: [],
+  });
+  await assert.rejects(editSession(store, 'original', 'archiveSession'), /operation to finish/);
+});

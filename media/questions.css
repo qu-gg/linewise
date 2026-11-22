@@ -1,0 +1,120 @@
+.question-result h3 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 13px;
+}
+.question-result .question-body {
+  max-height: 220px;
+  overflow: auto;
+}
+.question-card {
+  margin: 12px 0;
+  border: 1px solid var(--vscode-widget-border, var(--vscode-contrastBorder));
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--vscode-editor-background);
+}
+.question-card header,
+.question-card footer,
+.question-navigation {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.question-card header,
+.question-card footer {
+  flex-direction: row;
+  justify-content: space-between;
+  padding: 8px;
+}
+.question-card h2 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: inherit;
+  font-weight: 600;
+}
+.question-card header > span,
+.question-recommended,
+.question-choice small {
+  color: var(--vscode-descriptionForeground);
+  font-size: 11px;
+}
+.question-body {
+  padding: 4px 8px;
+  max-height: min(380px, 45vh);
+  overflow: auto;
+}
+.question-body fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.question-body legend {
+  padding: 0 0 8px;
+  overflow-wrap: anywhere;
+}
+.question-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 6px 2px;
+  cursor: pointer;
+}
+.question-choice:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+.question-choice input {
+  flex: 0 0 auto;
+  accent-color: var(--vscode-focusBorder);
+}
+.question-choice > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.question-choice strong {
+  font-weight: 500;
+}
+.question-recommended {
+  margin-left: 6px;
+}
+.question-choice small {
+  display: block;
+  margin-top: 2px;
+}
+.question-custom {
+  display: block;
+  margin: 8px 0 4px;
+}
+.question-body textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 48px;
+  max-height: 150px;
+  resize: vertical;
+  border: 1px solid var(--vscode-input-border, transparent);
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  padding: 6px;
+  font: inherit;
+}
+.question-review {
+  margin: 0;
+}
+.question-review dt {
+  font-weight: 600;
+}
+.question-review dd {
+  margin: 4px 0 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.question-error {
+  color: var(--vscode-errorForeground);
+}

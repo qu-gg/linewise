@@ -74,6 +74,23 @@ async function setup(context: TestContext) {
 
 test('native adapter captures write/delete/move without granting the parser filesystem ownership', async (context) => {
   const current = await setup(context);
+  assert.equal(current.tool.parameters.type, 'object');
+  assert.deepEqual(current.tool.parameters.required, ['input']);
+  assert.equal(
+    (current.tool.parameters.properties as Record<string, { type: string }>).input!.type,
+    'string',
+  );
+  const readOnly = path.join(current.root, '.omp/agent/sessions/local.md');
+  await mkdir(path.dirname(readOnly), { recursive: true });
+  await writeFile(readOnly, 'readable but not editable');
+  await current.handlers.get('tool_result')!(
+    { ...current.event, input: { path: readOnly } },
+    current.native,
+  );
+  await current.handlers.get('tool_result')!(
+    { ...current.event, input: { path: `${current.source}:1-1` } },
+    current.native,
+  );
   for (const plan of [
     { op: 'update', content: 'after' },
     { op: 'delete' },

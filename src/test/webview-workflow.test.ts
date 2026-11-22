@@ -74,6 +74,15 @@ test('semantic controls retain focus through streamed rerenders and removed cont
   assert.equal(dom.window.document.activeElement, element('.model-output'));
 });
 
+test('background rerenders do not reclaim focus from the workbench', (context) => {
+  update({ attachments: [{ id: 'snapshot', label: 'Selected text', uri: 'file:///a' }] });
+  element('[data-action="removeAttachment"]').focus();
+  context.mock.method(dom.window.document, 'hasFocus', () => false);
+  update({ session: 'Background stream update' });
+  assert.equal(dom.window.document.activeElement, dom.window.document.body);
+  assert.equal(messages.length, 0);
+});
+
 test('stable live regions announce status and errors without announcing streamed token changes', () => {
   update({ busy: true, cancellable: true, turns: [{ ...turn(), status: 'running' }] });
   const live = element('[role="status"][aria-live="polite"]');

@@ -10,15 +10,28 @@ import type {
 } from '@agentclientprotocol/sdk';
 import type { ReviewJournal } from './review.js';
 import type { WorkspaceFiles } from './workspace.js';
-import { TerminalManager } from './terminal.js';
+import type { TerminalManager } from './terminal.js';
 import type { TerminalCommand } from './terminal.js';
-import { MutationBroker } from './mutations.js';
+import { MutationBroker, permissionInput, isReviewedService } from './mutations.js';
 import type { Mutation } from './mutations.js';
-import { checkedPath } from './file-policy.js';
-import { commandDecision, permissionMode } from './terminal-policy.js';
+import { checkedPath, checkedReadPath } from './file-policy.js';
+import { commandDecision } from './terminal-policy.js';
+import { CommandPermissions, permissionSetting } from './host-permissions.js';
+import { executeShell } from './shell.js';
+import { createTerminalManager, pickOwnedTerminal } from './host-terminals.js';
+import { inspectEditor } from './host-inspect.js';
+import { renameWorkspace } from './host-rename.js';
+import { codeActionsWorkspace } from './host-code-actions.js';
+import { editNotebook } from './host-notebook.js';
+import { executeWorkspaceTask } from './host-tasks.js';
+import { fetchWeb } from './host-fetch.js';
+import { askQuestions } from './host-questions.js';
+import type { RequestQuestions } from './questions.js';
+import { SessionBrowser } from './browser.js';
+import type { BrowserRequest } from './browser-policy.js';
 import type { PermissionMode } from './terminal-policy.js';
 import type { Provenance } from './review-types.js';
-import { commandApproval } from './approval-prompts.js';
+import { browserApproval, commandApproval } from './approval-prompts.js';
 import type { RequestApproval } from './approvals.js';
 
 export interface ToolScope {
@@ -31,6 +44,7 @@ export interface ToolScope {
 }
 
 type ActiveScope = ToolScope & {
+  reads: Set<string>;
   manager?: TerminalManager;
   broker?: MutationBroker;
   abort: AbortController;
@@ -43,94 +57,50 @@ export const toolConfiguration = {
   launch: { enabled: false },
 };
 
-function permissionInput(input: Record<string, unknown>): string | undefined {
-  if (Object.keys(input).length !== 1) return;
-  if (typeof input.input === 'string') return input.input;
-  if (typeof input.command === 'string') return JSON.stringify({ command: input.command });
-}
-
-function permissionSetting<Value>(key: string, fallback: Value): Value {
-  const inspected = vscode.workspace.getConfiguration('omp').inspect<Value>(`permissions.${key}`);
-  return inspected?.globalValue === undefined ? fallback : inspected.globalValue;
-}
-
-async function confirmPermissions(mode: PermissionMode, current: PermissionMode): Promise<boolean> {
-  if (mode !== 'all' || current === 'all') return true;
-  const enabled = await vscode.window.showWarningMessage(
-    'Allow commands without confirmation for this connection?',
-    {
-      modal: true,
-      detail:
-        'Commands run with your host permissions, without an OS sandbox, and can delete files or send data. Explicit deny rules still block; ask rules and uncertain syntax still prompt. File approvals and tool restrictions stay unchanged. This choice resets on reconnect or session switch.',
-    },
-    'Enable Allow All',
-  );
-  return enabled === 'Enable Allow All';
-}
-
 export class HostTools {
   private scope: ActiveScope | undefined;
+  private readonly browsers = new SessionBrowser();
   private closing: Promise<void> | undefined;
   private failed = false;
-  private mode: PermissionMode = permissionMode
-    .exclude(['all'])
-    .parse(permissionSetting('defaultMode', 'rules'));
-
+  private readonly commandPermissions = new CommandPermissions(() => this.assertPermissionIdle());
   constructor(
     private readonly files: Pick<WorkspaceFiles, 'normalize'>,
     private readonly journal: Pick<ReviewJournal, 'read' | 'write'> &
-      Partial<Pick<ReviewJournal, 'inspect' | 'delete' | 'move'>>,
+      Partial<Pick<ReviewJournal, 'authorizeRead' | 'inspect' | 'delete' | 'move'>>,
     private readonly mutationDirectory?: string,
     private readonly requestApproval: RequestApproval = async () => false,
+    private readonly requestQuestions: RequestQuestions = askQuestions,
   ) {}
-
   begin(scope: ToolScope): void {
     if (this.scope || this.closing || this.failed)
       throw new Error('Previous tool scope has not closed safely.');
     const abort = new AbortController();
-    this.scope = { ...scope, abort, signal: AbortSignal.any([scope.signal, abort.signal]) };
+    this.scope = {
+      ...scope,
+      reads: new Set(),
+      abort,
+      signal: AbortSignal.any([scope.signal, abort.signal]),
+    };
   }
 
   get cleanupFailed(): boolean {
     return this.failed;
   }
 
+  private get privateRoot(): string | undefined {
+    return this.mutationDirectory && path.dirname(this.mutationDirectory);
+  }
+
   get permissions(): PermissionMode {
-    return this.mode;
+    return this.commandPermissions.value;
   }
 
   resetPermissions(): void {
-    this.assertPermissionIdle();
-    this.mode = permissionMode.exclude(['all']).parse(permissionSetting('defaultMode', 'rules'));
+    this.commandPermissions.reset();
   }
 
-  async pickPermissions(): Promise<void> {
-    this.assertPermissionIdle();
-    const picked = await vscode.window.showQuickPick(
-      [
-        { label: '$(shield) Ask Every Time', value: 'ask' },
-        { label: '$(checklist) Command Rules', value: 'rules' },
-        { label: '$(unlock) Allow All Except Restrictions', value: 'all' },
-        { label: '$(settings-gear) Edit User Command Rules', value: 'settings' },
-      ],
-      {
-        title: 'OMP Command Permissions',
-        placeHolder: `Current mode: ${this.mode}`,
-        ignoreFocusOut: true,
-      },
-    );
-    if (!picked) return;
-    if (picked.value === 'settings') {
-      await vscode.commands.executeCommand(
-        'workbench.action.openSettings',
-        '@id:omp.permissions.commandRules',
-      );
-      return;
-    }
-    const mode = permissionMode.parse(picked.value);
-    if (!(await confirmPermissions(mode, this.mode))) return;
-    this.assertPermissionIdle();
-    this.mode = mode;
+  pickPermissions(): Promise<void> {
+    return this.commandPermissions.pick();
   }
 
   private assertPermissionIdle(): void {
@@ -142,8 +112,11 @@ export class HostTools {
 
   async run<Result>(scope: ToolScope, action: () => Promise<Result>): Promise<Result> {
     this.begin(scope);
+    let completed = false;
     try {
       const active = this.current(scope.sessionId);
+      await this.browsers.bind(JSON.stringify([scope.sessionId, scope.owner, scope.cwd]));
+      this.assertCurrent(active);
       if (this.mutationDirectory) {
         active.broker = new MutationBroker(
           this.mutationDirectory,
@@ -154,9 +127,10 @@ export class HostTools {
       }
       const result = await action();
       active.signal.throwIfAborted();
+      completed = true;
       return result;
     } finally {
-      await this.finish();
+      await this.finish(completed);
     }
   }
 
@@ -175,7 +149,8 @@ export class HostTools {
 
   async read(request: ReadTextFileRequest): Promise<string> {
     const scope = this.current(request.sessionId);
-    const text = await this.journal.read(request.path, scope.signal);
+    const approved = scope.reads.delete(request.path) ? request.path : undefined;
+    const text = await this.journal.read(request.path, scope.signal, approved);
     if (this.current(request.sessionId) !== scope)
       throw new Error('Tool request belongs to a retired prompt.');
     return text
@@ -200,13 +175,26 @@ export class HostTools {
 
   async create(request: CreateTerminalRequest) {
     const scope = this.current(request.sessionId);
-    scope.manager ??= new TerminalManager({
-      sessionId: scope.sessionId,
-      cwd: scope.cwd,
-      signal: scope.signal,
-      approve: (command, signal) => this.approve(scope, command, signal),
-    });
-    return scope.manager.create(request);
+    return this.terminalManager(scope).create(request);
+  }
+
+  private terminalManager(scope: ActiveScope): TerminalManager {
+    return (scope.manager ??= createTerminalManager(
+      scope,
+      (command, signal) => this.approve(scope, command, signal),
+      () => this.assertCurrent(scope),
+    ));
+  }
+
+  async pickTerminal(onCancel?: (sessionId: string) => void): Promise<void> {
+    const scope = this.current(this.scope?.sessionId ?? '');
+    await pickOwnedTerminal(
+      this.terminalManager(scope),
+      scope.sessionId,
+      () => this.assertCurrent(scope),
+      scope.signal,
+      onCancel?.bind(undefined, scope.sessionId),
+    );
   }
 
   async permission(request: RequestPermissionRequest): Promise<RequestPermissionResponse> {
@@ -235,12 +223,14 @@ export class HostTools {
     toolCallId?: string,
   ): Promise<string | null> {
     this.assertCurrent(scope);
+    if ('request' in mutation) {
+      const result = await this.nativeService(scope, mutation, toolCallId);
+      this.assertCurrent(scope);
+      return result;
+    }
+    if (mutation.op === 'access') return this.authorizeRead(scope, mutation.path);
     const provenance: Provenance = { turnId: scope.turnId, toolCallId, tool: 'edit' };
-    const target = await checkedPath(
-      mutation.path,
-      scope.cwd,
-      this.mutationDirectory && path.dirname(this.mutationDirectory),
-    );
+    const target = await checkedPath(mutation.path, scope.cwd, this.privateRoot);
     if (target !== mutation.path) throw new Error('Native mutation path changed after capture.');
     this.assertCurrent(scope);
     if (mutation.op === 'read') {
@@ -263,6 +253,98 @@ export class HostTools {
     }
     await this.applyDestructive(scope, mutation, target, provenance);
     return mutation.op === 'delete' ? '' : mutation.content;
+  }
+
+  private async nativeService(
+    scope: ActiveScope,
+    mutation: Extract<Mutation, { request: unknown }>,
+    toolCallId?: string,
+  ): Promise<string> {
+    const serviceScope = {
+      sessionId: scope.sessionId,
+      cwd: scope.cwd,
+      privateRoot: this.privateRoot,
+      signal: scope.signal,
+      valid: () => {
+        this.assertCurrent(scope);
+        return true;
+      },
+    };
+    if (mutation.op === 'fetch')
+      return fetchWeb(mutation.request, serviceScope, this.requestApproval);
+    if (mutation.op === 'task')
+      return executeWorkspaceTask(mutation.request, serviceScope, this.terminalManager(scope));
+    if (isReviewedService(mutation)) {
+      const write = async (image: Parameters<Parameters<typeof renameWorkspace>[2]>[0]) => {
+        this.assertCurrent(scope);
+        await this.journal.write(
+          scope.owner,
+          image.path,
+          image.content,
+          scope.signal,
+          image.before,
+          {
+            turnId: scope.turnId,
+            toolCallId,
+            tool: mutation.op,
+          },
+        );
+      };
+      if (mutation.op === 'notebook_edit')
+        return editNotebook(mutation.request, serviceScope, write);
+      return mutation.op === 'rename'
+        ? renameWorkspace(mutation.request, serviceScope, write)
+        : codeActionsWorkspace(mutation.request, serviceScope, write);
+    }
+    if (mutation.op === 'questions')
+      return this.requestQuestions(mutation.request, scope.signal, serviceScope.valid);
+    if (mutation.op === 'browser') return this.browser(scope, mutation.request);
+    if (mutation.op === 'editor') return inspectEditor(mutation.request, serviceScope);
+    return executeShell(
+      this.terminalManager(scope),
+      scope.sessionId,
+      scope.cwd,
+      mutation.request,
+      scope.signal,
+    );
+  }
+
+  private async authorizeRead(scope: ActiveScope, captured: string): Promise<null> {
+    if (!this.journal.authorizeRead || scope.reads.size >= 256)
+      throw new Error('Read authorization is unavailable.');
+    const target = await checkedReadPath(captured, scope.cwd, this.privateRoot);
+    if (target !== captured) throw new Error('Read path changed after capture.');
+    await this.journal.authorizeRead(target, scope.signal);
+    this.assertCurrent(scope);
+    scope.reads.add(target);
+    return null;
+  }
+
+  private browser(scope: ActiveScope, request: BrowserRequest): Promise<string> {
+    const config = vscode.workspace
+      .getConfiguration('omp')
+      .inspect<string>('browser.executablePath');
+    const executablePath = config?.globalValue || undefined;
+    if (executablePath && !path.isAbsolute(executablePath))
+      throw new Error('Configure an absolute user browser executable path.');
+    return this.browsers.execute(
+      JSON.stringify([scope.sessionId, scope.owner, scope.cwd]),
+      request,
+      {
+        signal: scope.signal,
+        executablePath,
+        approve: async (request: BrowserRequest, signal) => {
+          this.assertCurrent(scope);
+          const approved = await this.requestApproval(
+            browserApproval(request, executablePath),
+            signal,
+            () => this.current(scope.sessionId) === scope,
+          );
+          this.assertCurrent(scope);
+          return approved;
+        },
+      },
+    );
   }
 
   private async applyDestructive(
@@ -309,12 +391,13 @@ export class HostTools {
     const decide = () =>
       commandDecision(
         command,
-        this.mode,
+        this.permissions,
         permissionSetting('commandRules', []),
         permissionSetting('useDefaultRules', true),
       );
     const decision = decide();
-    if (decision === 'deny') throw new Error('Command blocked by an OMP user rule.');
+    if (decision === 'deny')
+      throw new Error('Command blocked by an OMP user rule or YOLO safety restriction.');
     if (decision === 'allow') return true;
     const approved = await this.requestApproval(
       commandApproval(command),
@@ -323,7 +406,8 @@ export class HostTools {
     );
     signal.throwIfAborted();
     if (this.current(scope.sessionId) !== scope) throw new Error('Terminal approval is stale.');
-    if (decide() === 'deny') throw new Error('Command blocked by an OMP user rule.');
+    if (decide() === 'deny')
+      throw new Error('Command blocked by an OMP user rule or YOLO safety restriction.');
     return approved;
   }
 
@@ -346,14 +430,19 @@ export class HostTools {
     return this.manager(request).release(request);
   }
 
-  finish(): Promise<void> {
-    if (this.closing) return this.closing;
+  closeBrowser(): Promise<void> {
+    return this.browsers.revoke();
+  }
+
+  finish(preserveBrowser = false): Promise<void> {
     if (this.failed)
       return Promise.reject(new Error('Terminal cleanup failed; tool execution remains disabled.'));
+    const browser = preserveBrowser ? undefined : this.closeBrowser();
+    if (this.closing) return Promise.all([this.closing, browser]).then(() => {});
     const scope = this.scope;
     this.scope = undefined;
     scope?.abort.abort();
-    this.closing = Promise.all([scope?.manager?.dispose(), scope?.broker?.close()])
+    this.closing = Promise.all([scope?.manager?.dispose(), browser, scope?.broker?.close()])
       .then(() => {})
       .catch((cause: unknown) => {
         this.failed = true;

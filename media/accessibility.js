@@ -14,7 +14,19 @@ function identity(element) {
   return null;
 }
 
+export function settleAttentionFocus(root, action) {
+  const document = root.ownerDocument;
+  const settle = () => {
+    if (document.hasFocus() && document.activeElement === document.body) action();
+  };
+  requestAnimationFrame(() => {
+    if (document.hasFocus()) settle();
+    else document.defaultView.addEventListener('focus', settle, { once: true });
+  });
+}
+
 export function captureFocus(root) {
+  if (!root.ownerDocument.hasFocus()) return null;
   const active = root.ownerDocument.activeElement;
   if (!root.contains(active)) return null;
   return { identity: identity(active), start: active.selectionStart, end: active.selectionEnd };
@@ -31,7 +43,7 @@ export function restoreFocus(root, saved) {
   );
   const next = target && !target.disabled ? target : root.querySelector('#history-prompt, #prompt');
   next?.focus({ preventScroll: true });
-  if (next instanceof HTMLTextAreaElement && Number.isInteger(saved.start))
+  if (typeof next?.setSelectionRange === 'function' && Number.isInteger(saved.start))
     next.setSelectionRange(saved.start, saved.end);
 }
 

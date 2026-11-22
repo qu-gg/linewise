@@ -1,0 +1,57 @@
+.markdown {
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+.markdown > :first-child {
+  margin-top: 0;
+}
+.markdown > :last-child {
+  margin-bottom: 0;
+}
+.markdown p {
+  margin: 0 0 12px;
+}
+.markdown ul,
+.markdown ol {
+  padding-left: 22px;
+  margin: 8px 0 12px;
+}
+.markdown li {
+  margin: 4px 0;
+}
+.markdown table {
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: separate;
+  border-spacing: 0;
+  border: 1px solid var(--vscode-textSeparator-foreground, var(--vscode-widget-border));
+  border-radius: 4px;
+  margin: 8px 0 12px;
+}
+.markdown th,
+.markdown td {
+  padding: 4px 6px;
+  text-align: left;
+  border: 0;
+  border-right: 1px solid var(--vscode-textSeparator-foreground, var(--vscode-widget-border));
+  border-bottom: 1px solid var(--vscode-textSeparator-foreground, var(--vscode-widget-border));
+}
+.markdown tr > :last-child {
+  border-right: 0;
+}
+.markdown tbody tr:last-child > td {
+  border-bottom: 0;
+}
+.markdown th {
+  font-weight: 600;
+  background: var(--vscode-textCodeBlock-background);
+}
+.markdown h1,
+.markdown h2,
+.markdown h3 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 15px 0 8px;
+}

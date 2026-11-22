@@ -10,6 +10,7 @@ export default [
       'coverage/**',
       'reports/**',
       '.spike/**',
+      '.local-dev/**',
       '.quality-build/**',
     ],
   },

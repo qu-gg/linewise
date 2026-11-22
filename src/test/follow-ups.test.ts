@@ -1,6 +1,37 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { FollowUps, isQueueRequest } from '../follow-ups.js';
+import { imageContextSnapshot } from '../context.js';
+import { imagePayload } from '../image-policy.js';
+
+test('queued images retain immutable bytes and encoded image data counts toward queue bounds', async () => {
+  const queue = new FollowUps();
+  const bytes = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+  const image = imageContextSnapshot(
+    'image.png',
+    'file:///image.png',
+    imagePayload('image/png', bytes),
+  );
+  queue.enqueue('owner', 'inspect', [image]);
+  image.image!.data = '';
+  const large = Buffer.alloc(524_288);
+  bytes.copy(large);
+  const oversized = imageContextSnapshot(
+    'large.png',
+    'file:///large.png',
+    imagePayload('image/png', large),
+  );
+  assert.throws(() => queue.enqueue('owner', 'too large when encoded', [oversized]), /queue limit/);
+  assert.equal(queue.snapshot('owner').queued.length, 1);
+  await queue.drain(
+    'owner',
+    () => true,
+    async (item) => {
+      assert.equal(item.attachments[0]!.image!.data, bytes.toString('base64'));
+    },
+  );
+  assert.deepEqual(queue.snapshot('owner').queued, []);
+});
 
 test('follow-ups drain in FIFO order with immutable snapshots and session ownership', async () => {
   const queue = new FollowUps();

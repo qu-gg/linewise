@@ -2,6 +2,7 @@ import type { SessionNotification } from '@agentclientprotocol/sdk';
 import { selectOptions, type OmpClient } from './acp.js';
 import { updateTurn } from './session-updates.js';
 import { parseUsage, type SavedSession, type Turn } from './state.js';
+import type { HistorySnapshot } from './history.js';
 
 export function applyNotification(
   client: OmpClient,
@@ -32,6 +33,25 @@ function applyUsage(
   if (session && usage && !connecting) session.usage = usage;
 }
 
+export function applyCompactionUsage(
+  session: SavedSession,
+  current: Turn,
+  before: HistorySnapshot,
+  after: HistorySnapshot,
+) {
+  if (current.status !== 'completed' || before.sessionId !== after.sessionId) return;
+  if (!after.contextUsage) return;
+  const previous = new Set(before.entries.map((entry) => entry.id));
+  if (!after.entries.some((entry) => entry.type === 'compaction' && !previous.has(entry.id)))
+    return;
+  session.usage = {
+    ...session.usage,
+    used: after.contextUsage.tokens,
+    size: after.contextUsage.contextWindow,
+    stale: false,
+  };
+}
+
 export function connectionPresentation(
   client: OmpClient | undefined,
   session: SavedSession | undefined,
@@ -47,7 +67,7 @@ export function connectionPresentation(
 export function sessionPresentation(session: SavedSession | undefined) {
   return {
     sessionId: session?.id,
-    session: session?.label ?? 'New Session',
+    session: session?.title ?? session?.label ?? 'New Session',
     turns: session?.turns ?? [],
     context: session?.usage,
   };

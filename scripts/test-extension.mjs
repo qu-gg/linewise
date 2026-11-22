@@ -1,9 +1,45 @@
 import { runTests } from '@vscode/test-electron';
+import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { cp, mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import {
+  chmod,
+  cp,
+  mkdtemp,
+  mkdir,
+  readFile,
+  readdir,
+  realpath,
+  rm,
+  writeFile,
+} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { runNativeDialogs } from './native-dialogs.mjs';
+import {
+  runNativeDialogs,
+  driveLiveQuestions,
+  driveLiveTerminals,
+  driveTerminalControls,
+} from './native-dialogs.mjs';
+import { liveSettings } from './live-guard.mjs';
+import { ensureTestDisplay } from './test-display.mjs';
+import { driveNativeUX } from './native-ux.mjs';
+
+const live = process.env.VS_OMP_LIVE_TESTS === '1';
+if (live) liveSettings();
+await ensureTestDisplay();
+const questions =
+  live && ['questions', 'mixed-questions', 'mixed-session'].includes(process.env.VS_OMP_LIVE_CASE);
+const terminals = live && process.env.VS_OMP_LIVE_CASE === 'terminal-handoff';
+const nativeInput = questions || terminals;
+
+const installed = process.env.VS_OMP_INSTALLED_PROFILE
+  ? await realpath(process.env.VS_OMP_INSTALLED_PROFILE)
+  : undefined;
+if (installed) {
+  assert.equal(live, false, 'Installed-profile tests are scripted-only; no live inference');
+  assert.ok(installed.startsWith(`${path.resolve('.local-dev/release')}/r01-authorization-`));
+  assert.ok(['fresh-install', 'update-rollback'].includes(path.basename(installed)));
+}
 
 async function isolatedExtension(directory) {
   if (process.env.VS_OMP_VSIX) {
@@ -17,6 +53,8 @@ async function isolatedExtension(directory) {
     'dist/extension.cjs',
     'dist/omp-guard.js',
     'dist/review.js',
+    'dist/playwright',
+    'dist/pty',
     'dist/webview',
   ]) {
     const destination = path.join(isolated, relative);
@@ -27,41 +65,171 @@ async function isolatedExtension(directory) {
 }
 
 const directory = await mkdtemp(path.join(os.tmpdir(), 'vs-omp-extension-'));
-const workspace = path.join(directory, 'workspace');
-const userData = path.join(directory, 'user-data');
-await mkdir(workspace);
+const profile = installed || directory;
+const workspace = path.join(profile, 'workspace');
+const workspaceFile = path.join(
+  profile,
+  installed ? 'test.code-workspace' : 'native.code-workspace',
+);
+const userData = path.join(profile, 'user-data');
+const settingsFile = path.join(userData, 'User', 'settings.json');
+const originalSettings = installed ? await readFile(settingsFile) : undefined;
+const installedFolders = installed
+  ? (await readdir(path.join(profile, 'extensions'))).filter((name) =>
+      name.startsWith('vs-omp-local.vs-omp-'),
+    )
+  : [];
+if (installed) assert.equal(installedFolders.length, 1, 'Require one installed OMP package');
+const installedExtension = installed
+  ? await realpath(path.join(profile, 'extensions', installedFolders[0]))
+  : undefined;
+if (installed) {
+  await rm(path.join(userData, 'DevToolsActivePort'), { force: true });
+  const markers = await readdir(workspace);
+  for (const name of markers) {
+    if (/^native-onboarding-(missing|incompatible|auth|connected)(\.json|-checked)$/.test(name))
+      await rm(path.join(workspace, name));
+  }
+}
+let liveReport;
+if (live) {
+  await chmod(path.resolve('scripts/live-omp.mjs'), 0o755);
+  const reports = path.resolve('reports', 'live');
+  await mkdir(reports, { recursive: true, mode: 0o700 });
+  const run = await mkdtemp(path.join(reports, 'run-'));
+  liveReport = path.join(run, 'observer.json');
+  console.log(`Live test report: ${liveReport}`);
+}
+await mkdir(workspace, { recursive: true });
+if (!live && !installed)
+  await writeFile(workspaceFile, JSON.stringify({ folders: [{ path: workspace }] }));
 await writeFile(
   path.join(workspace, 'AGENTS.md'),
   'VS_OMP_INSTRUCTION_DISCOVERY_SENTINEL: preserve existing user work.\n',
 );
-await mkdir(userData);
+await mkdir(userData, { recursive: true });
+await mkdir(path.join(userData, 'User'), { recursive: true });
+await writeFile(
+  settingsFile,
+  JSON.stringify({
+    ...(originalSettings ? JSON.parse(originalSettings.toString('utf8')) : {}),
+    'task.saveBeforeRun': 'never',
+    ...(installed
+      ? { 'omp.permissions.defaultMode': 'rules', 'omp.permissions.useDefaultRules': true }
+      : {}),
+  }),
+  { mode: 0o600 },
+);
+let passed = false;
 try {
-  const extensionDevelopmentPath = await isolatedExtension(directory);
-  await runNativeDialogs(directory);
-  await runTests({
+  const extensionDevelopmentPath = installed ? undefined : await isolatedExtension(directory);
+  const resourcesFixture = path.join(directory, 'resource-fixture');
+  await mkdir(resourcesFixture);
+  await writeFile(
+    path.join(resourcesFixture, 'package.json'),
+    JSON.stringify({
+      name: 'omp-native-resource-fixture',
+      publisher: 'vs-omp-fixture',
+      version: '0.0.0',
+      engines: { vscode: '^1.146.0' },
+      contributes: {
+        notebooks: [
+          {
+            type: 'omp-parity-fixture',
+            displayName: 'Parity Notebook Fixture',
+            selector: [{ filenamePattern: '*.ompnotebook' }, { filenamePattern: '*.ipynb' }],
+          },
+        ],
+      },
+    }),
+  );
+  if (!live && !installed) await runNativeDialogs(directory);
+  const testOptions = {
     vscodeExecutablePath: process.env.VSCODE_EXECUTABLE || '/usr/share/code/code',
-    extensionDevelopmentPath,
-    extensionTestsPath: path.join(process.cwd(), 'dist/test/extension.integration.cjs'),
+    extensionDevelopmentPath: extensionDevelopmentPath
+      ? [extensionDevelopmentPath, resourcesFixture]
+      : [resourcesFixture],
+    extensionTestsPath: path.join(
+      process.cwd(),
+      `dist/test/${live ? 'live' : 'extension'}.integration.cjs`,
+    ),
     extensionTestsEnv: {
       ELECTRON_RUN_AS_NODE: undefined,
-      VS_OMP_TEST_FIXTURE: path.join(process.cwd(), 'scripts/history-fixture.mjs'),
+      VS_OMP_TEST_FIXTURE: path.join(
+        process.cwd(),
+        live ? 'scripts/live-guard.mjs' : 'scripts/history-fixture.mjs',
+      ),
       VS_OMP_FIXTURE_NATIVE: '1',
+      VS_OMP_EXPECTED_EXTENSION_PATH: installedExtension,
+      VS_OMP_UX_REOPEN: undefined,
       VS_OMP_FIXTURE_CONTEXT: path.join(directory, 'provider-context.json'),
+      ...(live
+        ? {
+            VS_OMP_LIVE_REPORT: liveReport,
+            VS_OMP_LIVE_USER_DATA: userData,
+            VS_OMP_LIVE_SOURCE_ROOT: process.cwd(),
+            VS_OMP_LIVE_EXECUTABLE: path.resolve('scripts/live-omp.mjs'),
+          }
+        : {}),
     },
     launchArgs: [
-      workspace,
+      live ? workspace : workspaceFile,
       '--no-sandbox',
       '--disable-gpu',
-      '--disable-extensions',
+      '--password-store=basic',
+      ...(!installed ? ['--disable-extensions'] : []),
       '--skip-welcome',
       '--skip-release-notes',
       '--disable-workspace-trust',
+      ...(nativeInput || !live
+        ? ['--remote-debugging-address=127.0.0.1', '--remote-debugging-port=0']
+        : []),
       '--user-data-dir',
       userData,
+      '--shared-data-dir',
+      path.join(profile, 'shared-data'),
       '--extensions-dir',
-      path.join(directory, 'extensions'),
+      path.join(profile, 'extensions'),
     ],
-  });
+  };
+  const testing = runTests(testOptions);
+  const outcomes = await Promise.allSettled([
+    testing,
+    ...(!live
+      ? [
+          driveNativeUX(userData, workspace, !!installed),
+          ...(!installed ? [driveTerminalControls(userData, workspace)] : []),
+        ]
+      : []),
+    ...(nativeInput
+      ? [
+          (terminals ? driveLiveTerminals : driveLiveQuestions)(
+            userData,
+            workspace,
+            liveReport,
+            liveSettings().seconds * 1000,
+          ),
+        ]
+      : []),
+  ]);
+  const failures = outcomes.filter((outcome) => outcome.status === 'rejected');
+  if (failures.length) throw new AggregateError(failures.map((outcome) => outcome.reason));
+  if (!live && !installed)
+    await runTests({
+      ...testOptions,
+      extensionTestsEnv: { ...testOptions.extensionTestsEnv, VS_OMP_UX_REOPEN: '1' },
+    });
+  passed = true;
+} catch (error) {
+  if (liveReport)
+    await writeFile(
+      `${liveReport}.failure.json`,
+      JSON.stringify({ passed: false, error: String(error) }),
+      { mode: 0o600 },
+    );
+  throw error;
 } finally {
-  await rm(directory, { recursive: true, force: true });
+  if (originalSettings) await writeFile(settingsFile, originalSettings, { mode: 0o600 });
+  if (passed) await rm(directory, { recursive: true, force: true });
+  else console.error(`Retained failed extension-fixture evidence: ${directory}`);
 }

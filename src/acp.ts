@@ -18,6 +18,7 @@ import { z } from 'zod';
 import { exchangeHistory, historyCommand } from './history.js';
 import type { HistoryOperation, HistorySnapshot } from './history.js';
 import type { TerminalManager } from './terminal.js';
+import type { ImagePayload } from './image-policy.js';
 
 export interface ClientHandlers {
   closed?(): void;
@@ -39,14 +40,21 @@ interface StartOptions {
 
 export function promptBlocks(
   text: string,
-  attached?: { uri: string; text: string } | { uri: string; text: string }[],
+  attached?:
+    | { uri: string; text: string; image?: ImagePayload }
+    | { uri: string; text: string; image?: ImagePayload }[],
 ): ContentBlock[] {
   const blocks: ContentBlock[] = [{ type: 'text', text }];
-  for (const snapshot of attached ? (Array.isArray(attached) ? attached : [attached]) : [])
+  for (const snapshot of attached ? (Array.isArray(attached) ? attached : [attached]) : []) {
+    if (snapshot.image) {
+      blocks.push({ type: 'text', text: snapshot.text }, { type: 'image', ...snapshot.image });
+      continue;
+    }
     blocks.push({
       type: 'resource',
       resource: { uri: snapshot.uri, mimeType: 'text/plain', text: snapshot.text },
     });
+  }
   return blocks;
 }
 
@@ -327,11 +335,12 @@ export class OmpClient {
       await this.connection.agent.notify('session/cancel', { sessionId: this.sessionId });
   }
 
-  async stop(): Promise<void> {
+  async stop(immediate = false): Promise<void> {
     if (this.stopping) return this.stopping;
     const child = this.child;
     if (!child) return;
     this.stopping = (async () => {
+      child.kill(immediate ? 'SIGKILL' : 'SIGTERM');
       this.connection?.close();
       child.stdin.end();
       const timer = setTimeout(() => child.kill('SIGKILL'), 3_000);

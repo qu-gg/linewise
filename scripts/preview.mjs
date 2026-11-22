@@ -1,6 +1,7 @@
 import http from 'node:http';
-import { readFile } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
+import { inlineJson, recordedFixture } from './preview-data.mjs';
 
 const fixture = {
   connected: true,
@@ -164,18 +165,25 @@ Object.assign(fixture.changes[0], {
   ],
   operations: [{ kind: 'edit', turn: 2, tool: 'write' }],
 });
+const replay = process.env.VS_OMP_PREVIEW_CHAT;
+if (replay && (await stat(replay)).size > 2 * 1024 * 1024)
+  throw new Error('Recorded chat preview exceeds 2 MiB.');
+const viewFixture = replay
+  ? recordedFixture(fixture, JSON.parse(await readFile(replay, 'utf8')))
+  : fixture;
 const html = `<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>OMP Webview Fixture</title><link rel="stylesheet" href="/main.css"><style>
 :root{--vscode-font-family:'Segoe UI',sans-serif;--vscode-font-size:13px;--vscode-editor-font-family:monospace;--vscode-editor-font-size:12px;--vscode-foreground:#cccccc;--vscode-sideBar-background:#181818;--vscode-descriptionForeground:#9d9d9d;--vscode-editorWidget-background:#232323;--vscode-chat-requestBackground:#232323;--vscode-editor-background:#121212;--vscode-terminal-background:#181818;--vscode-input-background:#1b1b1b;--vscode-input-foreground:#cccccc;--vscode-input-placeholderForeground:#989898;--vscode-widget-border:#343434;--vscode-tree-indentGuidesStroke:#383838;--vscode-dropdown-background:#232323;--vscode-focusBorder:#4b8bac;--vscode-button-background:#376f8d;--vscode-button-foreground:white;--vscode-textCodeBlock-background:#252525;--vscode-textLink-foreground:#6aa7d4;--vscode-progressBar-background:#508bab;--vscode-testing-iconPassed:#73c991;--vscode-gitDecoration-addedResourceForeground:#81b88b;--vscode-gitDecoration-deletedResourceForeground:#e56b60;--vscode-editorWarning-foreground:#cca700;--vscode-toolbar-hoverBackground:#303030}
 body.light{--vscode-foreground:#333;--vscode-sideBar-background:#f8f8f8;--vscode-descriptionForeground:#616161;--vscode-chat-requestBackground:#eee;--vscode-input-background:#fff;--vscode-input-foreground:#333;--vscode-dropdown-background:#eee;--vscode-widget-border:#ccc;--vscode-tree-indentGuidesStroke:#ccc;--vscode-textCodeBlock-background:#eee;--vscode-toolbar-hoverBackground:#ddd;--vscode-editor-background:#fff;--vscode-editorWidget-background:#f8f8f8;--vscode-terminal-background:#fff;--vscode-textLink-foreground:#006ab1;--vscode-symbolIcon-variableForeground:#846f00;--vscode-symbolIcon-classForeground:#2b7ab0;--vscode-gitDecoration-addedResourceForeground:#326e39;--vscode-gitDecoration-deletedResourceForeground:#b5302d}
 body.contrast{--vscode-foreground:#fff;--vscode-sideBar-background:#000;--vscode-descriptionForeground:#fff;--vscode-widget-border:#fff;--vscode-tree-indentGuidesStroke:#fff;--vscode-focusBorder:#f38518;--vscode-button-background:#000;--vscode-button-foreground:#fff;--vscode-textLink-foreground:#6fc3df}
 </style></head><body><main id="app"></main><script>
-globalThis.fixtureState=${JSON.stringify(fixture)};globalThis.messages=[];
+globalThis.fixtureState=${inlineJson(viewFixture)};globalThis.messages=[];
 let saved=JSON.parse(sessionStorage.getItem('omp-fixture')||'null');
 const publish=()=>postMessage({v:1,type:'state',state:fixtureState},location.origin);
 const finish=()=>{fixtureState.busy=false;const current=fixtureState.turns.at(-1);current.status='completed';current.endedAt=Date.now();for(const block of current.blocks)if(block.status==='in_progress')block.status='completed'};
 globalThis.acquireVsCodeApi=()=>({getState:()=>saved,setState:value=>{saved=value;sessionStorage.setItem('omp-fixture',JSON.stringify(value))},postMessage:message=>{
   messages.push(message);
   if(message.type==='ready')publish();
+  if(${Boolean(replay)})return;
   if(message.type==='editPrompt'){const index=fixtureState.turns.findIndex(current=>current.id===message.id);fixtureState.turns=fixtureState.turns.slice(0,index);fixtureState.turns.push({id:crypto.randomUUID(),prompt:message.text,status:'completed',startedAt:Date.now(),endedAt:Date.now(),history:{sessionId:'preview-native',promptEntryId:crypto.randomUUID(),afterEntryId:crypto.randomUUID()},blocks:[{id:crypto.randomUUID(),kind:'text',text:'Replacement response. Workspace files and shared memory are unchanged.'}]});publish();postMessage({v:1,type:'editResult',id:message.id,ok:true},location.origin)}
   if(message.type==='forkTurn'){const index=fixtureState.turns.findIndex(current=>current.id===message.id);const original=fixtureState.turns[index];fixtureState.turns=fixtureState.turns.slice(0,index+(message.boundary==='after'?1:0));fixtureState.sessionId=crypto.randomUUID();fixtureState.session='Forked conversation';publish();if(message.boundary==='before')postMessage({v:1,type:'draft',text:original.prompt},location.origin)}
   if(message.type==='cancel'){finish();fixtureState.turns.at(-1).status='cancelled';fixtureState.queued=[];fixtureState.approval=undefined;fixtureState.approvalCount=0;publish()}
@@ -193,7 +201,7 @@ globalThis.acquireVsCodeApi=()=>({getState:()=>saved,setState:value=>{saved=valu
 }});
 </script><script src="/main.js"></script></body></html>`;
 
-const server = http.createServer(async (request, response) => {
+export const server = http.createServer(async (request, response) => {
   try {
     response.setHeader('cache-control', 'no-store');
     const filename = new URL(request.url, 'http://localhost').pathname;

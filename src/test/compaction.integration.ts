@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import assert from 'node:assert/strict';
 import { watch } from 'node:fs';
 import { readFile, writeFile } from 'node:fs/promises';
+import { fileSignal } from './production-terminal.integration.js';
 
 type Api = Awaited<ReturnType<typeof import('../extension.js').activate>>;
 type Request = (message: object) => Promise<void>;
@@ -62,7 +63,23 @@ async function populate(api: Api, request: Request) {
   await request({ type: 'config', id: 'model', value: 'vs-omp-fixture/history' });
 }
 
-async function compact(api: Api, request: Request) {
+async function usageUI(api: Api, root: vscode.Uri, stage: string) {
+  const usage = api.status()!.context!;
+  const provider = await readFile(process.env.VS_OMP_FIXTURE_CONTEXT!, 'utf8');
+  const name = vscode.Uri.joinPath(root, `native-ux-usage-${stage}`).fsPath;
+  await writeFile(
+    `${name}-ready.json`,
+    JSON.stringify({ used: usage.used, size: usage.size, stale: usage.stale === true }),
+    { mode: 0o600 },
+  );
+  await fileSignal(`${name}-checked`);
+  assert.ok(
+    (await readFile(process.env.VS_OMP_FIXTURE_CONTEXT!, 'utf8')) === provider,
+    'Context indicator/popover inspection changed provider context; content withheld.',
+  );
+}
+
+async function compact(api: Api, request: Request, root: vscode.Uri) {
   const document = await vscode.workspace.openTextDocument({
     content: 'COMPACTION_PENDING_ATTACHMENT',
   });
@@ -74,7 +91,12 @@ async function compact(api: Api, request: Request) {
   const pending = structuredClone(api.status()!.attachments);
   await request({ type: 'compact' });
   assert.equal(api.status()!.compacting, false);
-  assert.equal(api.status()!.context?.stale, true);
+  assert.notEqual(
+    api.status()!.context?.stale,
+    true,
+    'Installed OMP must report fresh post-compaction usage without another model prompt.',
+  );
+  assert.ok(api.status()!.context!.used > 0);
   assert.deepEqual(api.status()!.attachments, pending);
   const branch = JSON.parse(
     await readFile(`${process.env.VS_OMP_FIXTURE_CONTEXT}.branch.json`, 'utf8'),
@@ -83,6 +105,7 @@ async function compact(api: Api, request: Request) {
   assert.ok(summary, 'Populated /compact must persist an actual native compaction entry');
   assert.match(summary.summary!, /FIXTURE_REPLY.*SUMMARY_ONLY_FUTURE_SENTINEL/);
   assert.ok(summary.tokensBefore! > 20000);
+  await usageUI(api, root, 'manual');
   await request({ type: 'prompt', text: 'COMPACTION_CONTINUATION' });
   const messages = JSON.stringify((await providerContext()).messages);
   assert.match(messages, /FUTURE_SENTINEL/);
@@ -251,7 +274,12 @@ async function interruptedHistory(api: Api, request: Request) {
   );
 }
 
-async function failedCompaction(api: Api, request: Request, outcome: 'FAILURE' | 'CANCEL') {
+async function failedCompaction(
+  api: Api,
+  request: Request,
+  root: vscode.Uri,
+  outcome: 'FAILURE' | 'CANCEL',
+) {
   await request({ type: 'new' });
   await request({ type: 'config', id: 'model', value: 'vs-omp-fixture/history' });
   await request({ type: 'prompt', text: `COMPACTION_${outcome}_FIXTURE` });
@@ -305,9 +333,51 @@ async function failedCompaction(api: Api, request: Request, outcome: 'FAILURE' |
     );
   else assert.equal(api.status()!.turns.at(-1)!.status, 'cancelled');
   assert.equal(document.getText(), 'FAULT_PENDING_CONTEXT');
+  await usageUI(api, root, outcome.toLowerCase());
   console.log(
     `PASS: native populated compaction ${outcome.toLowerCase()} preserves pending context and never records success.`,
   );
+}
+
+async function automaticCompaction(api: Api, request: Request, root: vscode.Uri) {
+  const previous = process.env.VS_OMP_FIXTURE_AUTO_COMPACTION;
+  const changes = structuredClone(api.storedState!().changes);
+  process.env.VS_OMP_FIXTURE_AUTO_COMPACTION = '1';
+  try {
+    await request({ type: 'new' });
+    await request({ type: 'config', id: 'model', value: 'vs-omp-fixture/history' });
+    const repeated = `AUTOMATIC_COMPACTION_CONTEXT ${'preserved context '.repeat(3500)}`.trim();
+    for (const text of [repeated, repeated, repeated, 'AUTOMATIC_COMPACTION_CONTINUATION'])
+      await request({ type: 'prompt', text });
+    const state = api.status()!;
+    assert.equal(state.turns.length, 4);
+    assert.equal(state.context?.size, 64000);
+    assert.ok(state.context!.used > 0);
+    assert.notEqual(state.context?.stale, true);
+    await usageUI(api, root, 'automatic');
+    const provider = await providerContext();
+    await request({ type: 'prompt', text: '/vs-omp-compaction-inspect' });
+    const branch = JSON.parse(
+      await readFile(`${process.env.VS_OMP_FIXTURE_CONTEXT}.branch.json`, 'utf8'),
+    ) as Entry[];
+    assert.ok(
+      branch.some((entry) => entry.type === 'compaction'),
+      'Installed OMP must have committed an actual automatic summary.',
+    );
+    assert.equal(
+      state.turns.some((turn) => turn.prompt === '/compact'),
+      false,
+    );
+    assert.deepEqual(await providerContext(), provider);
+    assert.deepEqual(api.storedState!().changes, changes);
+    console.log(
+      'PASS: installed automatic compaction commits a summary and refreshes verified context usage without manual /compact or a follow-up generation.',
+    );
+  } finally {
+    await request({ type: 'disconnect' });
+    if (previous === undefined) delete process.env.VS_OMP_FIXTURE_AUTO_COMPACTION;
+    else process.env.VS_OMP_FIXTURE_AUTO_COMPACTION = previous;
+  }
 }
 
 export async function nativeCompaction(api: Api, root: vscode.Uri): Promise<void> {
@@ -316,7 +386,7 @@ export async function nativeCompaction(api: Api, root: vscode.Uri): Promise<void
   const changes = structuredClone(api.storedState!().changes);
   const file = vscode.Uri.joinPath(root, 'chat-hunks.txt');
   const text = await readFile(file.fsPath, 'utf8');
-  await compact(api, request);
+  await compact(api, request, root);
   await boundaries(api, request);
   assert.deepEqual(api.storedState!().changes, changes);
   assert.equal(await readFile(file.fsPath, 'utf8'), text);
@@ -325,6 +395,7 @@ export async function nativeCompaction(api: Api, root: vscode.Uri): Promise<void
   );
   await mutationHistory(api, request, root);
   await interruptedHistory(api, request);
-  await failedCompaction(api, request, 'FAILURE');
-  await failedCompaction(api, request, 'CANCEL');
+  await failedCompaction(api, request, root, 'FAILURE');
+  await failedCompaction(api, request, root, 'CANCEL');
+  await automaticCompaction(api, request, root);
 }

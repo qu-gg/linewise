@@ -13,6 +13,9 @@ import path from 'node:path';
 import type { Readable } from 'node:stream';
 import { StringDecoder } from 'node:string_decoder';
 import { z } from 'zod';
+import { reserveCommands } from './terminal-reservation.js';
+import type { TerminalCommand, ReservedTerminals } from './terminal-reservation.js';
+export type { TerminalCommand, ReservedTerminals } from './terminal-reservation.js';
 
 const text = z
   .string()
@@ -35,20 +38,40 @@ const requestSchema = z
     'Terminal request is too large.',
   );
 
-export interface TerminalCommand {
-  command: string;
-  args: string[];
-  cwd: string;
-  env: Record<string, string>;
-  outputByteLimit: number;
-}
-
 export interface TerminalOptions {
   sessionId: string;
   cwd: string;
   signal: AbortSignal;
   approve(command: Readonly<TerminalCommand>, signal: AbortSignal): Promise<boolean>;
-  timeoutMs?: number;
+  timeoutMs?: number | null;
+  launch?(
+    command: TerminalCommand,
+    timeoutMs: number | null,
+    execution: TerminalExecution,
+  ): ManagedTerminal | undefined;
+}
+
+const executionSchema = z
+  .object({
+    pty: z.boolean(),
+    visibility: z.enum(['hidden', 'background', 'foreground']),
+  })
+  .strict();
+export type TerminalExecution = z.infer<typeof executionSchema>;
+
+export interface ManagedTerminal {
+  readonly label?: string;
+  readonly interactive?: boolean;
+  readonly ready: Promise<void>;
+  readonly done: Promise<TerminalExitStatus>;
+  terminate(reason: string): void;
+  snapshot(): TerminalOutputResponse;
+  waitForOutput(waitMs: number): Promise<TerminalOutputResponse>;
+  assertCleanup(): void;
+  waitForHandback?(): Promise<void>;
+  reveal?(): void;
+  takeover?(): Promise<void>;
+  observeOutput?(listener: (snapshot: TerminalOutputResponse) => void): () => void;
 }
 
 function abortable<Result>(task: Promise<Result>, signal: AbortSignal): Promise<Result> {
@@ -72,28 +95,30 @@ function abortable<Result>(task: Promise<Result>, signal: AbortSignal): Promise<
   });
 }
 
-function environment(overrides: Record<string, string>): NodeJS.ProcessEnv {
+export function environment(overrides: Record<string, string>): NodeJS.ProcessEnv {
   const inherited = Object.entries(process.env).filter(([name]) =>
     /^(PATH|HOME|USER|LOGNAME|SHELL|LANG|LC_[A-Z_]+|TERM|TMPDIR)$/.test(name),
   );
   return { ...Object.fromEntries(inherited), ...overrides };
 }
 
-class RunningTerminal {
+export class RunningTerminal {
   private readonly child: ChildProcessByStdio<null, Readable, Readable>;
   private output = '';
   private truncated = false;
   private status: TerminalExitStatus | undefined;
   private termination: string | undefined;
-  private deadline: NodeJS.Timeout;
+  private deadline: NodeJS.Timeout | undefined;
   private escalation: NodeJS.Timeout | undefined;
   private cleanupError: unknown;
+  private readonly outputObservers = new Set<(snapshot: TerminalOutputResponse) => void>();
   readonly ready: Promise<void>;
   readonly done: Promise<TerminalExitStatus>;
 
   constructor(
     private readonly command: TerminalCommand,
-    timeoutMs: number,
+    timeoutMs: number | null,
+    private readonly write?: (text: string) => void,
   ) {
     this.child = spawn(command.command, command.args, {
       cwd: command.cwd,
@@ -111,7 +136,8 @@ class RunningTerminal {
       stream.on('data', (chunk: Buffer) => this.append(decoder.write(chunk)));
       stream.once('end', () => this.append(decoder.end()));
     }
-    this.deadline = setTimeout(() => this.terminate('timeout'), timeoutMs);
+    this.deadline =
+      timeoutMs === null ? undefined : setTimeout(() => this.terminate('timeout'), timeoutMs);
     this.child.once('exit', () => this.signalGroup('SIGKILL'));
     this.done = new Promise((resolve) => {
       this.child.once('close', (exitCode, signal) => {
@@ -125,11 +151,21 @@ class RunningTerminal {
   }
 
   private append(text: string): void {
+    this.write?.(text);
     const bytes = Buffer.from(this.output + text);
     let start = Math.max(0, bytes.length - this.command.outputByteLimit);
     this.truncated ||= start > 0;
     while (start < bytes.length && (bytes[start]! & 0xc0) === 0x80) start++;
     this.output = bytes.toString('utf8', start);
+    for (const observer of this.outputObservers) observer(this.snapshot());
+  }
+
+  observeOutput(listener: (snapshot: TerminalOutputResponse) => void): () => void {
+    this.outputObservers.add(listener);
+    listener(this.snapshot());
+    return () => {
+      this.outputObservers.delete(listener);
+    };
   }
 
   private signalGroup(signal: NodeJS.Signals): void {
@@ -150,6 +186,12 @@ class RunningTerminal {
     this.escalation = setTimeout(() => this.signalGroup('SIGKILL'), 100);
   }
 
+  input(data: string): boolean {
+    if (this.status || this.termination || data !== '\x03') return false;
+    this.signalGroup('SIGINT');
+    return true;
+  }
+
   snapshot(): TerminalOutputResponse {
     this.assertCleanup();
     return {
@@ -157,6 +199,25 @@ class RunningTerminal {
       truncated: this.truncated,
       exitStatus: this.status && structuredClone(this.status),
     };
+  }
+
+  async waitForOutput(waitMs: number): Promise<TerminalOutputResponse> {
+    const current = this.snapshot();
+    if (current.output || current.exitStatus || !waitMs) return current;
+    await new Promise<void>((resolve) => {
+      const finish = () => {
+        clearTimeout(timer);
+        this.child.stdout.removeListener('data', finish);
+        this.child.stderr.removeListener('data', finish);
+        this.child.removeListener('close', finish);
+        resolve();
+      };
+      const timer = setTimeout(finish, waitMs);
+      this.child.stdout.once('data', finish);
+      this.child.stderr.once('data', finish);
+      this.child.once('close', finish);
+    });
+    return this.snapshot();
   }
 
   assertCleanup(): void {
@@ -167,9 +228,9 @@ class RunningTerminal {
 
 export class TerminalManager {
   private readonly options: TerminalOptions;
-  private readonly terminals = new Map<string, RunningTerminal>();
+  private readonly terminals = new Map<string, ManagedTerminal>();
   private readonly stopped = new AbortController();
-  private readonly timeoutMs: number;
+  private readonly timeoutMs: number | null;
   private readonly onAbort: () => void;
   private creating = 0;
   private closing: Promise<void> | undefined;
@@ -184,7 +245,8 @@ export class TerminalManager {
       .int()
       .min(10)
       .max(600_000)
-      .parse(options.timeoutMs ?? 120_000);
+      .nullable()
+      .parse(options.timeoutMs ?? null);
     if (!options.sessionId || !path.isAbsolute(options.cwd))
       throw new Error('A session and absolute workspace root are required.');
     options.signal.addEventListener('abort', this.onAbort, { once: true });
@@ -221,13 +283,22 @@ export class TerminalManager {
     };
   }
 
-  async create(request: CreateTerminalRequest): Promise<CreateTerminalResponse> {
+  async create(
+    request: CreateTerminalRequest,
+    executionTimeoutMs: number | null = this.timeoutMs,
+    signal: AbortSignal = this.stopped.signal,
+    execution: TerminalExecution = { pty: false, visibility: 'hidden' },
+  ): Promise<CreateTerminalResponse> {
+    execution = executionSchema.parse(execution);
+    if (executionTimeoutMs !== null)
+      z.number().int().min(10).max(600_000).parse(executionTimeoutMs);
     this.check(request.sessionId);
     if (this.terminals.size + this.creating >= 4)
       throw new Error('Release a terminal before creating another.');
     this.creating++;
     try {
-      const signal = AbortSignal.any([this.stopped.signal, AbortSignal.timeout(this.timeoutMs)]);
+      signal = AbortSignal.any([this.stopped.signal, signal]);
+      signal.throwIfAborted();
       const command = await abortable(this.prepare(request), signal);
       this.check(request.sessionId);
       if (!(await abortable(this.options.approve(structuredClone(command), signal), signal)))
@@ -236,19 +307,48 @@ export class TerminalManager {
       if ((await abortable(realpath(request.cwd ?? this.options.cwd), signal)) !== command.cwd)
         throw new Error('Terminal cwd changed during approval.');
       this.check(request.sessionId);
-      return await this.launch(command);
+      return await this.launch(command, executionTimeoutMs, signal, execution);
     } finally {
       this.creating--;
     }
   }
 
-  private async launch(command: TerminalCommand): Promise<CreateTerminalResponse> {
-    const terminal = new RunningTerminal(command, this.timeoutMs);
+  async reserve(
+    requests: readonly CreateTerminalRequest[],
+    signal: AbortSignal = this.stopped.signal,
+  ): Promise<ReservedTerminals> {
+    if (!requests.length || requests.length > 4) throw new Error('Reserve one to four commands.');
+    if (this.terminals.size + this.creating + requests.length > 4)
+      throw new Error('Release a terminal before reserving task commands.');
+    return reserveCommands(requests, {
+      signal: AbortSignal.any([this.stopped.signal, signal]),
+      timeoutMs: this.timeoutMs,
+      check: (sessionId) => this.check(sessionId),
+      prepare: (request) => this.prepare(request),
+      approve: (command, currentSignal) => this.options.approve(command, currentSignal),
+      launch: (command, timeoutMs, currentSignal) =>
+        this.launch(command, timeoutMs, currentSignal, { pty: false, visibility: 'hidden' }),
+      capacity: (delta) => {
+        this.creating += delta;
+      },
+    });
+  }
+
+  private async launch(
+    command: TerminalCommand,
+    timeoutMs: number | null,
+    signal: AbortSignal,
+    execution: TerminalExecution,
+  ): Promise<CreateTerminalResponse> {
+    const launched = this.options.launch?.(command, timeoutMs, execution);
+    if (!launched && (execution.pty || execution.visibility !== 'hidden'))
+      throw new Error('Integrated terminal execution is unavailable.');
+    const terminal = launched ?? new RunningTerminal(command, timeoutMs);
     const terminalId = randomUUID();
     this.terminals.set(terminalId, terminal);
     try {
-      await abortable(terminal.ready, this.stopped.signal);
-      this.stopped.signal.throwIfAborted();
+      await abortable(terminal.ready, signal);
+      signal.throwIfAborted();
       return { terminalId };
     } catch (error) {
       terminal.terminate('startup-failure');
@@ -258,7 +358,7 @@ export class TerminalManager {
     }
   }
 
-  private owned(request: TerminalOutputRequest): RunningTerminal {
+  private owned(request: TerminalOutputRequest): ManagedTerminal {
     this.check(request.sessionId);
     const terminal = this.terminals.get(request.terminalId);
     if (!terminal) throw new Error('Unknown or released terminal.');
@@ -269,9 +369,49 @@ export class TerminalManager {
     return this.owned(request).snapshot();
   }
 
+  observeOutput(
+    request: TerminalOutputRequest,
+    listener: (snapshot: TerminalOutputResponse) => void,
+  ): () => void {
+    const terminal = this.owned(request);
+    if (!terminal.observeOutput) throw new Error('Owned task output observation is unavailable.');
+    return terminal.observeOutput(listener);
+  }
+
+  choices() {
+    this.check(this.options.sessionId);
+    return [...this.terminals].map(([terminalId, terminal]) => ({
+      terminalId,
+      label: terminal.label ?? `OMP pipe ${terminalId.slice(0, 8)}`,
+      running: !terminal.snapshot().exitStatus,
+      interactive: terminal.interactive ?? false,
+      visible: !!terminal.reveal,
+    }));
+  }
+
+  reveal(request: TerminalOutputRequest): void {
+    const terminal = this.owned(request);
+    if (!terminal.reveal) throw new Error('This terminal cannot be revealed.');
+    terminal.reveal();
+  }
+
+  async takeover(request: TerminalOutputRequest): Promise<void> {
+    const terminal = this.owned(request);
+    if (!terminal.takeover) throw new Error('This terminal does not support takeover.');
+    await terminal.takeover();
+    this.check(request.sessionId);
+    terminal.assertCleanup();
+  }
+
+  waitForOutput(request: TerminalOutputRequest, waitMs: number): Promise<TerminalOutputResponse> {
+    z.number().int().min(0).max(10000).parse(waitMs);
+    return this.owned(request).waitForOutput(waitMs);
+  }
+
   async waitForExit(request: TerminalOutputRequest): Promise<TerminalExitStatus> {
     const terminal = this.owned(request);
     const status = await terminal.done;
+    await terminal.waitForHandback?.();
     terminal.assertCleanup();
     return structuredClone(status);
   }

@@ -3,8 +3,15 @@ import { marked } from 'marked';
 import { permissions, toolbar } from './toolbar.js';
 import { changesPanel as reviewPanel, reviewRequest } from './review.js';
 import { canSubmit, composer } from './composer.js';
-import { announcements, captureFocus, restoreFocus } from './accessibility.js';
+import {
+  announcements,
+  captureFocus,
+  restoreFocus,
+  settleAttentionFocus,
+} from './accessibility.js';
 import { approvalCard, bindApprovals, refreshApproval } from './approvals.js';
+import { questionCard, questionResults, bindQuestions } from './questions.js';
+import { sessionManager, showSessions, bindSessions, managerState } from './sessions.js';
 import { contextPanel as sessionInfo, usagePercentage } from './context-info.js';
 
 const vscode = acquireVsCodeApi();
@@ -70,6 +77,16 @@ const markdown = (text) =>
   });
 const send = (type, extra = {}) => vscode.postMessage({ v: 1, type, ...extra });
 bindApprovals(send);
+bindQuestions(send, render);
+bindSessions(
+  send,
+  () => {
+    remember();
+    render();
+  },
+  () => state,
+  remembered.sessions,
+);
 
 function modelOutput(block, className = '') {
   const date = new Date(block.receivedAt ?? NaN);
@@ -152,7 +169,7 @@ function turn(current) {
       !(block.kind === 'plan' && block.entries && current === state.turns.at(-1)),
   );
   const failures = details.filter((block) => block.kind === 'tool' && block.status === 'failed');
-  return `<article class="turn">${promptRow(current)}${turnActivity(current, details)}${failures.map((block) => `<div class="failure" role="status">${icon('warning')}${escape(block.title)} failed</div>`).join('')}${answer ? modelOutput(answer, 'answer') : ''}${afterAnswer(current)}</article>`;
+  return `<article class="turn">${promptRow(current)}${turnActivity(current, details)}${questionResults(current, { escape, icon })}${failures.map((block) => `<div class="failure" role="status">${icon('warning')}${escape(block.title)} failed</div>`).join('')}${answer ? modelOutput(answer, 'answer') : ''}${afterAnswer(current)}</article>`;
 }
 
 const percentage = () => usagePercentage(state.context);
@@ -173,11 +190,19 @@ function render() {
   const scroll = oldTranscript?.scrollTop ?? 0;
   const dockScroll = document.querySelector('.dock-sections')?.scrollTop ?? 0;
   const focused = captureFocus(app);
+  const manager = sessionManager(state, { escape, icon, button });
   app.innerHTML = `${toolbar(state, button, escape)}
-    ${state.error ? `<div class="attention">${icon('warning')}<span>${escape(state.error)}</span></div>` : ''}
-    <section class="transcript" aria-label="Conversation">${state.turns.map(turn).join('')}${approvalCard(state, { escape, icon }, 'command')}${!state.workspace ? '<button class="text-button" data-action="openFolder">Open Folder</button>' : ''}</section>
+    ${state.error ? `<div class="attention">${icon('warning')}<span>${escape(state.error)}</span></div>` : ''}${manager}
+    <section class="transcript" aria-label="Conversation">${state.turns.map(turn).join('')}${approvalCard(state, { escape, icon }, 'command')}${questionCard(state, { escape, icon })}${!state.workspace ? '<button class="text-button" data-action="openFolder">Open Folder</button>' : ''}</section>
     ${composer(state, draft, { button, itemButton, escape, icon, working, changesPanel, permissions, contextPanel, contextOpen, percentage, expanded })}`;
   const transcript = document.querySelector('.transcript');
+  if (manager) {
+    transcript.remove();
+    document.querySelector('#composer').closest('footer').remove();
+    restoreFocus(app, focused);
+    announce(state);
+    return;
+  }
   transcript.scrollTop = follow ? transcript.scrollHeight : scroll;
   document.querySelector('.dock-sections').scrollTop = dockScroll;
   refreshApproval(app);
@@ -202,7 +227,14 @@ function applyEdit() {
 }
 
 function remember() {
-  vscode.setState({ draft, drafts, sessionId: draftSession, editing, expanded });
+  vscode.setState({
+    draft,
+    drafts,
+    sessionId: draftSession,
+    editing,
+    expanded,
+    sessions: managerState(),
+  });
 }
 app.addEventListener('submit', (event) => {
   event.preventDefault();
@@ -280,6 +312,17 @@ function contextAction(action) {
     .focus({ preventScroll: true });
 }
 
+function offerAction(action, id) {
+  send(action, { id });
+  document.querySelector('#prompt')?.focus({ preventScroll: true });
+}
+
+function escapeOffer(event) {
+  if (event.key !== 'Escape' || !event.target.closest?.('.context-offer') || working()) return;
+  event.preventDefault();
+  offerAction('dismissOffer', state.contextOffer.id);
+}
+
 function buttonAction(target) {
   const actions = {
     edit: () => beginEdit(target.dataset.id),
@@ -289,6 +332,8 @@ function buttonAction(target) {
     forkAfter: () => send('forkTurn', { id: target.dataset.id, boundary: 'after' }),
     context: () => contextAction('context'),
     closeContext: () => contextAction('closeContext'),
+    attachOffer: () => offerAction('attachOffer', target.dataset.id),
+    dismissOffer: () => offerAction('dismissOffer', target.dataset.id),
   };
   const handler = actions[target.dataset.action];
   if (handler) handler();
@@ -318,6 +363,7 @@ document.addEventListener('click', (event) => {
   }
 });
 document.addEventListener('keydown', (event) => {
+  escapeOffer(event);
   if (event.key === 'Escape' && editing && !editing.pending) {
     event.preventDefault();
     editing = null;
@@ -345,12 +391,14 @@ function editResult(data) {
 }
 
 function switchDraft(incoming) {
-  if (incoming.sessionId && incoming.sessionId !== draftSession) {
-    if (draftSession) drafts[draftSession] = draft;
-    draft = drafts[incoming.sessionId] ?? (draftSession ? '' : draft);
-    if (draftSession) editing = null;
-    draftSession = incoming.sessionId;
-  }
+  const owner = incoming.sessionId ?? 'new';
+  if (owner === draftSession) return;
+  if (draftSession) drafts[draftSession] = draft;
+  const initialDraft = !draftSession || draftSession === 'new';
+  draft = drafts[owner] ?? (initialDraft ? draft : '');
+  if (draftSession === 'new') delete drafts.new;
+  if (draftSession) editing = null;
+  draftSession = owner;
 }
 
 function settleThoughts(turns) {
@@ -390,22 +438,57 @@ function receiveState(incoming) {
   });
 }
 
+function focusTerminals(sessionId) {
+  if (state.connected && state.busy && state.sessionId === sessionId)
+    document
+      .querySelector('[data-action="terminals"]:not(:disabled)')
+      ?.focus({ preventScroll: true });
+}
+
+function focusAttention(event, nextFrame = true) {
+  if (state.sessionId !== event.sessionId) return;
+  const pending = event.kind === 'approval' ? state.approval : state.question;
+  if (event.kind !== 'finished' && pending?.id !== event.id) return;
+  if (managerState().open) {
+    showSessions(false);
+    render();
+    remember();
+  }
+  const selector = {
+    approval: '.approval-card',
+    questions: '.question-card[data-question-id]',
+    finished: '#prompt',
+  }[event.kind];
+  const target = document.querySelector(selector);
+  if (!target) return;
+  target.focus({ preventScroll: true });
+  if (nextFrame) settleAttentionFocus(app, () => focusAttention(event, false));
+}
+
+window.addEventListener('focus', () => send('focus', { focused: true }));
+window.addEventListener('blur', () => send('focus', { focused: false }));
+const messageActions = {
+  editResult,
+  draft: (data) => {
+    draft = data.text;
+    remember();
+    render();
+    document.querySelector('#prompt')?.focus({ preventScroll: true });
+  },
+  state: (data) => receiveState(data.state),
+  focusTerminals: (data) => focusTerminals(data.sessionId),
+  focusAttention,
+  showSessions: () => {
+    showSessions();
+    render();
+    remember();
+    document.querySelector('#session-search')?.focus();
+  },
+};
 window.addEventListener('message', (event) => {
   if (event.data?.v !== 1) return;
-  switch (event.data.type) {
-    case 'editResult':
-      editResult(event.data);
-      break;
-    case 'draft':
-      draft = event.data.text;
-      remember();
-      render();
-      document.querySelector('#prompt')?.focus({ preventScroll: true });
-      break;
-    case 'state':
-      receiveState(event.data.state);
-      break;
-  }
+  if (Object.hasOwn(messageActions, event.data.type)) messageActions[event.data.type](event.data);
 });
 render();
 send('ready');
+send('focus', { focused: document.hasFocus() });

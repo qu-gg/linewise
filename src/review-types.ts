@@ -1,7 +1,18 @@
+export type Approval = (
+  operation: {
+    kind: 'read' | 'write' | 'delete' | 'move';
+    path: string;
+    before?: string | null;
+    after?: string | null;
+    destination?: string;
+  },
+  signal?: AbortSignal,
+) => Promise<boolean>;
+
 export interface Provenance {
   turnId?: string;
   toolCallId?: string;
-  tool?: 'write' | 'edit';
+  tool?: 'write' | 'edit' | 'rename' | 'code_action' | 'notebook_edit';
 }
 
 export interface ReviewOperation extends Provenance {

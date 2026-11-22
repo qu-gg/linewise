@@ -2,10 +2,26 @@ import path from 'node:path';
 import { parse } from 'shell-quote';
 import { z } from 'zod';
 import type { TerminalCommand } from './terminal.js';
+import { pathReason } from './file-policy.js';
 
-export const permissionMode = z.enum(['ask', 'rules', 'all']);
+export const permissionMode = z.enum(['ask', 'rules', 'all', 'yolo']);
 export type PermissionMode = z.infer<typeof permissionMode>;
 export type CommandDecision = 'allow' | 'ask' | 'deny';
+
+export const shellInput = z
+  .object({
+    command: z.string().min(1).max(65536),
+    i: z.string().nullish(),
+    timeout: z.number().min(0).max(120).nullish(),
+    cwd: z
+      .string()
+      .max(4096)
+      .refine((value) => !value || !pathReason(value, false))
+      .nullish(),
+    pty: z.boolean().nullish(),
+    visibility: z.enum(['hidden', 'background', 'foreground']).optional(),
+  })
+  .strict();
 
 const ruleSchema = z
   .object({
@@ -105,15 +121,101 @@ const gitWrites = new Set([
   'rebase',
   'merge',
 ]);
+const yoloDenied = new Set([
+  'mkfs',
+  'mkswap',
+  'wipefs',
+  'fdisk',
+  'sfdisk',
+  'cfdisk',
+  'parted',
+  'shred',
+  'shutdown',
+  'reboot',
+  'poweroff',
+  'halt',
+  'telinit',
+]);
+const yoloWrappers = new Set([...shellWrappers, 'sudo', 'su', 'doas', 'env', 'exec']);
+
+function protectedRemoval(value: string): boolean {
+  const normalized = path.posix.normalize(value).replace(/\/+$/, '') || '/';
+  return (
+    [
+      '.',
+      '..',
+      '/',
+      '~',
+      '~/*',
+      '$HOME',
+      '$HOME/*',
+      '${HOME}',
+      '${HOME}/*',
+      '/home',
+      '/root',
+      '/etc',
+      '/usr',
+      '/var',
+      '/boot',
+      '/dev',
+      '/proc',
+      '/sys',
+      '/tmp',
+    ].includes(normalized) ||
+    /^\/(?:home|Users)\/[^/]+\/?\*?$/.test(normalized) ||
+    /^\/(?:\*|(?:etc|usr|var|boot|dev|proc|sys|root|home)\/\*)$/.test(normalized)
+  );
+}
+
+function yoloExecutableRisk(name: string, args: readonly string[]): boolean {
+  if (yoloDenied.has(name) || name.startsWith('mkfs.')) return true;
+  if (name === 'rm')
+    return args.some((arg) => /^-[^-]*[rR]|^--recursive$/.test(arg)) && args.some(protectedRemoval);
+  if (name === 'dd')
+    return args.some((arg) =>
+      /^of=\/dev\/(?:sd[a-z]|hd[a-z]|vd[a-z]|xvd[a-z]|nvme\d|mmcblk\d|disk\/)/.test(arg),
+    );
+  return false;
+}
+
+function yoloRisk(words: readonly string[], depth = 0): boolean {
+  const [first = '', ...args] = words;
+  const name = path.basename(first);
+  if (yoloExecutableRisk(name, args)) return true;
+  if (depth >= 8) return yoloWrappers.has(name) || shells.has(name);
+  if (shells.has(name) || name === 'eval') return yoloScriptRisk(args.at(-1) ?? '', depth + 1);
+  return (
+    yoloWrappers.has(name) &&
+    args.some((_, index) => yoloRisk(effectiveWords(args.slice(index)), depth + 1))
+  );
+}
+
+function yoloScriptRisk(source: string, depth = 0): boolean {
+  return (
+    /([A-Za-z_][A-Za-z0-9_]*|:)\s*\(\)\s*\{\s*\1\s*\|\s*\1\s*&\s*;?\s*\}/.test(source) ||
+    />\s*\/dev\/(?:sd[a-z]|hd[a-z]|vd[a-z]|xvd[a-z]|nvme\d|mmcblk\d|disk\/)/.test(source) ||
+    parseSegments(source).segments.some((words) => yoloRisk(effectiveWords(words), depth))
+  );
+}
+
+function yoloSourceRisk(command: Readonly<TerminalCommand>): boolean {
+  return shells.has(path.basename(command.command)) && yoloScriptRisk(command.args.at(-1) ?? '');
+}
 
 function executable(value: string): string {
   return /^\/(?:usr\/)?bin\/[^/]+$/.test(value) ? path.basename(value) : value;
 }
 
-function completeQuotes(source: string): boolean {
+function unquotedNewline(character: string, quote: string, escaped: boolean): string {
+  return character === '\n' && !quote && !escaped ? ';' : character;
+}
+
+function parsedSource(source: string): { complete: boolean; source: string } {
   let quote = '';
   let escaped = false;
+  const result: string[] = [];
   for (const character of source) {
+    result.push(unquotedNewline(character, quote, escaped));
     if (escaped) {
       escaped = false;
       continue;
@@ -126,14 +228,14 @@ function completeQuotes(source: string): boolean {
       if (character === quote) quote = '';
     } else if (character === "'" || character === '"') quote = character;
   }
-  return !quote && !escaped;
+  return { complete: !quote && !escaped, source: result.join('') };
 }
 
 function parseSegments(source: string) {
   let certain = true;
   const segments: string[][] = [[]];
   try {
-    for (const token of parse(source, {})) {
+    for (const token of parse(parsedSource(source).source, (name) => `$${name}`)) {
       if (typeof token === 'string') segments.at(-1)!.push(token);
       else {
         if (!('op' in token) || !['&&', '||', '|', ';'].includes(token.op)) certain = false;
@@ -161,7 +263,7 @@ function splitCommand(command: Readonly<TerminalCommand>) {
   const parsed = parseSegments(source);
   const control = Array.from(source).some((character) => character.charCodeAt(0) < 32);
   const literal =
-    completeQuotes(source) &&
+    parsedSource(source).complete &&
     !control &&
     !/[$`{}()\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060-\u206f]/u.test(source);
   return {
@@ -242,6 +344,22 @@ function automaticContext(command: Readonly<TerminalCommand>, segments: string[]
   );
 }
 
+function yoloBlocked(
+  command: Readonly<TerminalCommand>,
+  mode: PermissionMode,
+  segments: string[][],
+): boolean {
+  return mode === 'yolo' && (segments.some((words) => yoloRisk(words)) || yoloSourceRisk(command));
+}
+
+function needsApproval(
+  command: Readonly<TerminalCommand>,
+  mode: PermissionMode,
+  parsed: ReturnType<typeof splitCommand>,
+): boolean {
+  return mode === 'ask' || !parsed.certain || !automaticContext(command, parsed.segments);
+}
+
 export function commandDecision(
   command: Readonly<TerminalCommand>,
   mode: PermissionMode,
@@ -253,10 +371,11 @@ export function commandDecision(
     throw new Error('Invalid OMP command rules; execution is disabled. Check user settings.');
   const parsed = splitCommand(command);
   const segments = parsed.segments.map(effectiveWords);
+  if (yoloBlocked(command, mode, segments)) return 'deny';
   const restricted = restriction(segments, rules.data);
   if (restricted) return restricted;
-  if (mode === 'ask' || !parsed.certain) return 'ask';
-  if (!automaticContext(command, parsed.segments)) return 'ask';
+  if (mode === 'yolo') return 'allow';
+  if (needsApproval(command, mode, parsed)) return 'ask';
   return segments.every((words) => segmentDecision(words, rules.data, mode, defaults) === 'allow')
     ? 'allow'
     : 'ask';

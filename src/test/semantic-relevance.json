@@ -1,0 +1,161 @@
+{
+  "revision": "t03-semantic-v1",
+  "backend": "local-lsa-v1",
+  "library": "ml-matrix@6.12.1",
+  "budgets": {
+    "sourceFiles": 64,
+    "sourceBytes": 1048576,
+    "vocabulary": 512,
+    "latentDimensions": 32,
+    "derivedBytes": 16777216,
+    "buildMs": 10000,
+    "queryMs": 1000,
+    "topFiveMinimum": 16,
+    "nonliteralMinimum": 8,
+    "inferenceRequests": 0
+  },
+  "sources": {
+    "billing/invoice.ts": "export function computeInvoiceTotal(lines: { quantity: number; unitPrice: number }[], taxRate: number) {\n  const subtotal = lines.reduce((total, line) => total + line.quantity * line.unitPrice, 0);\n  return subtotal * (1 + taxRate);\n}\n",
+    "shipping/postage.ts": "export function shippingCharge(weight: number, distance: number, pricePerKilogram: number) {\n  return weight * pricePerKilogram + distance * 0.02;\n}\n",
+    "accounts/login.ts": "export function recordFailedLogin(account: { attempts: number; lockedUntil: number }, now: number) {\n  account.attempts += 1;\n  if (account.attempts >= 3) account.lockedUntil = now + 60000;\n}\n",
+    "accounts/otp.ts": "export function verifyOneTimeCode(supplied: string, expected: string, expiresAt: number, now: number) {\n  return now < expiresAt && supplied === expected;\n}\n",
+    "network/json.ts": "export async function fetchJson(url: string, signal: AbortSignal) {\n  const response = await fetch(url, { signal });\n  if (!response.ok) throw new Error(String(response.status));\n  return response.json();\n}\n",
+    "network/retry.ts": "export function retryDelay(attempt: number, baseMilliseconds: number) {\n  return Math.min(baseMilliseconds * 2 ** attempt, 30000);\n}\n",
+    "review/accept.ts": "export function keepChange(before: string, after: string, accepted: boolean) {\n  return accepted ? after : before;\n}\n",
+    "review/conflict.ts": "export function hasStalePreimage(expected: string, currentDisk: string) {\n  return expected !== currentDisk;\n}\n",
+    "text/encoding.ts": "export function utf8ByteLength(text: string) {\n  return new TextEncoder().encode(text).byteLength;\n}\n",
+    "text/lines.ts": "export function lineOffsets(text: string) {\n  const offsets = [0];\n  for (let index = 0; index < text.length; index++) if (text[index] === '\\n') offsets.push(index + 1);\n  return offsets;\n}\n",
+    "cache/sessions.py": "def expire_sessions(session_cache, now):\n    expired = [session for session in session_cache if session_cache[session]['expires_at'] <= now]\n    for session in expired:\n        del session_cache[session]\n    return len(expired)\n",
+    "queue/pending.py": "def cancel_pending_messages(pending_messages, cancelled):\n    if cancelled:\n        pending_messages.clear()\n    return pending_messages\n",
+    "queue/fifo.py": "def take_queue_head(queue):\n    if not queue:\n        return None\n    return queue.pop(0)\n",
+    "files/atomic.py": "def atomic_replace_file(destination, content, filesystem):\n    temporary = destination + '.tmp'\n    filesystem.write(temporary, content)\n    filesystem.rename(temporary, destination)\n",
+    "files/private.py": "def is_private_path(path, private_root):\n    return path == private_root or path.startswith(private_root + '/')\n",
+    "images/mime.py": "def image_mime_type(prefix):\n    if prefix.startswith(b'\\x89PNG'):\n        return 'image/png'\n    if prefix.startswith(b'\\xff\\xd8'):\n        return 'image/jpeg'\n    return None\n",
+    "math/average.py": "def arithmetic_mean(values):\n    if not values:\n        raise ValueError('empty values')\n    return sum(values) / len(values)\n",
+    "dates/expiry.py": "def is_token_expired(token, now):\n    return token['expires_at'] <= now\n",
+    "search/ranking.py": "def rank_search_results(results):\n    return sorted(results, key=lambda result: result['score'], reverse=True)\n",
+    "jobs/exit.py": "def command_outcome(exit_code, cancelled):\n    if cancelled:\n        return 'cancelled'\n    if exit_code is None:\n        return 'unknown'\n    return 'success' if exit_code == 0 else 'failed'\n"
+  },
+  "queries": [
+    {
+      "query": "computeInvoiceTotal",
+      "expected": "billing/invoice.ts",
+      "nonliteral": false,
+      "symbol": "computeInvoiceTotal"
+    },
+    {
+      "query": "shippingCharge",
+      "expected": "shipping/postage.ts",
+      "nonliteral": false,
+      "symbol": "shippingCharge"
+    },
+    {
+      "query": "recordFailedLogin",
+      "expected": "accounts/login.ts",
+      "nonliteral": false,
+      "symbol": "recordFailedLogin"
+    },
+    {
+      "query": "verifyOneTimeCode",
+      "expected": "accounts/otp.ts",
+      "nonliteral": false,
+      "symbol": "verifyOneTimeCode"
+    },
+    {
+      "query": "fetchJson",
+      "expected": "network/json.ts",
+      "nonliteral": false,
+      "symbol": "fetchJson"
+    },
+    {
+      "query": "retryDelay",
+      "expected": "network/retry.ts",
+      "nonliteral": false,
+      "symbol": "retryDelay"
+    },
+    {
+      "query": "keepChange",
+      "expected": "review/accept.ts",
+      "nonliteral": false,
+      "symbol": "keepChange"
+    },
+    {
+      "query": "hasStalePreimage",
+      "expected": "review/conflict.ts",
+      "nonliteral": false,
+      "symbol": "hasStalePreimage"
+    },
+    {
+      "query": "utf8ByteLength",
+      "expected": "text/encoding.ts",
+      "nonliteral": false,
+      "symbol": "utf8ByteLength"
+    },
+    {
+      "query": "lineOffsets",
+      "expected": "text/lines.ts",
+      "nonliteral": false,
+      "symbol": "lineOffsets"
+    },
+    {
+      "query": "Evict expired entries from the session cache",
+      "expected": "cache/sessions.py",
+      "nonliteral": true,
+      "symbol": "expire_sessions"
+    },
+    {
+      "query": "Clear pending messages after cancellation",
+      "expected": "queue/pending.py",
+      "nonliteral": true,
+      "symbol": "cancel_pending_messages"
+    },
+    {
+      "query": "Remove the first item at the head of a queue",
+      "expected": "queue/fifo.py",
+      "nonliteral": true,
+      "symbol": "take_queue_head"
+    },
+    {
+      "query": "Write content to a temporary file then rename the destination",
+      "expected": "files/atomic.py",
+      "nonliteral": true,
+      "symbol": "atomic_replace_file"
+    },
+    {
+      "query": "Reject paths inside the private storage root",
+      "expected": "files/private.py",
+      "nonliteral": true,
+      "symbol": "is_private_path"
+    },
+    {
+      "query": "Identify an image MIME type from its byte prefix",
+      "expected": "images/mime.py",
+      "nonliteral": true,
+      "symbol": "image_mime_type"
+    },
+    {
+      "query": "Calculate the arithmetic average of numeric values",
+      "expected": "math/average.py",
+      "nonliteral": true,
+      "symbol": "arithmetic_mean"
+    },
+    {
+      "query": "Check whether a token has expired at the current time",
+      "expected": "dates/expiry.py",
+      "nonliteral": true,
+      "symbol": "is_token_expired"
+    },
+    {
+      "query": "Sort search results by descending relevance score",
+      "expected": "search/ranking.py",
+      "nonliteral": true,
+      "symbol": "rank_search_results"
+    },
+    {
+      "query": "Classify a command exit as failed cancelled or unknown",
+      "expected": "jobs/exit.py",
+      "nonliteral": true,
+      "symbol": "command_outcome"
+    }
+  ]
+}

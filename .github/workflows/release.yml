@@ -1,0 +1,162 @@
+name: Private Alpha Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      phase:
+        description: Create a candidate or publish an accepted candidate
+        type: choice
+        options: [candidate, publish]
+        default: candidate
+      candidate_run:
+        description: Successful candidate workflow run ID (publish only)
+        type: string
+      acceptance:
+        description: Exact local release-acceptance JSON (publish only)
+        type: string
+      approve_publication:
+        description: Approve creating a private prerelease and version tag
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: private-alpha-release
+  cancel-in-progress: false
+
+jobs:
+  candidate:
+    if: github.ref == 'refs/heads/main' && github.actor == github.repository_owner && inputs.phase == 'candidate'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: npm
+      - name: Verify Private Main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test "$(gh api "repos/$GITHUB_REPOSITORY" --jq '.private')" = true
+          test "$(gh api "repos/$GITHUB_REPOSITORY/branches/main" --jq '.commit.sha')" = "$GITHUB_SHA"
+      - run: npm ci
+      - run: npm run check
+      - name: Audit Locked Dependencies
+        run: npm audit --audit-level=moderate
+      - name: Build And Inspect Candidate
+        run: |
+          mkdir -p reports/release
+          version=$(node -p 'require("./package.json").version')
+          npm run package -- --target linux-x64 --out "reports/release/vs-omp-${version}-linux-x64.vsix"
+          node scripts/release.mjs candidate reports/release "$GITHUB_SHA"
+          node scripts/release.mjs verify reports/release "$GITHUB_SHA"
+      - name: Upload Candidate Only
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: release-candidate
+          path: |
+            reports/release/*.vsix
+            reports/release/SHA256SUMS
+            reports/release/release-candidate.json
+            reports/release/release-notes.md
+          if-no-files-found: error
+          retention-days: 14
+
+  preflight:
+    if: github.ref == 'refs/heads/main' && github.actor == github.repository_owner && inputs.phase == 'publish' && inputs.approve_publication
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      tag: ${{ steps.identity.outputs.tag }}
+      vsix: ${{ steps.identity.outputs.vsix }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Verify Candidate Run And Owner Evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_RUN: ${{ inputs.candidate_run }}
+          ACCEPTANCE_JSON: ${{ inputs.acceptance }}
+        run: |
+          mkdir -p reports
+          node scripts/release-run.mjs
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: release-candidate
+          path: reports/release
+          run-id: ${{ inputs.candidate_run }}
+          github-token: ${{ github.token }}
+      - run: npm run check
+      - name: Audit Locked Dependencies Again
+        run: npm audit --audit-level=moderate
+      - name: Verify Exact Package And Acceptance
+        id: identity
+        run: |
+          node scripts/release.mjs publish-ready reports/release "$GITHUB_SHA" reports/release-acceptance.json
+          node --input-type=module -e 'import fs from "node:fs"; const candidate=JSON.parse(fs.readFileSync("reports/release/release-candidate.json","utf8")); fs.appendFileSync(process.env.GITHUB_OUTPUT, `tag=${candidate.tag}\nvsix=${candidate.package.file}\n`);'
+          cp reports/release-acceptance.json reports/release/release-acceptance.json
+      - name: Upload Verified Publication Payload
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: release-approved
+          path: |
+            reports/release/*.vsix
+            reports/release/SHA256SUMS
+            reports/release/release-candidate.json
+            reports/release/release-notes.md
+            reports/release/release-acceptance.json
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    needs: preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      actions: read
+    env:
+      TAG: ${{ needs.preflight.outputs.tag }}
+      VSIX: ${{ needs.preflight.outputs.vsix }}
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: release-approved
+          path: release
+      - name: Recheck Destination And Unused Tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test "$(gh api "repos/$GITHUB_REPOSITORY" --jq '.private')" = true
+          test "$(gh api "repos/$GITHUB_REPOSITORY/branches/main" --jq '.commit.sha')" = "$GITHUB_SHA"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/$TAG" --jq 'map(select(.ref == ("refs/tags/" + env.TAG))) | length')" = 0
+          cd release
+          sha256sum --strict -c SHA256SUMS
+      - name: Create Draft With Exact Assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --draft --prerelease --title "OMP $TAG (local Linux alpha)" --notes-file release/release-notes.md "release/$VSIX" release/SHA256SUMS release/release-candidate.json release/release-notes.md release/release-acceptance.json
+      - name: Verify Downloaded Bytes Then Publish Prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir downloaded
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir downloaded
+          for file in release/*; do cmp "$file" "downloaded/$(basename "$file")"; done
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease

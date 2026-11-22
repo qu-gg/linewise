@@ -55,6 +55,28 @@ async function fixture(testContext: TestContext) {
   return { root, control, artifacts, state, context, handler, send };
 }
 
+test('native usage reports are numeric metadata and unavailable getters cannot disable history controls', async (context) => {
+  const current = await fixture(context);
+  current.context.getContextUsage = () => ({ tokens: 200.5, contextWindow: 1000, percent: 20.05 });
+  const result = await exchangeHistory(current.control, current.send, { action: 'inspect' });
+  assert.deepEqual(result.contextUsage, { tokens: 200.5, contextWindow: 1000 });
+  for (const getter of [
+    () => undefined,
+    () => ({ tokens: -1, contextWindow: 1000 }),
+    () => ({ tokens: Infinity, contextWindow: 1000 }),
+    () => ({ tokens: 200, contextWindow: 0 }),
+    () => {
+      throw new Error('Usage is unavailable.');
+    },
+  ]) {
+    current.context.getContextUsage = getter;
+    const snapshot = await exchangeHistory(current.control, current.send, { action: 'inspect' });
+    assert.equal(snapshot.sessionId, 'native');
+    assert.equal(snapshot.contextUsage, undefined);
+  }
+  assert.deepEqual(await readdir(current.control), []);
+});
+
 test('private resume accepts only a regular file inside canonical private storage', async (context) => {
   const current = await fixture(context);
   const target = path.join(current.artifacts, 'good.jsonl');

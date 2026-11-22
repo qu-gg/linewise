@@ -1,42 +1,47 @@
 import * as vscode from 'vscode';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readFile, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { nativeMutationFiles, nativeWorkspaceFiles } from './native-files.js';
 import { nativeChat } from './chat.integration.js';
-
-async function nativeStorageInspection(
-  api: Awaited<ReturnType<typeof import('../extension.js').activate>>,
-) {
-  const before = api.storedState!();
-  await vscode.commands.executeCommand('omp.inspectStorage');
-  const document = vscode.window.activeTextEditor!.document;
-  assert.equal(document.uri.scheme, 'omp-storage');
-  assert.notEqual(vscode.workspace.fs.isWritableFileSystem(document.uri.scheme), true);
-  assert.equal(document.isDirty, false);
-  const report = JSON.parse(document.getText());
-  assert.equal(report.sessionCount, before.sessions.length);
-  assert.equal(report.serializedStateBytes, Buffer.byteLength(JSON.stringify(before)));
-  assert.equal(report.automaticDeletion, false);
-  assert.equal(report.nativeArtifactSizes, 'regular-jsonl-only');
-  await vscode.commands.executeCommand('omp.inspectStorage');
-  assert.notEqual(vscode.window.activeTextEditor!.document.uri.toString(), document.uri.toString());
-  assert.deepEqual(api.storedState!(), before);
-  assert.notEqual(api.status()!.connected, true);
-  console.log(
-    'PASS: native storage inspection opens fresh read-only metadata without OMP or state changes.',
-  );
-}
+import { prepareUXReopen, verifyUXReopen } from './ux.integration.js';
+import { inspectEditor } from '../host-inspect.js';
+import { editorRequest } from '../editor-policy.js';
+import { renameWorkspace } from '../host-rename.js';
+import { renameRequest } from '../rename-policy.js';
+import { ReviewJournal, PathGuard } from '../review.js';
+import { WorkspaceFiles } from '../workspace.js';
+import { nativeReviewedCodeAction } from './code-actions.integration.js';
+import { nativeSessionTools } from './browser-session.integration.js';
+import {
+  nativeInstalledOnboarding,
+  nativeOnboarding,
+  nativeStorageInspection,
+} from './onboarding.integration.js';
 
 export async function run(): Promise<void> {
   const extension = vscode.extensions.getExtension('vs-omp-local.vs-omp');
-  assert.ok(extension, 'Development extension must be discoverable');
+  assert.ok(extension, 'OMP extension must be discoverable');
+  if (process.env.VS_OMP_EXPECTED_EXTENSION_PATH) {
+    assert.equal(
+      await realpath(extension.extensionPath),
+      process.env.VS_OMP_EXPECTED_EXTENSION_PATH,
+    );
+    console.log('PASS: actual registry-installed OMP package is selected, not a development copy.');
+  }
   await extension.activate();
   assert.equal(extension.isActive, true);
   await vscode.commands.executeCommand('omp.open');
-  await nativeStorageInspection(extension.exports);
   const root = vscode.workspace.workspaceFolders?.[0]?.uri;
   assert.ok(root);
+  if (process.env.VS_OMP_EXPECTED_EXTENSION_PATH) return nativeInstalledOnboarding(root);
+  if (process.env.VS_OMP_UX_REOPEN === '1') return verifyUXReopen(extension.exports, root);
+  await nativeOnboarding(extension.exports, root);
+  await nativeStorageInspection(extension.exports);
+  await nativeReviewedRename(root);
+  await nativeReviewedCodeAction(root);
+  await nativeEditorResources(root);
+  await nativeSessionTools(root, extension.exports);
   await nativeWorkspaceFiles(root);
   await vscode.commands.executeCommand('omp.newSession');
   const status = extension.exports.status();
@@ -64,10 +69,187 @@ export async function run(): Promise<void> {
   const prepared = await prepareHistory({ extension, root, request, dispatch });
   const edited = await editHistory(prepared);
   await firstFork(edited);
-  const archive = await reopenBranches(prepared);
+  const archive = await reopenBranches(edited);
   await operationGates({ ...prepared, archive });
   await nativeMutationFiles(extension.exports, root);
   await nativeChat(extension.exports, root);
+  await prepareUXReopen(extension.exports, root);
+}
+
+async function nativeReviewedRename(root: vscode.Uri): Promise<void> {
+  const source = vscode.Uri.joinPath(root, 'rename-source.ts');
+  const usage = vscode.Uri.joinPath(root, 'rename-usage.ts');
+  const before = [
+    'export const rate = 7;\n',
+    'import {rate} from "./rename-source";\nexport const quote = rate * 3;\n',
+  ];
+  const provider = vscode.extensions.getExtension('vscode.typescript-language-features');
+  assert.ok(provider);
+  await provider.activate();
+  const files = new WorkspaceFiles(root);
+  let persisted = '[]';
+  const journal = new ReviewJournal(
+    files,
+    new PathGuard([root.fsPath]),
+    async () => false,
+    async (changes) => {
+      persisted = JSON.stringify(changes);
+    },
+  );
+  try {
+    await vscode.workspace.fs.writeFile(source, Buffer.from(before[0]!));
+    await vscode.workspace.fs.writeFile(usage, Buffer.from(before[1]!));
+    await vscode.window.showTextDocument(source);
+    await vscode.commands.executeCommand('vscode.executeDocumentSymbolProvider', source);
+    const input = renameRequest.parse({
+      path: source.fsPath,
+      line: 1,
+      column: 14,
+      newName: 'shippingRate',
+      paths: [source.fsPath, usage.fsPath],
+    });
+    const scope = {
+      cwd: root.fsPath,
+      privateRoot: path.join(root.fsPath, '.rename-private'),
+      signal: new AbortController().signal,
+      valid: () => true,
+    };
+    const result = JSON.parse(
+      await renameWorkspace(input, scope, (image) =>
+        journal.write('native-rename', image.path, image.content, scope.signal, image.before, {
+          tool: 'rename',
+        }),
+      ),
+    );
+    assert.equal(result.completed, 2);
+    assert.match((await files.read(source.fsPath))!, /export const shippingRate/);
+    assert.match((await files.read(usage.fsPath))!, /shippingRate \* 3/);
+    const reopened = new ReviewJournal(
+      files,
+      new PathGuard([root.fsPath]),
+      async () => false,
+      async () => {},
+      JSON.parse(persisted),
+    );
+    for (const change of reopened.list()) await reopened.discard(change.id);
+    assert.equal(await files.read(source.fsPath), before[0]);
+    assert.equal(await files.read(usage.fsPath), before[1]);
+    console.log(
+      'PASS: native TypeScript cross-file rename enters durable review and Discard restores both files.',
+    );
+  } finally {
+    await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+    await vscode.workspace.fs.delete(source, { recursive: false, useTrash: false });
+    await vscode.workspace.fs.delete(usage, { recursive: false, useTrash: false });
+  }
+}
+
+const nativeNotebookPng = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACklEQVR4nGMAAQAABQABDQottAAAAABJRU5ErkJggg==',
+  'base64',
+);
+
+function nativeNotebookData(): vscode.NotebookData {
+  const cell = new vscode.NotebookCellData(
+    vscode.NotebookCellKind.Code,
+    'ORIGINAL_NOTEBOOK_CELL',
+    'plaintext',
+  );
+  cell.outputs = [
+    new vscode.NotebookCellOutput([
+      vscode.NotebookCellOutputItem.text('Native text output'),
+      new vscode.NotebookCellOutputItem(nativeNotebookPng, 'image/png'),
+    ]),
+  ];
+  return new vscode.NotebookData([cell]);
+}
+
+async function nativeNotebookImage(
+  uri: vscode.Uri,
+  scope: Parameters<typeof inspectEditor>[1],
+): Promise<void> {
+  const image = JSON.parse(
+    await inspectEditor(
+      editorRequest.parse({
+        action: 'notebookImage',
+        path: uri.fsPath,
+        cell: 1,
+        output: 1,
+        item: 2,
+      }),
+      scope,
+    ),
+  );
+  assert.equal(image.mimeType, 'image/png');
+  assert.equal(image.untrusted, true);
+  assert.deepEqual(Buffer.from(image.data, 'base64'), nativeNotebookPng);
+  console.log(
+    'PASS: native notebook output image is returned exactly without kernel execution or notebook mutation.',
+  );
+}
+
+async function nativeEditorResources(root: vscode.Uri): Promise<void> {
+  const uri = vscode.Uri.joinPath(root, 'parity.ompnotebook');
+  const data = nativeNotebookData();
+  const serializer = vscode.workspace.registerNotebookSerializer('omp-parity-fixture', {
+    deserializeNotebook: () => data,
+    serializeNotebook: () => new TextEncoder().encode('fixture notebook'),
+  });
+  const provider = vscode.tasks.registerTaskProvider('omp-parity-fixture', {
+    provideTasks: () => [
+      new vscode.Task(
+        { type: 'omp-parity-fixture' },
+        vscode.workspace.workspaceFolders![0]!,
+        'Parity Read-Only Task',
+        'parity-fixture',
+        new vscode.ProcessExecution(process.execPath, ['--version']),
+      ),
+    ],
+    resolveTask: () => undefined,
+  });
+  try {
+    await vscode.workspace.fs.writeFile(uri, new TextEncoder().encode('fixture notebook'));
+    const notebook = await vscode.workspace.openNotebookDocument('omp-parity-fixture', data);
+    await vscode.commands.executeCommand('vscode.openWith', uri, 'omp-parity-fixture');
+    const opened = vscode.workspace.notebookDocuments.find(
+      (item) => item.uri.toString() === uri.toString(),
+    )!;
+    assert.ok(opened);
+    const cell = opened.cellAt(0);
+    const edit = new vscode.WorkspaceEdit();
+    edit.replace(
+      cell.document.uri,
+      new vscode.Range(
+        new vscode.Position(0, 0),
+        cell.document.positionAt(cell.document.getText().length),
+      ),
+      'UNSAVED_NATIVE_NOTEBOOK_CELL',
+    );
+    assert.ok(await vscode.workspace.applyEdit(edit));
+    const scope = {
+      cwd: root.fsPath,
+      privateRoot: path.join(root.fsPath, '.private-resource-fixture'),
+      signal: new AbortController().signal,
+    };
+    const result = JSON.parse(
+      await inspectEditor(editorRequest.parse({ action: 'notebook', path: uri.fsPath }), scope),
+    );
+    assert.equal(result.items[0].text, 'UNSAVED_NATIVE_NOTEBOOK_CELL');
+    assert.equal(result.items[0].dirty, true);
+    assert.equal(result.items[0].outputs[1].item, 2);
+    await nativeNotebookImage(uri, scope);
+    const tasks = JSON.parse(await inspectEditor(editorRequest.parse({ action: 'tasks' }), scope));
+    assert.ok(tasks.items.some((item: { name: string }) => item.name === 'Parity Read-Only Task'));
+    assert.equal(notebook.cellCount, 1);
+    console.log(
+      'PASS: native public notebook inspection preserves unsaved cells and task discovery does not execute.',
+    );
+  } finally {
+    provider.dispose();
+    serializer.dispose();
+    await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+    await vscode.workspace.fs.delete(uri);
+  }
 }
 
 interface NativeCase {
@@ -160,19 +342,18 @@ async function editHistory(prepared: Awaited<ReturnType<typeof prepareHistory>>)
   assert.ok(!editedContext.includes('FUTURE_SENTINEL'));
   assert.ok(editedContext.includes('ATTACHMENT_ORIGINAL'));
   assert.ok(!editedContext.includes('ATTACHMENT_CHANGED'));
-  assert.ok(
-    extension.exports
-      .storedState()
-      .sessions.some(
-        (saved: { id: string; turns: { prompt: string }[] }) =>
-          saved.id !== originalId &&
-          saved.turns.some((current) => current.prompt === 'FUTURE_SENTINEL'),
-      ),
-  );
+  const archive = extension.exports
+    .storedState()
+    .sessions.find(
+      (saved: { id: string; turns: { prompt: string }[] }) =>
+        saved.id !== originalId &&
+        saved.turns.some((current) => current.prompt === 'FUTURE_SENTINEL'),
+    );
+  assert.ok(archive);
   console.log(
     'PASS: editing rewinds real model context, archives the original, and preserves files, dirty buffers and pending review ownership.',
   );
-  return { ...prepared, editedStatus };
+  return { ...prepared, editedStatus, archive };
 }
 
 async function firstFork({
@@ -217,7 +398,8 @@ async function reopenBranches({
   pending,
   contextPath,
   writeTurn,
-}: Awaited<ReturnType<typeof prepareHistory>>) {
+  archive,
+}: Awaited<ReturnType<typeof editHistory>>) {
   const resumed = extension.exports.status();
   await request({ v: 1, type: 'forkTurn', id: resumed.turns[0].id, boundary: 'after' });
   assert.notEqual(extension.exports.status().sessionId, resumed.sessionId);
@@ -242,10 +424,7 @@ async function reopenBranches({
     ),
   );
   assert.ok(!JSON.stringify(paired).includes('REPLACEMENT_SENTINEL'));
-  const archive = extension.exports
-    .storedState()
-    .sessions.find((saved: { label: string }) => saved.label.endsWith('(before edit)'));
-  assert.ok(archive);
+  assert.ok(archive.label.endsWith('(before edit)'));
   await extension.exports.resume(archive.id);
   await request({ v: 1, type: 'config', id: 'model', value: 'vs-omp-fixture/history' });
   await request({ v: 1, type: 'prompt', text: 'ARCHIVE_CHECK' });

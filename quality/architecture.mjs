@@ -4,7 +4,24 @@ import { cruise } from 'dependency-cruiser';
 import { parse } from '@babel/parser';
 import config from '../.dependency-cruiser.mjs';
 
-const expectedTools = ['read', 'write', 'todo', 'retain', 'recall', 'memory_edit', 'edit', 'bash'];
+const expectedTools = [
+  'read',
+  'write',
+  'todo',
+  'retain',
+  'recall',
+  'memory_edit',
+  'edit',
+  'bash',
+  'editor',
+  'ask',
+  'browser',
+  'rename',
+  'task',
+  'fetch',
+  'code_action',
+  'notebook_edit',
+];
 
 export function journalImportViolations(source) {
   const body = parse(source, { sourceType: 'module', plugins: ['typescript'] }).program.body;

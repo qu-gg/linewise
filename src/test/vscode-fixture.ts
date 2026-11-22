@@ -1,5 +1,10 @@
 import path from 'node:path';
-
+import { Task, CustomExecution, EventEmitter } from './task-fixture.js';
+import type { TaskPty } from './task-fixture.js';
+import { createDiagnosticCollection } from './task-fixture.js';
+export { Task, CustomExecution, EventEmitter };
+export { Diagnostic, DiagnosticSeverity } from './task-fixture.js';
+export { ProcessExecution, ShellExecution, TaskScope } from './task-fixture.js';
 export class Uri {
   constructor(
     readonly scheme: string,
@@ -38,6 +43,9 @@ export class Position {
     readonly line: number,
     readonly character: number,
   ) {}
+  isEqual(other: Position) {
+    return this.line === other.line && this.character === other.character;
+  }
 }
 export class Range {
   constructor(
@@ -46,7 +54,14 @@ export class Range {
   ) {}
 }
 export const FileType = { File: 1, Directory: 2, SymbolicLink: 64 };
+export const CodeActionTriggerKind = { Invoke: 1, Automatic: 2 };
 export class FileSystemError extends Error {
+  static NoPermissions() {
+    return new FileSystemError('NoPermissions');
+  }
+  static FileNotFound(_uri?: Uri) {
+    return new FileSystemError('FileNotFound');
+  }
   constructor(readonly code: string) {
     super(code);
   }
@@ -56,9 +71,23 @@ type Edit = {
   uri: Uri;
   content?: string;
   destination?: Uri;
+  range?: Range;
 };
 export class WorkspaceEdit {
   readonly edits: Edit[] = [];
+  get size() {
+    return new Set(this.edits.map((edit) => edit.uri.toString())).size;
+  }
+  entries(): [Uri, { range: Range; newText: string }[]][] {
+    const entries = new Map<string, [Uri, { range: Range; newText: string }[]]>();
+    for (const edit of this.edits) {
+      if (edit.type !== 'replace') continue;
+      const current = entries.get(edit.uri.toString()) ?? [edit.uri, []];
+      current[1].push({ range: edit.range!, newText: edit.content! });
+      entries.set(edit.uri.toString(), current);
+    }
+    return [...entries.values()];
+  }
   createFile(uri: Uri) {
     this.edits.push({ type: 'create', uri });
   }
@@ -68,13 +97,14 @@ export class WorkspaceEdit {
   renameFile(uri: Uri, destination: Uri) {
     this.edits.push({ type: 'rename', uri, destination });
   }
-  replace(uri: Uri, _range: Range, content: string) {
-    this.edits.push({ type: 'replace', uri, content });
+  replace(uri: Uri, range: Range, content: string) {
+    this.edits.push({ type: 'replace', uri, range, content });
   }
 }
 
 export class Document {
   isDirty = true;
+  version = 1;
   constructor(
     public uri: Uri,
     public text: string,
@@ -92,6 +122,14 @@ export class Document {
     const lines = this.text.slice(0, offset).split('\n');
     return new Position(lines.length - 1, lines.at(-1)!.length);
   }
+  offsetAt(position: Position) {
+    const lines = this.text.split('\n');
+    if (position.line >= lines.length) return this.text.length;
+    const prefix = lines
+      .slice(0, position.line)
+      .reduce((total, line) => total + line.length + 1, 0);
+    return prefix + Math.min(position.character, lines[position.line]!.replace(/\r$/, '').length);
+  }
   async save() {
     if (!fixture.saveAllowed) return false;
     fixture.disk.set(this.uri.path, {
@@ -106,6 +144,16 @@ export class Document {
 export const fixture = {
   disk: new Map<string, { bytes: Uint8Array; type: number; size?: number }>(),
   documents: [] as Document[],
+  notebook: undefined as unknown,
+  tasks: [] as unknown[],
+  taskRuns: [] as {
+    task: Task;
+    terminal: TaskPty;
+    output: string;
+    exitCode?: number;
+    terminations: number;
+    terminate(): void;
+  }[],
   configuration: new Map<string, unknown>(),
   applyAllowed: true,
   saveAllowed: true,
@@ -116,7 +164,7 @@ export const fixture = {
     | { document: Document; selection: { isEmpty: boolean; start?: Position; end?: Position } }
     | undefined,
   provider: undefined as { resolveWebviewView(resolved: typeof view): void } | undefined,
-  commands: new Map<string, () => unknown>(),
+  commands: new Map<string, (...args: unknown[]) => unknown>(),
   contentProviders: new Map<
     string,
     { provideTextDocumentContent(uri: Uri): string | Promise<string> }
@@ -135,6 +183,8 @@ export const fixture = {
   warnings: [] as { message: string; detail?: string; choices: string[] }[],
   onWarning: undefined as (() => Promise<string | undefined>) | undefined,
   listeners: [] as (() => void)[],
+  rootListeners: [] as (() => Promise<void>)[],
+  editorListeners: [] as (() => void)[],
   messageListener: undefined as ((message: unknown) => void) | undefined,
   viewDisposed: undefined as (() => void) | undefined,
   delivery: true as boolean | 'reject',
@@ -143,6 +193,9 @@ export const fixture = {
 export function reset() {
   fixture.disk.clear();
   fixture.documents.length = 0;
+  fixture.notebook = undefined;
+  fixture.tasks = [];
+  fixture.taskRuns = [];
   fixture.configuration.clear();
   fixture.applyAllowed = true;
   fixture.saveAllowed = true;
@@ -167,6 +220,8 @@ export function reset() {
   fixture.warnings.length = 0;
   fixture.onWarning = undefined;
   fixture.listeners.length = 0;
+  fixture.rootListeners.length = 0;
+  fixture.editorListeners.length = 0;
   fixture.messageListener = undefined;
   fixture.viewDisposed = undefined;
   fixture.delivery = true;
@@ -185,8 +240,12 @@ function existing(uri: Uri) {
   if (!file) throw new FileSystemError('FileNotFound');
   return file;
 }
-
 export const workspace = {
+  onDidChangeConfiguration: (_listener: unknown) => disposable(),
+  onDidChangeWorkspaceFolders: (listener: () => Promise<void>) => {
+    fixture.rootListeners.push(listener);
+    return disposable();
+  },
   get workspaceFolders() {
     return fixture.roots;
   },
@@ -196,6 +255,7 @@ export const workspace = {
   getWorkspaceFolder: (uri: Uri) =>
     fixture.roots.find((root) => uri.path.startsWith(root.uri.path + '/')),
   asRelativePath: (uri: Uri) => path.relative(fixture.roots[0]!.uri.path, uri.path),
+  registerFileSystemProvider: () => disposable(),
   registerTextDocumentContentProvider: (
     scheme: string,
     provider: { provideTextDocumentContent(uri: Uri): string | Promise<string> },
@@ -220,6 +280,11 @@ export const workspace = {
   get textDocuments() {
     return fixture.documents;
   },
+  get notebookDocuments() {
+    return fixture.notebook ? [fixture.notebook] : [];
+  },
+  findFiles: async (_include: unknown, _exclude: unknown, maximum: number) =>
+    [...fixture.disk.keys()].slice(0, maximum).map((target) => Uri.file(target)),
   fs: {
     stat: async (uri: Uri) => {
       const file = existing(uri);
@@ -252,6 +317,10 @@ export const workspace = {
     fixture.documents.push(document);
     return document;
   },
+  openNotebookDocument: async () => {
+    if (!fixture.notebook) throw new Error('No notebook provider available');
+    return fixture.notebook;
+  },
   applyEdit: async (edit: WorkspaceEdit) => {
     if (!fixture.applyAllowed) return false;
     for (const change of edit.edits) {
@@ -270,6 +339,41 @@ export const workspace = {
   },
 };
 
+export class NotebookRange {
+  constructor(
+    public start: number,
+    public end: number,
+  ) {}
+}
+export const tasks = {
+  fetchTasks: async () => fixture.tasks,
+  executeTask: async (task: Task) => {
+    if (!(task.execution instanceof CustomExecution))
+      throw new Error('Expected owned task execution.');
+    const terminal = await task.execution.callback(task.definition);
+    const run = {
+      task,
+      terminal,
+      output: '',
+      exitCode: undefined as number | undefined,
+      terminations: 0,
+      terminate: () => {
+        run.terminations++;
+        terminal.close();
+      },
+    };
+    terminal.onDidWrite((text) => {
+      run.output += text;
+    });
+    terminal.onDidClose((code) => {
+      run.exitCode = code;
+    });
+    fixture.taskRuns.push(run);
+    terminal.open();
+    return run;
+  },
+};
+
 function renameFixtureFile(source: Uri, destination: Uri): void {
   if (fixture.disk.has(destination.path)) throw new Error('Destination exists.');
   fixture.disk.set(destination.path, existing(source));
@@ -279,6 +383,21 @@ function renameFixtureFile(source: Uri, destination: Uri): void {
 }
 
 const disposable = () => ({ dispose() {} });
+export class CancellationTokenSource {
+  private readonly cancelled = new EventEmitter<void>();
+  readonly token = {
+    isCancellationRequested: false,
+    onCancellationRequested: this.cancelled.event,
+  };
+  cancel() {
+    if (this.token.isCancellationRequested) return;
+    this.token.isCancellationRequested = true;
+    this.cancelled.fire(undefined);
+  }
+  dispose() {
+    this.cancelled.dispose();
+  }
+}
 export const ExtensionMode = { Production: 1, Development: 2, Test: 3 };
 export class RelativePattern {
   constructor(
@@ -298,9 +417,17 @@ export const env = {
     return true;
   },
 };
-export const DiagnosticSeverity = { 0: 'Error', 1: 'Warning', 2: 'Information', 3: 'Hint' };
-export const languages = { getDiagnostics: () => fixture.diagnostics };
+export const languages = {
+  createDiagnosticCollection,
+  getDiagnostics: () => fixture.diagnostics,
+  registerCodeLensProvider: disposable,
+};
 export const window = {
+  registerCustomEditorProvider: disposable,
+  onDidChangeActiveTextEditor: (listener: () => void) => {
+    fixture.editorListeners.push(listener);
+    return disposable();
+  },
   get activeTextEditor() {
     return fixture.editor;
   },
@@ -324,7 +451,11 @@ export const window = {
     fixture.warnings.push({ message, detail: options.detail, choices });
     return fixture.onWarning ? fixture.onWarning() : fixture.approval;
   },
-  showInformationMessage: async () => undefined,
+  showInformationMessage: async (..._args: unknown[]): Promise<string | undefined> => undefined,
+  createTerminal: (_options: unknown): unknown => {
+    throw new Error('No terminal fixture installed.');
+  },
+  showInputBox: async (): Promise<string | undefined> => undefined,
   showQuickPick: async (
     items: { value?: string; label?: string }[],
     options?: { canPickMany?: boolean },
@@ -337,13 +468,13 @@ export const window = {
   showTextDocument: async () => undefined,
 };
 export const commands = {
-  registerCommand: (id: string, callback: () => unknown) => {
+  registerCommand: (id: string, callback: (...args: unknown[]) => unknown) => {
     fixture.commands.set(id, callback);
     return disposable();
   },
   executeCommand: async (id: string, ...args: unknown[]) => {
     fixture.commandCalls.push({ id, args });
-    return fixture.commands.get(id)?.();
+    return fixture.commands.get(id)?.(...args);
   },
 };
 export const view = {

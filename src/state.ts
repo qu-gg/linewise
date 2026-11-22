@@ -2,9 +2,11 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { z } from 'zod';
+import { questionAnswers } from './questions.js';
 import { historySnapshotSchema } from './history.js';
 import type { HistorySnapshot } from './history.js';
 import { retentionPolicy } from './storage-policy.js';
+import { imageSchema } from './image-policy.js';
 
 const block = z.object({
   id: z.string(),
@@ -14,6 +16,7 @@ const block = z.object({
   status: z.string().optional(),
   input: z.string().optional(),
   toolKind: z.string().optional(),
+  toolName: z.string().max(100).optional(),
   command: z.string().optional(),
   receivedAt: z.number().finite().nonnegative().optional(),
   model: z.string().optional(),
@@ -27,13 +30,19 @@ const block = z.object({
     .max(100)
     .optional(),
 });
-const attachment = z.object({
-  id: z.string().optional(),
-  kind: z.enum(['selection', 'file', 'resource', 'diagnostics']).optional(),
-  label: z.string(),
-  uri: z.string(),
-  text: z.string().max(128_000),
-});
+const attachment = z
+  .object({
+    id: z.string().optional(),
+    kind: z.enum(['selection', 'file', 'resource', 'diagnostics', 'image']).optional(),
+    label: z.string(),
+    uri: z.string(),
+    text: z.string().max(128_000),
+    image: imageSchema.optional(),
+  })
+  .refine(
+    (value) => (value.kind === 'image') === Boolean(value.image),
+    'Image attachment kind and payload must agree.',
+  );
 const turn = z.object({
   id: z.string(),
   prompt: z.string(),
@@ -59,10 +68,18 @@ const usage = z.object({
     .optional(),
   stale: z.boolean().optional(),
 });
+export const sessionTitle = z
+  .string()
+  .trim()
+  .min(1)
+  .max(200)
+  .refine((value) => !/[\p{Cc}\p{Cf}]/u.test(value));
 const session = z.object({
   id: z.string(),
   root: z.string(),
   label: z.string(),
+  title: sessionTitle.optional(),
+  archivedAt: z.number().finite().nonnegative().optional(),
   turns: z.array(turn),
   usage: usage.optional(),
   sessionFile: z
@@ -102,7 +119,7 @@ const change = z.object({
         at: z.number(),
         turnId: z.string().optional(),
         toolCallId: z.string().optional(),
-        tool: z.enum(['write', 'edit']).optional(),
+        tool: z.enum(['write', 'edit', 'rename', 'code_action', 'notebook_edit']).optional(),
       }),
     )
     .max(256)
@@ -146,6 +163,8 @@ export function cloneSession(
     ...structuredClone(source),
     id,
     label,
+    title: undefined,
+    archivedAt: undefined,
     sessionFile: snapshot.fileName,
     turns: structuredClone(source.turns.slice(0, count)),
     historyTransition: undefined,
@@ -299,6 +318,7 @@ export const webviewMessage = z.discriminatedUnion('type', [
       'compact',
       'inspectContext',
       'permissions',
+      'terminals',
       'clearQueue',
       'resumeQueue',
       'keepAll',
@@ -335,7 +355,13 @@ export const webviewMessage = z.discriminatedUnion('type', [
       'copyTool',
       'inspectAttachment',
       'removeAttachment',
+      'attachOffer',
+      'dismissOffer',
       'removeQueued',
+      'openSession',
+      'resumeSession',
+      'archiveSession',
+      'restoreSession',
     ]),
     id: z.string().min(1).max(100),
   }),
@@ -353,6 +379,27 @@ export const webviewMessage = z.discriminatedUnion('type', [
     id: z.enum(['model', 'thinking']),
     value: z.string().min(1).max(300),
   }),
+  z
+    .object({
+      v: z.literal(1),
+      type: z.literal('questionAnswer'),
+      id: z.string().min(1).max(100),
+      answers: questionAnswers,
+    })
+    .strict(),
+  z
+    .object({ v: z.literal(1), type: z.literal('questionCancel'), id: z.string().min(1).max(100) })
+    .strict(),
+  z
+    .object({
+      v: z.literal(1),
+      type: z.literal('renameSession'),
+      id: z.string().min(1).max(100),
+      title: sessionTitle,
+    })
+    .strict(),
+  z.object({ v: z.literal(1), type: z.literal('refreshSessions') }).strict(),
+  z.object({ v: z.literal(1), type: z.literal('focus'), focused: z.boolean() }).strict(),
   z.object({ v: z.literal(1), type: z.literal('link'), href: z.string().max(4096) }),
 ]);
 
@@ -392,11 +439,13 @@ export class StateStore {
   updateSessions(update: (data: StateStore['data']) => SavedSession[]): Promise<void> {
     return this.enqueue(async () => {
       const previous = this.data.sessions;
+      const previousOwner = this.data.activeSessionId;
       this.data.sessions = update(this.data);
       try {
         await this.persist();
       } catch (error) {
         this.data.sessions = previous;
+        this.data.activeSessionId = previousOwner;
         throw error;
       }
     });

@@ -66,7 +66,7 @@ function updateTool(
   block.title = update.title ?? block.title ?? update.name ?? 'Tool';
   block.status = update.status ?? block.status ?? 'in_progress';
   block.toolKind = update.kind ?? block.toolKind;
-  toolInput(block, update.rawInput);
+  toolInput(block, update.rawInput, update.name);
   if (update.content)
     block.text = update.content
       .flatMap((item) =>
@@ -76,7 +76,8 @@ function updateTool(
       .slice(0, 16_000);
 }
 
-function toolInput(block: ChatBlock, input: unknown) {
+function toolInput(block: ChatBlock, input: unknown, name?: string | null) {
+  block.toolName = name?.slice(0, 100) ?? block.toolName;
   if (
     typeof input === 'object' &&
     input !== null &&

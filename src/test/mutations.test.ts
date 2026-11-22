@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { chmod, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdtemp, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -12,7 +12,26 @@ import {
   mutationSchema,
   serveMutation,
   stagePermit,
+  cleanupMutation,
+  completeMutation,
 } from '../mutations.js';
+
+test('cancelled caller cleanup cannot unlink the broker response between write and atomic rename', async (context) => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'omp-response-owner-'));
+  context.after(() => rm(directory, { recursive: true, force: true }));
+  const id = randomUUID();
+  const response = path.join(directory, `response-${id}.json`);
+  const content = JSON.stringify({ id, ok: true, text: 'completed response' });
+  await writeFile(`${response}.tmp`, content, { mode: 0o600 });
+  await cleanupMutation(directory, id);
+  assert.equal(await readFile(`${response}.tmp`, 'utf8'), content);
+  await rename(`${response}.tmp`, response);
+  assert.equal(await completeMutation(directory, id), 'completed response');
+  assert.deepEqual(await readdir(directory), []);
+  await writeFile(`${response}.tmp`, content, { mode: 0o600 });
+  await cleanupMutation(directory, id, 'broker');
+  assert.deepEqual(await readdir(directory), []);
+});
 
 test('private mutation exchange binds identity, validates exact preimages and cleans envelopes', async (context) => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'omp-mutation-'));
@@ -102,6 +121,7 @@ test('batch failure reports completed operations, retains their results, and sto
   const broker = new MutationBroker(
     directory,
     async (mutation) => {
+      if (!('path' in mutation)) throw new Error('Expected a file mutation.');
       if (mutation.path === '/second.txt') throw new Error('injected save failure');
       applied.push(mutation.path);
       return null;

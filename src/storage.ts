@@ -1,7 +1,13 @@
 import type { SavedSession, StateStore } from './state.js';
 
 type StoredState = StateStore['data'];
-type Protection = 'active' | 'running' | 'pending-review' | 'history-recovery' | 'recovery-archive';
+type Protection =
+  | 'active'
+  | 'running'
+  | 'pending-review'
+  | 'history-recovery'
+  | 'recovery-archive'
+  | 'user-archive';
 
 function bytes(value: string): number {
   return Buffer.byteLength(value, 'utf8');
@@ -19,6 +25,11 @@ function sessionContent(saved: SavedSession) {
     serializedBytes: bytes(JSON.stringify(saved)),
     attachmentCount: attachments.length,
     attachmentTextBytes: attachments.reduce((total, attached) => total + bytes(attached.text), 0),
+    attachmentImageBytes: attachments.reduce(
+      (total, attached) =>
+        total + (attached.image ? Buffer.byteLength(attached.image.data, 'base64') : 0),
+      0,
+    ),
     lastActivityAt: activity.reduce<number | undefined>(
       (latest, at) => (latest === undefined ? at : Math.max(latest, at)),
       undefined,
@@ -39,6 +50,7 @@ function protections(data: StoredState) {
   if (data.activeSessionId !== undefined) protect(data.activeSessionId, 'active');
   for (const change of data.changes) protect(change.sessionId, 'pending-review');
   for (const saved of data.sessions) {
+    if (saved.archivedAt !== undefined) protect(saved.id, 'user-archive');
     if (saved.turns.some((current) => current.status === 'running')) protect(saved.id, 'running');
     if (saved.historyTransition) {
       protect(saved.id, 'history-recovery');
@@ -97,6 +109,7 @@ export function inspectStorage(data: StoredState) {
     turnCount: sessions.reduce((total, saved) => total + saved.turns, 0),
     attachmentCount: sessions.reduce((total, saved) => total + saved.attachmentCount, 0),
     attachmentTextBytes: sessions.reduce((total, saved) => total + saved.attachmentTextBytes, 0),
+    attachmentImageBytes: sessions.reduce((total, saved) => total + saved.attachmentImageBytes, 0),
     reviewCount: data.changes.length,
     reviewTextBytes: reviewTextBytes(data.changes),
     missingSessionIds: [...protectedIds.keys()].filter((id) => !known.has(id)),

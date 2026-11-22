@@ -6,8 +6,134 @@ import { setImmediate as tick } from 'node:timers/promises';
 import { setup, pendingApproval as pending } from './extension-setup.js';
 import { transport } from './acp-fixture.js';
 import { fixture, seedFile, view } from './vscode-fixture.js';
+import { installNativeQuestions } from '../native-questions.js';
+import type { NativeEditApi } from '../native-edit.js';
 
 type Host = Awaited<ReturnType<typeof setup>>;
+const { HostTools } = await import('../host-tools.js');
+
+function questionCommand(host: Host, context: Parameters<typeof setup>[0]) {
+  const previous = process.env.VS_OMP_ARTIFACTS_ROOT;
+  process.env.VS_OMP_ARTIFACTS_ROOT = path.join(host.storage, 'omp-sessions');
+  context.after(() => {
+    if (previous === undefined) delete process.env.VS_OMP_ARTIFACTS_ROOT;
+    else process.env.VS_OMP_ARTIFACTS_ROOT = previous;
+  });
+  let tool!: Parameters<NativeEditApi['registerTool']>[0];
+  installNativeQuestions({
+    registerTool: (definition) => {
+      tool = definition;
+    },
+  });
+  let answer = '';
+  transport.onPrompt = async () => {
+    const result = (await tool.execute(
+      randomUUID(),
+      {
+        questions: [
+          {
+            header: 'Format',
+            question: 'Choose a format',
+            options: [{ label: 'JSON' }, { label: 'Text' }],
+          },
+        ],
+      },
+      undefined,
+      undefined,
+      { cwd: host.root, sessionManager: { getSessionId: () => 'native-session' } },
+    )) as { content: { text: string }[] };
+    answer = result.content[0]!.text;
+  };
+  return () =>
+    host.request({ type: 'prompt', text: 'Ask for the format' }).then(
+      () => (answer ? JSON.parse(answer) : undefined),
+      (error: unknown) => error,
+    );
+}
+
+async function pendingQuestion(host: Host) {
+  const deadline = Date.now() + 5000;
+  while (!host.status()!.question) {
+    assert.ok(Date.now() < deadline, 'question did not become visible');
+    await tick();
+  }
+  return host.status()!.question!;
+}
+
+test('production broker uses owned chat questions and exact explicit answers without native dialog fallback', async (context) => {
+  const host = await setup(context);
+  await host.request({ type: 'connect' });
+  const ask = questionCommand(host, context);
+  const result = ask();
+  const card = await pendingQuestion(host);
+  assert.equal(host.status()!.busy, true);
+  await host.request({ type: 'questionAnswer', id: 'foreign', answers: [{ selected: ['JSON'] }] });
+  assert.equal(host.status()!.question!.id, card.id);
+  await assert.rejects(
+    host.request({ type: 'questionAnswer', id: card.id, answers: [{ selected: ['invented'] }] }),
+    /offered answer/,
+  );
+  await host.request({
+    type: 'questionAnswer',
+    id: card.id,
+    answers: [{ selected: ['JSON'], freeText: 'and this' }],
+  });
+  assert.deepEqual(await result, {
+    status: 'answered',
+    answers: { Format: { selected: ['JSON'], freeText: 'and this' } },
+  });
+  await host.request({ type: 'questionAnswer', id: card.id, answers: [{ selected: ['Text'] }] });
+  assert.equal(host.status()!.question, undefined);
+  assert.equal(host.status()!.permissions, 'rules');
+  const cancelled = ask();
+  const next = await pendingQuestion(host);
+  await host.request({ type: 'questionCancel', id: next.id });
+  assert.equal((await cancelled).status, 'cancelled');
+});
+
+for (const scenario of ['ready', 'replace', 'dispose', 'stop', 'trust'] as const) {
+  test(`owned chat questions retire on ${scenario} without accepting stale answers`, async (context) => {
+    const host = await setup(context);
+    await host.request({ type: 'connect' });
+    const ask = questionCommand(host, context);
+    const result = ask();
+    const card = await pendingQuestion(host);
+    if (scenario === 'ready') await host.request({ type: 'ready' });
+    if (scenario === 'replace')
+      fixture.provider!.resolveWebviewView({ ...view, webview: { ...view.webview } });
+    if (scenario === 'dispose') fixture.viewDisposed!();
+    if (scenario === 'stop') await host.request({ type: 'cancel' });
+    if (scenario === 'trust') {
+      fixture.trusted = false;
+      await host.request({
+        type: 'questionAnswer',
+        id: card.id,
+        answers: [{ selected: ['JSON'] }],
+      });
+    }
+    const outcome = await result;
+    if (scenario === 'stop') {
+      assert.equal(outcome, undefined);
+      assert.equal(host.status()!.turns.at(-1)!.status, 'cancelled');
+    }
+    fixture.trusted = true;
+    assert.equal(host.status()!.question, undefined);
+    await host.request({ type: 'questionAnswer', id: card.id, answers: [{ selected: ['JSON'] }] });
+    if (scenario === 'dispose') assert.equal((await ask()).status, 'cancelled');
+  });
+}
+
+test('undeliverable chat questions cancel rather than hanging or falling back to native input', async (context) => {
+  const host = await setup(context);
+  await host.request({ type: 'connect' });
+  const ask = questionCommand(host, context);
+  for (const delivery of [false, 'reject'] as const) {
+    fixture.delivery = delivery;
+    assert.equal((await ask()).status, 'cancelled');
+    assert.equal(host.status()!.questionCount, 0);
+  }
+  fixture.delivery = true;
+});
 
 function command(host: Host, executed = () => {}) {
   transport.onPrompt = async () => {
@@ -123,6 +249,32 @@ test('reload, view replacement, disposal and an unavailable view fail closed', a
   fixture.viewDisposed!();
   assert.match(String(await third), /not approved/);
   assert.match(String(await command(host)), /not approved/);
+});
+
+test('cancelled terminal pickers restore their owning view without reviving disposed views', async (context) => {
+  const host = await setup(context);
+  await host.request({ type: 'connect' });
+  const sessionId = host.status()!.sessionId!;
+  const shown: boolean[] = [];
+  const focusedView = { ...view, show: (preserveFocus: boolean) => shown.push(preserveFocus) };
+  fixture.provider!.resolveWebviewView(focusedView);
+  context.mock.method(
+    HostTools.prototype,
+    'pickTerminal',
+    async (onCancel?: (id: string) => void) => onCancel?.(sessionId),
+  );
+  await host.request({ type: 'terminals' });
+  assert.deepEqual(shown, [false]);
+  const messages = fixture.messages as { v: number; type: string; sessionId?: string }[];
+  assert.deepEqual(messages.filter((message) => message.type === 'focusTerminals').at(-1), {
+    v: 1,
+    type: 'focusTerminals',
+    sessionId,
+  });
+  fixture.viewDisposed!();
+  await host.request({ type: 'terminals' });
+  assert.equal(shown.length, 1);
+  assert.equal(messages.filter((message) => message.type === 'focusTerminals').length, 1);
 });
 
 test('outside file approvals bind full proposed images and cancel without mutation', async (context) => {

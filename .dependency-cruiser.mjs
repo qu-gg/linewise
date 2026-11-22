@@ -12,7 +12,7 @@ export default {
       from: {
         path: '^(src/(?!test/)|media/)',
         pathNot:
-          '^src/(extension|workspace|host-tools|chat-view|storage-view|host-view|host-activation)\\.ts$',
+          '^src/(extension|workspace|host-tools|host-permissions|host-inspect|host-search|host-questions|host-rename|host-code-actions|host-notebook|host-image-context|host-tasks|host-terminals|chat-view|inline-review-view|storage-view|host-view|host-activation)\\.ts$',
       },
       to: { path: '^vscode$' },
     },
@@ -57,7 +57,7 @@ export default {
         path: '^src/(review|review-types|review-hunks|path-guard|state|storage|storage-policy|retention|history|omp-guard)\\.ts$',
       },
       to: {
-        path: '^(vscode$|src/(extension|workspace|acp|terminal|host-tools|host-view|host-activation|chat-view|storage-view|session-start|session-prompt)\\.ts$|@agentclientprotocol/)',
+        path: '^(vscode$|src/(extension|workspace|acp|terminal|host-tools|host-permissions|host-inspect|host-questions|host-rename|host-code-actions|host-notebook|host-image-context|host-tasks|host-fetch|host-view|host-activation|chat-view|inline-review-view|storage-view|session-start|session-prompt)\\.ts$|@agentclientprotocol/)',
       },
     },
     {

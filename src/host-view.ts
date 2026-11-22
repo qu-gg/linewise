@@ -3,9 +3,16 @@ import { ChatView, isChatRequest } from './chat-view.js';
 import { ContextAttachments, isContextRequest } from './context.js';
 import { FollowUps, isQueueRequest, type QueueRequest } from './follow-ups.js';
 import { PathGuard, ReviewJournal } from './review.js';
-import { webviewMessage, type SavedSession, type StateStore } from './state.js';
-import { WorkspaceFiles } from './workspace.js';
+import { webviewMessage, type Attachment, type SavedSession, type StateStore } from './state.js';
+import { ReviewEditor, WorkspaceFiles } from './workspace.js';
 import { reviewSummary } from './review-presentation.js';
+import {
+  editSession,
+  inspectSession,
+  isSessionRequest,
+  sessionList,
+  type SessionRequest,
+} from './sessions.js';
 
 export type SidebarRequest = ReturnType<typeof webviewMessage.parse>;
 interface ViewActions {
@@ -17,6 +24,8 @@ interface ViewActions {
   busy: () => boolean;
   available: () => boolean;
   drain: () => Promise<void>;
+  disconnect: () => Promise<void>;
+  resume: (session: SavedSession) => Promise<void>;
 }
 
 export class HostView {
@@ -25,6 +34,7 @@ export class HostView {
   readonly followUps = new FollowUps();
   readonly files: WorkspaceFiles;
   readonly journal: ReviewJournal;
+  private readonly editor: ReviewEditor;
 
   constructor(
     private readonly context: vscode.ExtensionContext,
@@ -50,10 +60,16 @@ export class HostView {
       async (changes) => {
         this.store.data.changes = [...changes];
         await this.store.save();
+        this.editor.refresh();
         this.chat.publish();
       },
       store.data.changes,
     );
+    this.editor = new ReviewEditor(this.files, {
+      changes: () => this.journal.list(this.owner()),
+      available: actions.available,
+      dispatch: (request) => actions.perform(() => this.dispatch(request)),
+    });
   }
 
   async initialize(): Promise<void> {
@@ -65,10 +81,25 @@ export class HostView {
       });
     };
     this.context.subscriptions.push(
+      ...this.editor.register(this.context.extensionUri),
+      this.files.imageSnapshots,
+      this.files.reviewChanges,
+      this.files.reviewRequested,
+      vscode.workspace.registerFileSystemProvider('omp-image', this.files.imageSnapshots, {
+        isReadonly: true,
+        isCaseSensitive: true,
+      }),
       vscode.workspace.registerTextDocumentContentProvider('omp-review', {
+        onDidChange: this.files.reviewChanges.event,
         provideTextDocumentContent: (uri) => this.files.reviewSnapshots.get(uri.toString()) ?? '',
       }),
       vscode.workspace.onDidChangeTextDocument(refresh),
+      vscode.window.onDidChangeActiveTextEditor(() => this.chat.publish()),
+      vscode.workspace.onDidChangeConfiguration(() => this.chat.publish()),
+      vscode.commands.registerCommand('omp.addFileContext', (uri?: vscode.Uri) => {
+        const selected = uri ?? vscode.window.activeTextEditor?.document.uri;
+        return this.actions.perform(() => this.addFileContext(selected));
+      }),
     );
     for (const folder of vscode.workspace.workspaceFolders ?? []) {
       const watcher = vscode.workspace.createFileSystemWatcher(
@@ -81,6 +112,55 @@ export class HostView {
         watcher.onDidDelete(refresh),
       );
     }
+  }
+
+  addSnapshots(snapshots: Attachment[]): Promise<void> {
+    return this.actions.idle('context', async () => {
+      this.attachments.add(this.owner(), snapshots);
+      this.chat.publish();
+    });
+  }
+
+  contextPresentation() {
+    const owner = this.owner();
+    const uri = vscode.window.activeTextEditor?.document.uri;
+    const enabled = vscode.workspace
+      .getConfiguration('omp')
+      .get<boolean>('context.activeEditorOffer', true);
+    const supported = uri && this.files.acceptsContext(uri);
+    const resource =
+      enabled && supported && this.actions.available()
+        ? { uri: uri.toString(), label: vscode.workspace.asRelativePath(uri, false) }
+        : undefined;
+    return {
+      ...this.attachments.presentation(owner),
+      contextOffer: this.attachments.offer(owner, resource),
+    };
+  }
+
+  private addFileContext(uri?: vscode.Uri): Promise<void> {
+    const owner = this.owner();
+    return this.actions.idle('context', async () => {
+      if (!uri) throw new Error('Choose a file or open an editor to attach context.');
+      const snapshot = await this.files.fileContext(uri);
+      if (this.owner() !== owner) throw new Error('Context owner changed during capture.');
+      this.attachments.add(owner, [snapshot]);
+      await vscode.commands.executeCommand('omp.chat.focus');
+      this.chat.publish();
+    });
+  }
+
+  private async contextOffer(request: { type: 'attachOffer' | 'dismissOffer'; id: string }) {
+    const owner = this.owner();
+    const uri = this.attachments.offeredUri(owner, request.id);
+    if (request.type === 'dismissOffer') {
+      this.attachments.dismissOffer(owner, request.id);
+      this.chat.publish();
+      return;
+    }
+    if (vscode.window.activeTextEditor?.document.uri.toString() !== uri)
+      throw new Error('The active-editor context offer is stale.');
+    await this.addFileContext(vscode.Uri.parse(uri));
   }
 
   root(session?: SavedSession): vscode.WorkspaceFolder {
@@ -101,6 +181,16 @@ export class HostView {
         vscode.workspace.getWorkspaceFolder(vscode.window.activeTextEditor.document.uri)) ||
       roots[0]!
     );
+  }
+
+  assertRoot(root: vscode.WorkspaceFolder): void {
+    this.root();
+    if (
+      !vscode.workspace.workspaceFolders!.some(
+        (folder) => folder.uri.toString() === root.uri.toString(),
+      )
+    )
+      throw new Error('The workspace root changed during connection.');
   }
 
   private savedRoot(session: SavedSession, roots: readonly vscode.WorkspaceFolder[]) {
@@ -167,6 +257,7 @@ export class HostView {
   }
 
   changes() {
+    this.editor.refresh();
     return this.journal
       .list(this.store.data.activeSessionId)
       .map((change) =>
@@ -182,10 +273,42 @@ export class HostView {
     return this.store.data.sessions.map((session) => session.id);
   }
 
-  async dispatch(message: unknown): Promise<void> {
+  sessionPresentation() {
+    return { sessionIds: this.sessionIds(), sessions: sessionList(this.store.data) };
+  }
+
+  private async manageSession(request: SessionRequest) {
+    if (!this.actions.available())
+      throw new Error('Wait for the current operation before changing sessions.');
+    const saved = this.store.data.sessions.find((session) => session.id === request.id);
+    if (!saved) throw new Error('The selected session no longer exists.');
+    if (request.type === 'resumeSession') {
+      if (saved.archivedAt !== undefined)
+        throw new Error('Restore this archived session before resuming it.');
+      await this.actions.resume(saved);
+      return;
+    }
+    const action = request.type;
+    if (action === 'openSession' || (action === 'archiveSession' && this.owner() === request.id))
+      await this.actions.disconnect();
+    await this.actions.idle('context', async () => {
+      if (action === 'openSession') await inspectSession(this.store, request.id);
+      else await editSession(this.store, request.id, action, request.title);
+      this.chat.publish();
+    });
+  }
+
+  private validatedRequest(message: unknown) {
     const parsed = webviewMessage.safeParse(message);
     if (!parsed.success) throw new Error('Invalid sidebar message.');
-    const request = parsed.data;
+    return parsed.data;
+  }
+
+  async dispatch(message: unknown): Promise<void> {
+    const request = this.validatedRequest(message);
+    if (isSessionRequest(request)) return this.manageSession(request);
+    if (request.type === 'attachOffer' || request.type === 'dismissOffer')
+      return this.contextOffer({ type: request.type, id: request.id });
     if ('hunkId' in request) return this.hunkAction(request);
     if (isQueueRequest(request)) return this.queue(request);
     if (isContextRequest(request))
