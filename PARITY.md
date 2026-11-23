@@ -30,6 +30,14 @@ Linewise is an independent alternative to the Local chat workflow, not an implem
 - **Real model:** separately authorized, budgeted, observed scenarios. Historical success certifies that scenario and artifact, not every provider/model or new source bytes.
 - **Release:** clean commit and exact hosted VSIX with native/manual acceptance and verified download. The matching v0.1.0 GitHub release records whether an accepted package is published; source metadata is not acceptance.
 
+## Platform Compatibility
+
+The accepted package remains Linux x64 only. Its VSIX target metadata, native `node-pty` binary, and explicit Linux-only terminal/build/release guards are real compatibility constraints, not just labels indicating where we tested. Portable chat/webview code does not make the complete extension universal.
+
+One native build may run on multiple compatible Linux distributions or OS versions; each distro name does not automatically require recompilation. Our Ubuntu 24.04 build and glibc 2.39 tested host are evidence points, not proof of the oldest compatible libc or all Linux variants. Windows, macOS, other CPU architectures, and musl-based Linux require their own dependency/host assessment and applicable native builds.
+
+The [PLAT workstream](TODO.md#platform-compatibility) separates compatibility research, unchanged-artifact Linux tests, target implementation, build/package CI, and exact-artifact acceptance. Existing [WS-04](TODO.md#ws-04), [WS-05](TODO.md#ws-05), and [WS-06](TODO.md#ws-06) retain the native host-test work. All remain planned work; successful packaging alone does not widen this matrix or bypass [release policy](RELEASE.md).
+
 ## Local Comparison
 
 The intended shared workflow is chat beside code, inspectable changes, and selective review. Linewise's editor/review ownership and agent loop differ intentionally. Public comparisons must label actual versions and synthetic content; a recorded Local participant demonstrates native transcript rendering, not authenticated Local editing or full functional parity.
@@ -44,4 +52,4 @@ Instruction capture is root-only, bounded, and constrained by host policy. Pinne
 
 Remote-SSH remains unvalidated, as do multi-root lifecycle, other platforms/runtime versions, broader model providers, alternate harnesses, physical desktop/screen-reader coverage, existing browser-tab sharing, arbitrary editor-provider commands/file operations, delegated agents, MCP import, and public artifact acceptance.
 
-The [roadmap](ROADMAP.md) prioritizes scoped validation rather than treating partial equivalents as completed families. The [long shared ledger](TODO.md) restores atomic, claimable work and verification IDs. In particular, [SSH](TODO.md#remote-ssh), [PRV](TODO.md#model-providers), and [HAR](TODO.md#alternate-open-harnesses) separately track remote-host support, model backends, and non-OMP agent loops. A task being planned or claimed does not change this capability matrix; update it only after reviewed evidence.
+The [roadmap](ROADMAP.md) prioritizes scoped validation rather than treating partial equivalents as completed families. The [long shared ledger](TODO.md) restores atomic, claimable work and verification IDs. In particular, [PLAT](TODO.md#platform-compatibility), [SSH](TODO.md#remote-ssh), [PRV](TODO.md#model-providers), and [HAR](TODO.md#alternate-open-harnesses) separately track local platform compatibility, remote-host support, model backends, and non-OMP agent loops. A task being planned or claimed does not change this capability matrix; update it only after reviewed evidence.
