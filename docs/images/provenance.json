@@ -23,25 +23,53 @@
       "evidence": "Native Linewise transcript; guarded scripted OMP provider and real fixture file changes"
     },
     {
+      "file": "linewise-context.png",
+      "width": 1000,
+      "height": 800,
+      "sha256": "684cc2899fe5329a34fd7ec1573f61fe93ca23590519108e897b8c91fb184547",
+      "evidence": "Native composer with two explicitly attached file snapshots; submitted snapshot contents verified"
+    },
+    {
       "file": "linewise-final.png",
-      "width": 1280,
-      "height": 900,
-      "sha256": "5f4724687ca10c2f3506be11ef7b5a5c4a214fbce92e5989b52c908e8eefb03f",
-      "evidence": "Ordinary editor after Keep Header and Undo Footer; exact bytes verified"
+      "width": 1440,
+      "height": 960,
+      "sha256": "b75c2bbfad7edd95a8e05166ad505c6e01bff69f2294505159c738a48f3adbbe",
+      "evidence": "Actual Undo Footer; exact final bytes verified with HEADER retained and Footer restored"
     },
     {
       "file": "linewise-kept-header.png",
-      "width": 1280,
-      "height": 900,
-      "sha256": "c169120e2bb9f4fc10e87e1c29117c724a49febcd9b44486bbda93f5b25a0a66",
-      "evidence": "Native Linewise review after actual Keep; Header accepted and Footer pending"
+      "width": 1440,
+      "height": 960,
+      "sha256": "eb818c1475ee6ba49fdd7e1231bf283c1dfa7a688b23f325091c1279fa0512af",
+      "evidence": "Actual Keep Header; accepted baseline verified and Footer remains pending"
+    },
+    {
+      "file": "linewise-permissions.png",
+      "width": 1000,
+      "height": 660,
+      "sha256": "2d9fd57f91cef3ed3f412ad5c5ab4d0dc1f71f46bbcff3c7e3f8d71df2c536d2",
+      "evidence": "Actual native command-permission picker after its opening animation; cancelled with Rules unchanged and no elevation enabled"
+    },
+    {
+      "file": "linewise-questions.png",
+      "width": 1000,
+      "height": 800,
+      "sha256": "e98983276eea781a9ca558b513158ee7c541d56089737ece523027f0d41744a5",
+      "evidence": "Native in-chat multi-select and free-text question; all three final answers verified against actual OMP tool results"
     },
     {
       "file": "linewise-review.png",
-      "width": 1280,
-      "height": 900,
-      "sha256": "5ac881fc6e9a5e9b75a537b918d5cf68009c627a5027479b5acd3d1cf9fc3763",
-      "evidence": "Native Linewise inline editor with two actual pending hunks"
+      "width": 1440,
+      "height": 960,
+      "sha256": "0a3a1e6fbf5a0efcd2d7420734a0fbe6ef41587497b0735edf8f239bdce80c09",
+      "evidence": "Native inline review with two actual pending hunks; fixture file bytes and preview checkpoint verified"
+    },
+    {
+      "file": "linewise-sessions.png",
+      "width": 1000,
+      "height": 660,
+      "sha256": "e7763e860754e2d64883a4e623796d0ad5c86ec5e28006343b507b262661d296",
+      "evidence": "Native session manager with real synthetic sessions; search and archive/restore preserve exact conversation history"
     },
     {
       "file": "local-recorded-chat.png",
@@ -50,5 +78,6 @@
       "sha256": "72a9cb083705deec6087371819b7956106d82dfbd1af76ff0a54e17f11e17f68",
       "evidence": "Native Local recorded-only transcript; no workspace edits or generation"
     }
-  ]
+  ],
+  "featureTask": "Read a synthetic export policy, explicitly attach two files, answer Output/Scope/Notes questions, and inspect sessions and command-permission modes."
 }

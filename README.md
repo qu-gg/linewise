@@ -25,7 +25,7 @@
    v0.1.0 &middot; Linux x64 preview
 </p>
 
-Linewise brings an open coding-agent harness into your editor, with a familiar chat experience inspired by VS Code's Local Harness, notably including its inspectable changes. Review text edits hunk by hunk and whole-file operations individually, keep the changes you want, and undo the ones you do not.
+Linewise brings an open coding-agent harness into your editor, with a familiar chat experience inspired by VS Code's Local Harness. Manage sessions, attach chosen context, answer structured questions, inspect agent activity, and control command permissions alongside your code. Review text edits hunk by hunk and whole-file operations individually, keep the changes you want, and undo the ones you do not.
 
 It is an independent alternative for people who value VS Code's Local chat workflow. Oh My Pi owns the agent loop; Linewise owns the editor experience, approvals, and review. It uses public VS Code APIs and ACP, not private Copilot services. It remains dependent on supported VS Code APIs and versions, but not on Copilot's harness release cycle.
 
@@ -37,7 +37,7 @@ I have been hearing this notion that "IDEs no longer have use" and we should jus
 
 Of all the harnesses/agent experiences I have tried, the Local Harness in VSCode has been by far the best. I love having the familiar deeply-integrated workspace, knowing and partitioning the file structure of different projects across different workspaces, and having memory files on device that isn't reliant on the cloud. So given that Copilot has decided to rugpull the Local Harness away in favor of their cloud Copilot Chat (WITHOUT feature parity!), I've decided to make my attempt at an alternative: **Linewise**. It breaks free from relying on a company that deprecates products on a whim while hopefully providing a similar - if not even more customizable - experience.
 
-**Linewise** is not *quite* there yet but it is getting closer and closer! I hope my feelings resonate with some and we can build something great. I understand the potential hypocrisy of building this project largely via many agents very much against the spirity of granularity that I just soapboxed about, but hey, I did specify this is for specific workflows :)
+**Linewise** is not *quite* there yet but it is getting closer and closer! I hope my feelings resonate with some and we can build something great. I understand the potential hypocrisy of building this project largely via long-running agents, which might seem very much against the spirit of granularity that I just soapboxed about. But hey, I did specify this is for specific workflows :)
 
 <!-- prettier-ignore-end -->
 
@@ -48,11 +48,12 @@ Of all the harnesses/agent experiences I have tried, the Local Harness in VSCode
    <a href="docs/comparison.md">
       <img src="docs/images/linewise-review.png" alt="Linewise showing two pending inline hunks with floating Keep and Undo controls" width="100%">
    </a><br>
-   <sub>Actual native review UI in a synthetic workspace. The agent reply is scripted, not a live model result.</sub>
+   <sub>Full-file review beside chat, with room for both. All screenshots below use actual native controls, synthetic workspaces, and scripted agent replies, not live model results.</sub>
 </p>
 
 <p align="center">
    <a href="#why-linewise">Highlights</a> &middot;
+   <a href="#a-familiar-agent-workflow">Chat workflow</a> &middot;
    <a href="#keep-what-you-want">Selective review</a> &middot;
    <a href="#try-it">Try it</a> &middot;
    <a href="#control-and-limits">Boundaries</a> &middot;
@@ -83,20 +84,62 @@ Of all the harnesses/agent experiences I have tried, the Local Harness in VSCode
 
 Current model access uses OMP's GitHub Copilot provider and authentication. Open-source harness infrastructure does not mean free inference, support for every OMP provider, or independence from provider policies.
 
+## A Familiar Agent Workflow
+
+Selective review is one part of the experience. Linewise also brings the everyday conversation controls that make an editor-integrated agent useful. These are Local Harness-inspired workflows, not a claim of complete Local/Copilot parity; the [capability matrix](PARITY.md) records the exact boundaries.
+
+### Sessions You Can Return To
+
+Search Recent and Archived sessions, rename conversations, archive and restore them, and explicitly resume where you left off. Open a transcript without starting the agent. Edit and Continue and before/after forks let you branch a conversation without rewriting its original history.
+
+<p align="center">
+   <a href="docs/images/linewise-sessions.png"><img src="docs/images/linewise-sessions.png" alt="Linewise session manager with searchable Recent and Archived views, named conversations, and rename, resume, and archive controls" width="100%"></a><br>
+   <sub>Actual session records and native controls. Conversation branches do not roll back workspace files, pending review, or shared memory.</sub>
+</p>
+
+### Context You Choose
+
+Attach an editor or selection, multiple files, images, chosen open resources, or workspace problems. Inspect and remove attachment chips before sending. Submitted context is an immutable snapshot stored with that turn, not a later reread of a changed file; unrelated tabs are not silently attached.
+
+<p align="center">
+   <a href="docs/images/linewise-context.png"><img src="docs/images/linewise-context.png" alt="Linewise chat with a formatted agent reply and two explicit file attachments, repository-readout.md and export-policy.ts, above the draft prompt" width="100%"></a><br>
+   <sub>Two explicitly attached files in the composer. This capture verified their actual submitted snapshot contents.</sub>
+</p>
+
+### Questions Before Decisions
+
+Answer bounded single-choice, multiple-choice, and free-text questions directly in chat. Step through the questions, review the combined answers, then Submit or Cancel. Questions collect your input; they do not supply credentials or grant command approval.
+
+<p align="center">
+   <a href="docs/images/linewise-questions.png"><img src="docs/images/linewise-questions.png" alt="Linewise in-chat question with JSON and Text selected, a custom answer, a one-of-three progress indicator, and Cancel and Next controls" width="100%"></a><br>
+   <sub>Native choices and free-text input. The scripted flow checked all three submitted answers against the OMP tool result.</sub>
+</p>
+
+### Permissions You Can See
+
+Choose **Command Rules**, **Ask Every Time**, or separately confirmed **Allow All Except Restrictions** and **YOLO Commands**. Elevated modes are connection-scoped and reset on session or connection changes. Commands use your host permissions, not an OS sandbox; outside-workspace file access and web/browser consent remain independent.
+
+<p align="center">
+   <a href="docs/images/linewise-permissions.png"><img src="docs/images/linewise-permissions.png" alt="Native OMP Command Permissions picker showing Ask Every Time, Command Rules, Allow All Except Restrictions, YOLO Commands, and Edit User Command Rules" width="100%"></a><br>
+   <sub>The actual permission picker. This capture left Rules unchanged and did not enable an elevated mode.</sub>
+</p>
+
+### Activity, Plans, And Follow-Ups
+
+Follow streamed replies with collapsible activity, thinking, and tool records, separate final answers, and the agent's structured Todos. Model/thinking controls and provider-reported context usage stay close to the composer; Linewise does not invent reasoning or billing figures.
+
+Keep per-session drafts and queue follow-up prompts while work is running. Queued prompts run in order after cleanup, pause on failure, and clear on Stop or ownership changes; they are not in-flight steering or Autopilot. Local memory, owned terminal/browser controls, and approved editor/task integrations round out the workflow. See [usage](docs/usage.md) for the details and limits.
+
 ## Keep What You Want
 
 Keep the Header hunk, then undo Footer. The accepted `HEADER:` remains while the pending change returns to `Footer:`. No extra model request is needed to make that review decision.
 
-<table>
-   <tr>
-      <td width="50%"><img src="docs/images/linewise-kept-header.png" alt="Header accepted, with only the Footer hunk still pending" width="100%"></td>
-      <td width="50%"><img src="docs/images/linewise-final.png" alt="Ordinary editor after undoing Footer, with HEADER retained" width="100%"></td>
-   </tr>
-   <tr>
-      <td align="center"><sub>Keep Header. Footer stays pending.</sub></td>
-      <td align="center"><sub>Undo Footer. The accepted Header stays.</sub></td>
-   </tr>
-</table>
+<p align="center">
+   <a href="docs/comparison.md#undo-footer">
+      <img src="docs/images/linewise-kept-header.png" alt="Full-width Linewise review with HEADER accepted, Footer still pending, and the remaining Keep and Undo controls beside a wider chat pane" width="100%">
+   </a><br>
+   <sub>Keep Header. Footer stays pending. Undo Footer without losing the accepted Header; see the final editor state in the comparison.</sub>
+</p>
 
 These are actual native controls exercised with synthetic file-tool changes. The [comparison page](docs/comparison.md) includes matched Linewise/Local transcript views, exact evidence limits, and image provenance. Creation, deletion, and moves use whole-operation review; arbitrary individual-line acceptance is not implemented.
 
@@ -107,7 +150,7 @@ These are actual native controls exercised with synthetic file-tool changes. The
 The v0.1.0 acceptance profile is **Linux x64, VS Code 1.146.0, OMP 18.21.0, and a trusted single-root local filesystem workspace**. Other platforms, Remote-SSH, multi-root lifecycle, and untrusted/virtual workspaces are not certified.
 
 1. Install [Oh My Pi](https://github.com/can1357/oh-my-pi) separately. Check `omp --version` reports `omp/18.21.0`. Run `omp` and use its `/login` flow if your selected provider needs authentication; Linewise does not copy VS Code's Copilot credentials.
-2. Download the VSIX from the matching [v0.1.0 release](https://github.com/qu-gg/linewise/releases/tag/v0.1.0), when published, and verify it against the accompanying `SHA256SUMS`. Alternatively, build a development VSIX with **Node 24.11+**:
+2. Go to [GitHub Releases](https://github.com/qu-gg/linewise/releases), download the Linux x64 VSIX from [v0.1.0](https://github.com/qu-gg/linewise/releases/tag/v0.1.0), and verify it against the accompanying `SHA256SUMS`. Alternatively, build a development VSIX with **Node 24.11+**:
 
    ```sh
    git clone https://github.com/qu-gg/linewise.git

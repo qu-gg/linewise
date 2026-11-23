@@ -22,7 +22,7 @@ The native Local workbench uses a recorded-only participant and model that refus
 
 ## Selective Hunk Review
 
-The editor views use 1280 x 900 pixels with the same theme and zoom. Linewise's custom review editor is read-only; floating controls decide individual pending hunks rather than arbitrary individual lines.
+The editor views use 1440 x 960 pixels with the same theme and zoom. The primary sidebar is hidden and chat occupies about 640 pixels, leaving room to read both the file and conversation. Linewise's custom review editor is read-only; floating controls decide individual pending hunks rather than arbitrary individual lines.
 
 ### Two Pending Hunks
 
@@ -42,10 +42,16 @@ Keeping the first hunk advances its accepted baseline. The Footer change remains
 
 Undo restores `Footer:` without losing the accepted `HEADER:` edit. The pending review closes, and the ordinary editor shows the final file. The capture checked exact final bytes and unchanged provider context during review controls; those controls did not request another generation.
 
+## Beyond Review
+
+The [README workflow gallery](../README.md#a-familiar-agent-workflow) also shows session management, explicit file attachments, in-chat questions, and the native command-permission picker. Context and question views use 1000 x 800 pixels; session and permission views use 1000 x 660 pixels with the chat sidebar maximized. These are native controls with synthetic records and a guarded scripted provider, not painted mockups.
+
+The feature capture verified submitted attachment snapshots, all three question answers, session search and archive/restore, and that cancelling the permission picker left Rules unchanged. It did not enable Allow All/YOLO or certify every workflow described in the capability matrix. Review and feature checks have separate evidence scopes; no complete Local parity or new release acceptance is implied.
+
 ## Provenance And Limits
 
-All five PNGs are unaltered Playwright screenshots of disposable native extension-development workbenches. There is no cropping, compositing, pixel replacement, or metadata redaction. Routine notifications were dismissed or disabled in those documentation profiles; only synthetic handshake files were hidden from Explorer. The normal profile and native notification/privacy tests were not changed.
+All nine PNGs are unaltered Playwright screenshots of disposable native extension-development workbenches. There is no cropping, compositing, pixel replacement, or metadata redaction. Routine notifications were dismissed or disabled in those documentation profiles; synthetic handshake files were hidden from Explorer. The normal profile and native notification/privacy tests were not changed.
 
 The images contain only PNG image chunks, with no text or EXIF metadata. Their dimensions, SHA-256 hashes, capture environment, and evidence level are recorded in [the image ledger](images/provenance.json) and checked by `npm run check:public`. Project-written fixture code/text is MIT licensed; visible upstream workbench/interface elements retain their respective rights and do not imply endorsement. See [attribution](../ATTRIBUTION.md).
 
-These captures demonstrate the current review flow and transcript layout. They do not certify other platforms, narrow/mobile layouts, accessibility, provider compatibility, Local editing equivalence, or release acceptance. The [capability matrix](../PARITY.md) and [release policy](../RELEASE.md) remain authoritative about supported scope.
+These captures demonstrate the current review flow, transcript layout, and the named feature controls. They do not certify other platforms, narrow/mobile extension layouts, accessibility, provider compatibility, Local editing equivalence, or release acceptance. The [capability matrix](../PARITY.md) and [release policy](../RELEASE.md) remain authoritative about supported scope.
