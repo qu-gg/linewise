@@ -8,9 +8,10 @@ Linewise is a contributor-focused early alpha, not a promise of complete Local/C
 2. **Fresh-user onboarding:** clear missing/incompatible runtime and authentication errors, reproducible installation, and an honest first-run support matrix.
 3. **Accessible control:** keyboard/focus/scrolling review at narrow widths, native zoom and high contrast, and separately reported assistive-technology testing.
 4. **Reliable local workflow:** lifecycle, cancellation, review conflicts, storage recovery, and provider integration with discriminating regressions.
-5. **Remote and workspace coverage:** explicit [Remote-SSH tasks](TODO.md#remote-ssh), multi-root ownership, and named platform profiles. Start with host/URI/permission decisions, then test file review, PTYs, reconnect, storage, and exact artifact acceptance.
-6. **Model-provider choice:** [provider selection and conformance](TODO.md#model-providers), including OpenAI-compatible local endpoints and named cloud adapters. OMP availability is not automatic Linewise certification.
-7. **Open-harness interoperability:** [adapter contract and candidate research](TODO.md#alternate-open-harnesses), including Hermes, the intended ZooCode project, and ACP-speaking harnesses. Preserve review and host authority; do not assume a model-provider switch also changes the agent loop.
+5. **Platform compatibility:** a dedicated [local OS/architecture workstream](TODO.md#platform-compatibility), starting with additional Linux x64 distributions, then matching ARM64/macOS/Windows builds and host behavior. Build success is not native or release acceptance.
+6. **Remote and workspace coverage:** explicit [Remote-SSH tasks](TODO.md#remote-ssh) and multi-root ownership. Start with host/URI/permission decisions, then test file review, PTYs, reconnect, storage, and exact artifact acceptance; remote placement is separate from local platform support.
+7. **Model-provider choice:** [provider selection and conformance](TODO.md#model-providers), including OpenAI-compatible local endpoints and named cloud adapters. OMP availability is not automatic Linewise certification.
+8. **Open-harness interoperability:** [adapter contract and candidate research](TODO.md#alternate-open-harnesses), including Hermes, the intended ZooCode project, and ACP-speaking harnesses. Preserve review and host authority; do not assume a model-provider switch also changes the agent loop.
 
 ## Bounded Starter Tasks
 
@@ -25,10 +26,21 @@ Linewise is a contributor-focused early alpha, not a promise of complete Local/C
 
 These are entry points, not the full inventory. Choose a stable ID in [TODO.md](TODO.md), link its row in an issue, and ask to claim that bounded slice. Issues own confirmed assignments and handoffs; no existing issue assignment is implied by this table.
 
+## Platform Compatibility
+
+The current download is a Linux x64 package with a compiled native terminal dependency and Linux-specific host behavior, not a universal JavaScript-only extension. We want contributors to expand that support deliberately, one named target at a time; it does not require a separate package for every distribution or OS patch version when native dependencies are compatible.
+
+1. **Measure Linux compatibility:** inventory requirements in [PLAT-01](TODO.md#plat-01), then try the unchanged published VSIX on one additional distro in [PLAT-02](TODO.md#plat-02). Record exact package/runtime/libc versions and failures, not an assumed minimum from the build host.
+2. **Implement a target:** [PLAT-03](TODO.md#plat-03) covers Linux ARM64 packaging, [PLAT-04](TODO.md#plat-04) a named macOS architecture, and [PLAT-05](TODO.md#plat-05) Windows after its shell contract. Preserve existing Linux behavior and unsupported-host refusal.
+3. **Prove and publish the target:** add a reproducible [build/package lane](TODO.md#plat-06), complete the applicable native host tests, then seek [exact-artifact acceptance](TODO.md#plat-07). A matching filename, passing compile, or working chat view is not sufficient.
+
+The [dedicated ledger section](TODO.md#platform-compatibility) owns task IDs, dependencies, completion checks, and claim instructions. No new platform is accepted by adding these tasks; contributors can start with one reproducible compatibility report without undertaking a whole port.
+
 ## Compatibility Dependencies
 
 | Workstream          | First Decision                                             | Next Useful Slice                                                                         | Acceptance Gate                                                          |
 | ------------------- | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| Local platforms     | [PLAT-01](TODO.md#plat-01): native and host requirements   | [PLAT-02](TODO.md#plat-02): one Linux distro; then named target implementation            | [PLAT-07](TODO.md#plat-07): one exact hosted target/profile              |
 | Remote-SSH          | [SSH-01](TODO.md#ssh-01): actual host placement            | [SSH-03](TODO.md#ssh-03): URI mapping, then remote review                                 | [SSH-12](TODO.md#ssh-12): one named remote profile                       |
 | Model providers     | [PRV-01](TODO.md#prv-01): pinned public provider contracts | [PRV-03](TODO.md#prv-03): synthetic local endpoint                                        | [PRV-10](TODO.md#prv-10): explicitly authorized named live profile       |
 | Alternate harnesses | [HAR-01](TODO.md#har-01): adapter/authority contract       | [HAR-02](TODO.md#har-02)/[HAR-03](TODO.md#har-03): candidate assessment, then one fixture | [HAR-10](TODO.md#har-10): one named harness/profile                      |

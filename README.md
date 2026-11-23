@@ -149,6 +149,8 @@ These are actual native controls exercised with synthetic file-tool changes. The
 
 The v0.1.0 acceptance profile is **Linux x64, VS Code 1.146.0, OMP 18.21.0, and a trusted single-root local filesystem workspace**. Other platforms, Remote-SSH, multi-root lifecycle, and untrusted/virtual workspaces are not certified.
 
+The VSIX's `linux-x64` target is not just a filename: it includes a matching native terminal dependency and currently Linux-only host behavior. Other compatible Linux distributions may work, but macOS, Windows, and ARM64 are not automatically supported. Help test or port a named target through the [platform compatibility workstream](TODO.md#platform-compatibility).
+
 1. Install [Oh My Pi](https://github.com/can1357/oh-my-pi) separately. Check `omp --version` reports `omp/18.21.0`. Run `omp` and use its `/login` flow if your selected provider needs authentication; Linewise does not copy VS Code's Copilot credentials.
 2. Go to [GitHub Releases](https://github.com/qu-gg/linewise/releases), download the Linux x64 VSIX from [v0.1.0](https://github.com/qu-gg/linewise/releases/tag/v0.1.0), and verify it against the accompanying `SHA256SUMS`. Alternatively, build a development VSIX with **Node 24.11+**:
 
@@ -182,13 +184,14 @@ We want contributors who care about agent workflows **and** the ability to inspe
 - [Contributing](CONTRIBUTING.md): setup, small pull requests, tests, and evidence.
 - [Roadmap](ROADMAP.md): priorities and dependencies.
 - [Shared task ledger](TODO.md): stable IDs, atomic changes, verification work, and how to claim a task.
+- [Platform compatibility](TODO.md#platform-compatibility): additional Linux distro testing, ARM64 builds, and macOS/Windows portability with target-specific acceptance.
 - [Capability matrix](PARITY.md): what works, what is partial, and what is unavailable.
 - [Issues](https://github.com/qu-gg/linewise/issues): bugs and concrete proposals.
 - [Discussions](https://github.com/qu-gg/linewise/discussions): questions and design conversations.
 
 Large changes to permission boundaries, storage, runtime integration, or supported hosts should begin with an issue or discussion. We welcome AI-assisted contributions; contributors remain responsible for understanding, provenance, and verification.
 
-Remote-SSH, broader model providers, and alternate open harnesses are explicit workstreams in the shared ledger, not current support claims. A small, well-tested compatibility slice is useful progress; it need not solve the entire workstream.
+Broader platform support, Remote-SSH, model providers, and alternate open harnesses are explicit workstreams in the shared ledger, not current support claims. A small, well-tested compatibility slice is useful progress; it need not solve the entire workstream.
 
 ## License And Credits
 

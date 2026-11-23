@@ -8,6 +8,12 @@ The current acceptance profile is `local-linux-x64-single-root`: trusted local L
 
 Candidate and preflight builds use **Ubuntu 24.04**, not a moving native-build baseline. The packaged node-pty Node-API addon still needs exact-host loading/native acceptance; a module ABI number alone is neither proof of compatibility nor a failure diagnosis. ELF/hash inspection does not independently certify every glibc symbol or Electron combination.
 
+### Additional Platform Targets
+
+The [platform compatibility workstream](TODO.md#platform-compatibility) owns planned expansion beyond this profile. `linux-x64` is both the VSIX target and the bundled native binary target; it is not merely an untested-host disclaimer. Another distro may use the same compatible artifact, while another OS/CPU architecture needs matching native dependencies and host behavior. Record actual system-library requirements rather than treating glibc 2.39 as a proven minimum or promising compatibility with musl.
+
+Before adding a downloadable target, review its build/native inventory and licenses, exact VSIX metadata, installed OMP/browser prerequisites, shell/permission/path/storage behavior, owned process cleanup, and fresh/update/manual acceptance on that target. Current packaging and acceptance schemas are Linux-specific: extend them through a reviewed implementation PR that preserves strict existing checks, not by retagging a Linux VSIX or deleting platform guards. [PLAT-07](TODO.md#plat-07) requires a maintainer-approved target profile and the applicable release gates; a contribution or CI build does not itself authorize publication or change the current v0.1.0 download.
+
 ## Authority And Visibility
 
 [.github/release-maintainers.json](.github/release-maintainers.json) pins the destination repository and approved GitHub logins. Changing it is a security-sensitive reviewed PR, not contributor self-enrollment. Hosted authorization requires both that allowlist and current repository `admin`/`maintain` permission, the exact current `main` commit, and explicitly selected `private` or `public` visibility. Private is the default; a visibility mismatch fails rather than silently publishing somewhere else.
