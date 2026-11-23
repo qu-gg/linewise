@@ -1,19 +1,19 @@
 {
   "name": "vs-omp",
-  "displayName": "OMP",
-  "description": "A workspace-local OMP coding agent with inspectable changes.",
+  "displayName": "Linewise",
+  "description": "Open agent coding. Granular review. Inside VS Code. Powered by Oh My Pi.",
   "version": "0.0.2",
   "private": true,
   "publisher": "vs-omp-local",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/qu-gg/vs-omp.git"
+    "url": "https://github.com/qu-gg/linewise.git"
   },
   "bugs": {
-    "url": "https://github.com/qu-gg/vs-omp/issues"
+    "url": "https://github.com/qu-gg/linewise/issues"
   },
-  "homepage": "https://github.com/qu-gg/vs-omp#readme",
+  "homepage": "https://github.com/qu-gg/linewise#readme",
   "type": "module",
   "main": "./dist/extension.cjs",
   "categories": [
@@ -35,7 +35,7 @@
     "customEditors": [
       {
         "viewType": "omp.inlineReview",
-        "displayName": "OMP Inline Review",
+        "displayName": "Linewise Inline Review",
         "selector": [
           {
             "filenamePattern": "**/after/*"
@@ -48,7 +48,7 @@
       "secondarySidebar": [
         {
           "id": "omp",
-          "title": "OMP",
+          "title": "Linewise",
           "icon": "$(comment-discussion)"
         }
       ]
@@ -58,87 +58,87 @@
         {
           "type": "webview",
           "id": "omp.chat",
-          "name": "OMP"
+          "name": "Linewise"
         }
       ]
     },
     "commands": [
       {
         "command": "omp.open",
-        "title": "OMP: Open Chat"
+        "title": "Linewise: Open Chat"
       },
       {
         "command": "omp.preflight",
-        "title": "OMP: Check Runtime"
+        "title": "Linewise: Check Runtime"
       },
       {
         "command": "omp.newSession",
-        "title": "OMP: New Session",
+        "title": "Linewise: New Session",
         "icon": "$(add)"
       },
       {
         "command": "omp.sessions",
-        "title": "OMP: Switch Session",
+        "title": "Linewise: Switch Session",
         "icon": "$(history)"
       },
       {
         "command": "omp.stop",
-        "title": "OMP: Stop",
+        "title": "Linewise: Stop",
         "icon": "$(debug-stop)"
       },
       {
         "command": "omp.showOutput",
-        "title": "OMP: Show Output"
+        "title": "Linewise: Show Output"
       },
       {
         "command": "omp.addFileContext",
-        "title": "Add File as Context to OMP",
+        "title": "Add File as Context to Linewise",
         "icon": "$(add)"
       },
       {
         "command": "omp.reviewPrevious",
-        "title": "OMP: Previous Change",
+        "title": "Linewise: Previous Change",
         "icon": "$(arrow-up)"
       },
       {
         "command": "omp.reviewNext",
-        "title": "OMP: Next Change",
+        "title": "Linewise: Next Change",
         "icon": "$(arrow-down)"
       },
       {
         "command": "omp.reviewKeep",
-        "title": "OMP: Keep Change at Cursor",
+        "title": "Linewise: Keep Change at Cursor",
         "icon": "$(check)"
       },
       {
         "command": "omp.reviewDiscard",
-        "title": "OMP: Discard Change at Cursor",
+        "title": "Linewise: Discard Change at Cursor",
         "icon": "$(discard)"
       },
       {
         "command": "omp.closeBrowser",
-        "title": "OMP: Close Owned Browser",
+        "title": "Linewise: Close Owned Browser",
         "icon": "$(close-all)"
       },
       {
         "command": "omp.inspectStorage",
-        "title": "OMP: Inspect Storage"
+        "title": "Linewise: Inspect Storage"
       },
       {
         "command": "omp.exportSession",
-        "title": "OMP: Export Session"
+        "title": "Linewise: Export Session"
       },
       {
         "command": "omp.deleteSession",
-        "title": "OMP: Delete Session"
+        "title": "Linewise: Delete Session"
       },
       {
         "command": "omp.applyRetention",
-        "title": "OMP: Apply Retention Plan"
+        "title": "Linewise: Apply Retention Plan"
       },
       {
         "command": "omp.cleanupStorage",
-        "title": "OMP: Clean Orphaned Storage"
+        "title": "Linewise: Clean Orphaned Storage"
       }
     ],
     "menus": {
@@ -184,7 +184,7 @@
       ]
     },
     "configuration": {
-      "title": "OMP",
+      "title": "Linewise",
       "properties": {
         "omp.notifications.enabled": {
           "type": "boolean",
@@ -310,6 +310,7 @@
     "lint": "node scripts/quality.mjs lint",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "check:public": "node scripts/public-check.mjs",
     "check": "node scripts/quality.mjs check",
     "check:native": "node scripts/quality.mjs native",
     "check:release": "node scripts/quality.mjs release",
@@ -324,7 +325,7 @@
     "test": "node scripts/quality.mjs test",
     "spike:mutations": "npm run build && node scripts/mutation-spike.mjs",
     "spike:handshake": "node scripts/acp-spike.mjs",
-    "package": "vsce package --no-dependencies --no-rewrite-relative-links",
+    "package": "vsce package --no-dependencies",
     "release:accept": "node scripts/release-accept.mjs"
   },
   "dependencies": {

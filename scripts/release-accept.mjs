@@ -4,6 +4,7 @@ import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { profile, validateAcceptance, verifyDirectory } from './release.mjs';
+import { validateMaintainer } from './release-run.mjs';
 
 export function acceptanceArguments(args) {
   const [directory, output, manual, rollback] = args;
@@ -72,6 +73,8 @@ async function main() {
   });
   assert.equal(cleanCommit(), commit);
   await verifyDirectory(options.directory, commit);
+  const owner = execute('gh', ['api', 'user', '--jq', '.login']);
+  validateMaintainer(owner);
   const acceptance = {
     schema: 1,
     commit,
@@ -81,7 +84,7 @@ async function main() {
     arch: process.arch,
     omp: versions.omp,
     vscode: versions.vscode,
-    owner: 'qu-gg',
+    owner,
     native: true,
     packaged: true,
     manualSmoke: true,

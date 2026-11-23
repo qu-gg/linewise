@@ -79,7 +79,7 @@ export class ChatView {
         .asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'dist', 'webview', file))
         .toString();
     const nonce = randomBytes(18).toString('base64');
-    webview.html = `<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource}; font-src ${webview.cspSource}; script-src 'nonce-${nonce}';"><link rel="stylesheet" href="${resource('main.css')}"><title>OMP</title></head><body><main id="app"></main><script nonce="${nonce}" src="${resource('main.js')}"></script></body></html>`;
+    webview.html = `<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource}; font-src ${webview.cspSource}; script-src 'nonce-${nonce}';"><link rel="stylesheet" href="${resource('main.css')}"><title>Linewise</title></head><body><main id="app"></main><script nonce="${nonce}" src="${resource('main.js')}"></script></body></html>`;
     this.context.subscriptions.push(
       webview.onDidReceiveMessage((message) => {
         if (this.view === view) void this.dispatch(message);
@@ -156,9 +156,9 @@ export class ChatView {
 
   private async notify(event: AttentionEvent): Promise<void> {
     const messages = {
-      approval: ['OMP: Need approval', 'Review Approval'],
-      questions: ['OMP: Has questions', 'Answer Questions'],
-      finished: ['OMP: Session finished', 'Open Session'],
+      approval: ['Linewise: Need approval', 'Review Approval'],
+      questions: ['Linewise: Has questions', 'Answer Questions'],
+      finished: ['Linewise: Session finished', 'Open Session'],
     } as const;
     const [message, action] = messages[event.kind]!;
     if ((await vscode.window.showInformationMessage(message, action)) !== action) return;

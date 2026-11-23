@@ -11,6 +11,11 @@ import { ensureTestDisplay } from './test-display.mjs';
 await ensureTestDisplay();
 
 async function captureReference(page, output, turns) {
+  const toast = page.locator('.notifications-toasts .notification-list-item').last();
+  if (await toast.isVisible()) {
+    await toast.hover();
+    await toast.getByRole('button', { name: /^Clear Notification/ }).click();
+  }
   await page.getByRole('button', { name: 'Maximize Secondary Side Bar', exact: true }).click();
   const completed = page.getByText(/^Completed \d+ steps$/);
   if (await completed.isVisible()) await completed.click();
@@ -148,6 +153,11 @@ async function inspectReference(userData, output, ready, prompts) {
     await writeFile(path.join(output, 'native-tools.json'), await readFile(`${ready}.tools.json`), {
       mode: 0o600,
     });
+    await writeFile(
+      path.join(output, 'environment.json'),
+      JSON.stringify(JSON.parse(await readFile(ready, 'utf8')).environment),
+      { mode: 0o600 },
+    );
     await captureReference(page, output, prompts.length);
   } finally {
     await browser.close();

@@ -217,8 +217,8 @@ await writeFile(
     activationEvents: ['onStartupFinished'],
     main: './driver.cjs',
     contributes: {
-      viewsContainers: { secondarySidebar: [{ id: 'omp', title: 'OMP', icon: '$(history)' }] },
-      views: { omp: [{ type: 'webview', id: 'omp.chat', name: 'OMP' }] },
+      viewsContainers: { secondarySidebar: [{ id: 'omp', title: 'Linewise', icon: '$(history)' }] },
+      views: { omp: [{ type: 'webview', id: 'omp.chat', name: 'Linewise' }] },
       configuration: JSON.parse(await readFile('package.json', 'utf8')).contributes.configuration,
     },
   }),

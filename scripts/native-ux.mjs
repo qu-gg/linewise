@@ -61,7 +61,7 @@ async function driveQuickContext(page, output, file) {
         .first()
         .click({ button: 'right' });
     }
-    const command = page.getByRole('menuitem', { name: /Add File as Context to OMP/ });
+    const command = page.getByRole('menuitem', { name: /Add File as Context to Linewise/ });
     await command.waitFor({ state: 'visible' });
     await capture(page, output, `context-${entry}-menu`);
     await command.click();
@@ -80,7 +80,7 @@ async function driveContext(page, workspace, output) {
   await page
     .getByRole('tab', { name: new RegExp(ready.file.replace('.', '\\.')) })
     .click({ button: 'right' });
-  const command = page.getByRole('menuitem', { name: /Add File as Context to OMP/ });
+  const command = page.getByRole('menuitem', { name: /Add File as Context to Linewise/ });
   await command.waitFor({ state: 'visible' });
   await capture(page, output, 'context-menu');
   await command.click();
@@ -154,7 +154,7 @@ async function driveQuestionRetirement(page, workspace, output) {
     if (scenario === 'dismiss') {
       const notification = page
         .locator('.notifications-toasts .notification-list-item')
-        .filter({ hasText: 'OMP: Has questions' });
+        .filter({ hasText: 'Linewise: Has questions' });
       await notification.hover();
       const actions = await notification.locator('a, button').evaluateAll((elements) =>
         elements.map((element) => ({

@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { createWriteStream, readFileSync } from 'node:fs';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
@@ -18,9 +19,17 @@ import {
   verifyDirectory,
 } from '../scripts/release.mjs';
 import { acceptanceArguments, validateRuntimeVersions } from '../scripts/release-accept.mjs';
-import { validateRun } from '../scripts/release-run.mjs';
+import { validateDestination, validateMaintainer, validateRun } from '../scripts/release-run.mjs';
 import { parse } from 'yaml';
 import { copyPtyRuntime, ptyRuntimeFiles } from '../scripts/pty-runtime.mjs';
+import {
+  headingAnchors,
+  validateForkWorkflow,
+  validateMarkdown,
+  validateScreenshot,
+  validateTaskLedger,
+} from '../scripts/public-check.mjs';
+import { marked } from 'marked';
 
 const manifest = { name: 'vs-omp', publisher: 'vs-omp-local', version: '0.0.2', license: 'MIT' };
 const commit = 'a'.repeat(40);
@@ -190,7 +199,7 @@ test('release notes must be curated for the exact version, not generated from ar
 
 test('release policy keeps remote evidence separate and audit failure blocking', () => {
   const policy = readFileSync('RELEASE.md', 'utf8');
-  assert.ok(policy.includes('TODO3 remains open'));
+  assert.ok(policy.includes('Remote-SSH remains unvalidated'));
   assert.ok(policy.includes('does not authorize a release'));
   assert.ok(policy.includes('not a cryptographic proof'));
 });
@@ -225,19 +234,132 @@ test('candidate runs must be successful owner dispatches from this exact main co
     path: '.github/workflows/release.yml',
     head_branch: 'main',
     head_sha: commit,
-    head_repository: { full_name: 'qu-gg/vs-omp' },
+    head_repository: { full_name: 'qu-gg/linewise' },
     actor: { login: 'qu-gg' },
   };
-  validateRun(run, 'qu-gg/vs-omp', commit);
+  validateRun(run, 'qu-gg/linewise', commit);
   for (const changed of [
     { conclusion: 'failure' },
     { event: 'pull_request' },
     { head_sha: 'c'.repeat(40) },
     { path: '.github/workflows/quality.yml' },
     { actor: { login: 'other' } },
-    { head_repository: { full_name: 'other/vs-omp' } },
+    { head_repository: { full_name: 'qu-gg/vs-omp' } },
   ]) {
-    assert.throws(() => validateRun({ ...run, ...changed }, 'qu-gg/vs-omp', commit));
+    assert.throws(() => validateRun({ ...run, ...changed }, 'qu-gg/linewise', commit));
+  }
+});
+
+test('release authority is explicit and visibility cannot change or fall back', () => {
+  const repository = 'qu-gg/linewise';
+  const repo = { full_name: repository, default_branch: 'main', private: false };
+  validateDestination(repo, repository, commit, commit, 'public');
+  validateDestination({ ...repo, private: true }, repository, commit, commit, 'private');
+  for (const changed of [
+    { full_name: 'qu-gg/vs-omp' },
+    { default_branch: 'next' },
+    { private: true },
+  ])
+    assert.throws(() =>
+      validateDestination({ ...repo, ...changed }, repository, commit, commit, 'public'),
+    );
+  assert.throws(() => validateDestination(repo, repository, commit, commit, undefined));
+  assert.throws(() => validateDestination(repo, repository, commit, 'c'.repeat(40), 'public'));
+  validateMaintainer('second', { maintainers: ['second'] });
+  assert.throws(() => validateMaintainer('other'));
+});
+
+test('public screenshot provenance rejects changed pixels, dimensions and extra metadata', () => {
+  const ledger = JSON.parse(readFileSync('docs/images/provenance.json', 'utf8'));
+  const image = ledger.images[0];
+  const bytes = readFileSync(`docs/images/${image.file}`);
+  validateScreenshot(bytes, image);
+  assert.throws(() => validateScreenshot(bytes, { ...image, width: image.width + 1 }));
+  const changed = Buffer.from(bytes);
+  changed[40] ^= 1;
+  assert.throws(() => validateScreenshot(changed, image));
+  const metadata = Buffer.from(bytes);
+  metadata.write('tEXt', 37, 'ascii');
+  const digest = createHash('sha256').update(metadata).digest('hex');
+  assert.throws(() => validateScreenshot(metadata, { ...image, sha256: digest }));
+});
+
+test('public Markdown rejects private/missing targets and verifies same-file headings', () => {
+  const file = 'README.md';
+  const files = new Set([file, 'docs/usage.md']);
+  const load = () => '# Example\n\n## Repeated\n\n## Repeated\n';
+  assert.equal(validateMarkdown(file, '# Example\n\n[here](#example)', files, load), 1);
+  assert.deepEqual(
+    [...headingAnchors(marked.lexer(load()))],
+    ['example', 'repeated', 'repeated-1'],
+  );
+  for (const link of [
+    'reports/private.json',
+    '.local-dev/runbook.md',
+    'missing.md',
+    '#absent',
+    'javascript:alert(1)',
+    '/etc/passwd',
+  ])
+    assert.throws(() => validateMarkdown(file, `[bad](${link})`, files, load));
+  files.add('reports/private.json');
+  assert.throws(() => validateMarkdown(file, '[private](reports/private.json)', files, load));
+});
+
+test('public HTML validates image links, decoded attributes and explicit or generated anchors', () => {
+  const files = new Set(['README.md', 'docs/image.png', 'docs/a&b.md']);
+  const source = '<h1 align="center">Linewise</h1><a id="ssh-01"></a>';
+  const check = (html) => validateMarkdown('README.md', html, files, () => source);
+  const markup = `${source}<a href="#linewise">top</a><a href="#ssh-01">task</a><img src="docs/image.png"><a href="docs/a&amp;b.md">doc</a>`;
+  assert.equal(check(markup), 4);
+  for (const href of ['.local-dev/runbook.md', '#absent', 'javascript&#58;alert(1)'])
+    assert.throws(() => check(`<a href="${href}">bad</a>`));
+  assert.throws(() => check('<img src="missing.png">'));
+  assert.equal(check('```html\n<img src="missing.png">\n```'), 0);
+});
+test('shared ledger rejects duplicate IDs, missing anchors, invalid states and unsupported verification', () => {
+  const header = '| ID | State | Atomic Task | Completion Check |\n| --- | --- | --- | --- |\n';
+  const row =
+    '| <a id="ssh-01"></a> `SSH-01` | research | Establish remote host placement | Record actual host/process identities and public API boundaries. |\n';
+  assert.equal(validateTaskLedger(header + row).length, 1);
+  const accessible = row.replaceAll('SSH-01', 'A11Y-01').replaceAll('ssh-01', 'a11y-01');
+  assert.equal(validateTaskLedger(header + accessible).length, 1);
+  for (const source of [
+    header + row + row,
+    header + row.replace('research', 'done'),
+    header + row.replace('<a id="ssh-01"></a>', ''),
+    header + row.replace('research', 'verified'),
+    header + row.replace('Record actual host/process identities and public API boundaries.', ''),
+  ])
+    assert.throws(() => validateTaskLedger(source));
+});
+
+test('fork CI rejects write authority, secret requirements, unpinned actions and model calls', () => {
+  const workflow = parse(readFileSync('.github/workflows/quality.yml', 'utf8'));
+  validateForkWorkflow(workflow);
+  for (const modify of [
+    (copy) => {
+      copy.on.pull_request_target = {};
+    },
+    (copy) => {
+      copy.permissions.contents = 'write';
+    },
+    (copy) => {
+      copy.jobs.quality.permissions = { contents: 'write' };
+    },
+    (copy) => {
+      copy.jobs.quality.steps.push({ run: 'npm run test:live' });
+    },
+    (copy) => {
+      copy.jobs.quality.steps.push({ run: '${{ secrets.PROVIDER }}' });
+    },
+    (copy) => {
+      copy.jobs.quality.steps.push({ uses: 'actions/checkout@main' });
+    },
+  ]) {
+    const copy = structuredClone(workflow);
+    modify(copy);
+    assert.throws(() => validateForkWorkflow(copy));
   }
 });
 
@@ -257,13 +379,21 @@ test('release workflow is manual-only, audit-blocked and isolates write permissi
   assert.deepEqual(Object.keys(workflow.on), ['workflow_dispatch']);
   assert.equal(workflow.permissions.contents, 'read');
   assert.equal(workflow.on.workflow_dispatch.inputs.approve_publication.default, false);
+  assert.equal(workflow.on.workflow_dispatch.inputs.visibility.default, 'private');
   const jobs = workflow.jobs;
   assert.equal(jobs.publish.permissions.contents, 'write');
   assert.equal(jobs.publish.needs, 'preflight');
+  assert.equal(jobs.publish.environment, 'linewise-release');
+  assert.equal(jobs.authorize.permissions, undefined);
+  assert.ok(
+    jobs.authorize.steps.some((step) => step.run === 'node scripts/release-run.mjs authorize'),
+  );
   assert.ok(jobs.preflight.if.includes('inputs.approve_publication'));
   for (const name of ['candidate', 'preflight']) {
     assert.equal(jobs[name]['runs-on'], 'ubuntu-24.04');
     assert.ok(jobs[name].if.includes("github.ref == 'refs/heads/main'"));
+    assert.equal(jobs[name].needs, 'authorize');
+    assert.ok(jobs[name].if.includes("needs.authorize.outputs.allowed == 'true'"));
     assert.ok(jobs[name].steps.some((step) => step.run === 'npm audit --audit-level=moderate'));
     assert.ok(!jobs[name].permissions);
   }

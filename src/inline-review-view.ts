@@ -82,7 +82,7 @@ export class InlineReviewView implements vscode.CustomReadonlyEditorProvider, vs
     if (!last) throw new Error('OMP review is no longer available.');
     const entry: OpenReview = { document, panel, last, revision: '', line: 1, listeners: [] };
     this.opened.set(panel, entry);
-    panel.title = `${reviewSummary(last, path.basename).name} (OMP Changes)`;
+    panel.title = `${reviewSummary(last, path.basename).name} (Linewise Changes)`;
     const webview = panel.webview;
     const base = vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview');
     const resource = (file: string) =>
@@ -98,7 +98,7 @@ export class InlineReviewView implements vscode.CustomReadonlyEditorProvider, vs
         this.changed();
       }),
     );
-    webview.html = `<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; font-src ${webview.cspSource}; img-src ${webview.cspSource} data:; script-src 'nonce-${nonce}'; connect-src ${webview.cspSource}; worker-src blob:;"><link rel="stylesheet" href="${resource('inline-review.css')}"><title>OMP Changes</title></head><body data-worker="${resource('inline-worker.js')}"><main id="editor"></main><div id="status" role="status" hidden></div><script nonce="${nonce}" src="${resource('inline-review.js')}"></script></body></html>`;
+    webview.html = `<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; font-src ${webview.cspSource}; img-src ${webview.cspSource} data:; script-src 'nonce-${nonce}'; connect-src ${webview.cspSource}; worker-src blob:;"><link rel="stylesheet" href="${resource('inline-review.css')}"><title>Linewise Changes</title></head><body data-worker="${resource('inline-worker.js')}"><main id="editor"></main><div id="status" role="status" hidden></div><script nonce="${nonce}" src="${resource('inline-review.js')}"></script></body></html>`;
     this.publish(entry, this.files.reviewSelections.get(document.uri.toString()));
     this.changed();
   }

@@ -35,7 +35,7 @@ const execute = promisify(execFile);
 let application: OmpView | undefined;
 
 export async function activate(context: vscode.ExtensionContext) {
-  const output = vscode.window.createOutputChannel('OMP');
+  const output = vscode.window.createOutputChannel('Linewise');
   let owner: OmpView;
   const storage = await initializeStorage(context, (action) =>
     owner.perform(() => owner.manageStorage(action)),

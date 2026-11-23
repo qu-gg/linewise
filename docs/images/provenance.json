@@ -1,0 +1,54 @@
+{
+  "schema": 1,
+  "source": "Unaltered native VS Code extension-development workbench screenshots",
+  "environment": {
+    "platform": "linux-x64",
+    "vscode": "1.146.0",
+    "omp": "18.21.0",
+    "theme": "Dark 2026",
+    "zoomLevel": 0,
+    "editorFontSize": 14
+  },
+  "task": "Change Header: and Footer: to uppercase in review-sample.ts.",
+  "realInferenceRequests": 0,
+  "transformations": [],
+  "privacy": "Synthetic workspace/text only; visually inspected; no text or EXIF PNG chunks",
+  "rights": "Project-owned fixture text/code is MIT; visible upstream UI retains its respective rights; no endorsement",
+  "images": [
+    {
+      "file": "linewise-chat.png",
+      "width": 600,
+      "height": 900,
+      "sha256": "00d4dc84aabc09906a78dd43744cedb1ee2684750d0923e93235697cac55e3c1",
+      "evidence": "Native Linewise transcript; guarded scripted OMP provider and real fixture file changes"
+    },
+    {
+      "file": "linewise-final.png",
+      "width": 1280,
+      "height": 900,
+      "sha256": "5f4724687ca10c2f3506be11ef7b5a5c4a214fbce92e5989b52c908e8eefb03f",
+      "evidence": "Ordinary editor after Keep Header and Undo Footer; exact bytes verified"
+    },
+    {
+      "file": "linewise-kept-header.png",
+      "width": 1280,
+      "height": 900,
+      "sha256": "c169120e2bb9f4fc10e87e1c29117c724a49febcd9b44486bbda93f5b25a0a66",
+      "evidence": "Native Linewise review after actual Keep; Header accepted and Footer pending"
+    },
+    {
+      "file": "linewise-review.png",
+      "width": 1280,
+      "height": 900,
+      "sha256": "5ac881fc6e9a5e9b75a537b918d5cf68009c627a5027479b5acd3d1cf9fc3763",
+      "evidence": "Native Linewise inline editor with two actual pending hunks"
+    },
+    {
+      "file": "local-recorded-chat.png",
+      "width": 600,
+      "height": 900,
+      "sha256": "72a9cb083705deec6087371819b7956106d82dfbd1af76ff0a54e17f11e17f68",
+      "evidence": "Native Local recorded-only transcript; no workspace edits or generation"
+    }
+  ]
+}

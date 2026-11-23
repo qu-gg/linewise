@@ -159,7 +159,7 @@ async function scanPrivate(directory, value) {
     );
     files++;
     if (target.endsWith('.jsonl')) native++;
-    if (/output_logging[^/]*\/[^/]*OMP[^/]*\.log$/.test(target)) outputLogs++;
+    if (/output_logging[^/]*\/[^/]*Linewise[^/]*\.log$/.test(target)) outputLogs++;
   };
   const visit = async (root) => {
     const entries = await readdir(root, { withFileTypes: true });
@@ -177,7 +177,7 @@ async function scanPrivate(directory, value) {
   assert.equal(exported.format, 'vs-omp-session');
   assert.ok(exported.artifacts.some((artifact) => artifact.name.endsWith('.jsonl')));
   assert.ok(native > 0);
-  assert.ok(outputLogs > 0, 'Actual OMP output-channel logs must be included.');
+  assert.ok(outputLogs > 0, 'Actual Linewise output-channel logs must be included.');
   return { files, native, outputLogs };
 }
 

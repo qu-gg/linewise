@@ -1,243 +1,149 @@
-# OMP for VS Code
+<!-- markdownlint-configure-file { "MD033": { "allowed_elements": ["h1", "h3", "p", "b", "br", "a", "img", "sub", "table", "tr", "td"] } } -->
 
-Private local alpha of a custom OMP harness. It uses public VS Code APIs and the official ACP SDK, not private Copilot internals. In the source checkout, the [implementation plan](IMPLEMENTATION_PLAN.md) owns architecture/design, the [active roadmap](TODO.md#10-active-local-parity-roadmap) owns implementation and validation checklists, and the [parity matrix](PARITY.md) owns current capability/evidence status and accepted checkpoint history. [QUALITY.md](QUALITY.md) and [RELEASE.md](RELEASE.md) define engineering and distribution gates. Project-owned code is [MIT licensed](LICENSE); bundled components retain their [third-party licenses and attribution](THIRD_PARTY_NOTICES.txt).
+<h1 align="center">Linewise</h1>
+
+<p align="center">
+   <b>Open agent coding. Granular review. Inside VS Code.</b><br>
+   Powered by <a href="https://github.com/can1357/oh-my-pi">Oh My Pi</a> and hopefully many other harnesses soon.
+</p>
+
+<p align="center">
+   <a href="#try-it"><b>Build the alpha</b></a> &middot;
+   <a href="docs/comparison.md">See the review flow</a> &middot;
+   <a href="TODO.md">Find a task</a> &middot;
+   <a href="https://github.com/qu-gg/linewise/discussions">Join the discussion</a>
+</p>
+
+<p align="center">
+   <a href="LICENSE">MIT licensed</a> &middot;
+   Public VS Code APIs + ACP &middot;
+   Linux x64 alpha
+</p>
+
+Linewise brings an open coding-agent harness into your editor, with a familiar chat experience inspired by VS Code's Local Harness, notably including its inspectable changes. Review text edits hunk by hunk and whole-file operations individually, keep the changes you want, and undo the ones you do not.
+
+It is an independent alternative for people who value VS Code's Local chat workflow. Oh My Pi owns the agent loop; Linewise owns the editor experience, approvals, and review. It uses public VS Code APIs and ACP, not private Copilot services. It remains dependent on supported VS Code APIs and versions, but not on Copilot's harness release cycle.
+
+<!-- prettier-ignore-start -->
+
+<!-- markdownlint-disable-next-line MD009 MD022 -->
+### **But why? Just use X or Y instead, "IDEs are things of the past."** 
+I have been hearing this notion that "IDEs no longer have use" and we should just accept interfacing with agents via sterilized chat windows where you have little control or understanding of your actual file structure. I am quite opininated on this and reject that notion for specific workflows or granularity of work. There is immense value (to me and I suspect many others) in seeing and deciding agent changes line-by-line, in quickly making sure that hyperparameters of an expensive synthetic data run are unchanged or that some misaligned addition is caught. Working intentionally and iteratively with an agent can be needed at times.
+
+Of all the harnesses/agent experiences I have tried, the Local Harness in VSCode has been by far the best. I love having the familiar deeply-integrated workspace, knowing and partitioning the file structure of different projects across different workspaces, and having memory files on device that isn't reliant on the cloud. So given that Copilot has decided to rugpull the Local Harness away in favor of their cloud Copilot Chat (WITHOUT feature parity!), I've decided to make my attempt at an alternative: **Linewise**. It breaks free from relying on a company that deprecates products on a whim while hopefully providing a similar - if not even more customizable - experience.
+
+**Linewise** is not *quite* there yet but it is getting closer and closer! I hope my feelings resonate with some and we can build something great. I understand the potential hypocrisy of building this project largely via many agents very much against the spirity of granularity that I just soapboxed about, but hey, I did specify this is for specific workflows :)
+
+<!-- prettier-ignore-end -->
+
+> [!IMPORTANT]
+> **Early alpha, not yet published.** Contributors and careful testers are welcome. Start with a disposable workspace. Version 0.0.2 has no Marketplace listing or approved public download.
+
+<p align="center">
+   <a href="docs/comparison.md">
+      <img src="docs/images/linewise-review.png" alt="Linewise showing two pending inline hunks with floating Keep and Undo controls" width="100%">
+   </a><br>
+   <sub>Actual native review UI in a synthetic workspace. The agent reply is scripted, not a live model result.</sub>
+</p>
+
+<p align="center">
+   <a href="#why-linewise">Highlights</a> &middot;
+   <a href="#keep-what-you-want">Selective review</a> &middot;
+   <a href="#try-it">Try it</a> &middot;
+   <a href="#control-and-limits">Boundaries</a> &middot;
+   <a href="#build-with-us">Contribute</a> &middot;
+   <a href="#license-and-credits">Credits</a>
+</p>
+
+---
+
+## Why Linewise
+
+<table>
+   <tr>
+      <td width="33%" valign="top">
+         <h3>Your editor</h3>
+         <p>Chat beside your code, attach context, inspect tool activity, and open related diagnostics and tasks.</p>
+      </td>
+      <td width="33%" valign="top">
+         <h3>Your changes</h3>
+         <p>Review the full file with floating hunk-level Keep/Undo. Keep one change without accepting the next.</p>
+      </td>
+      <td width="33%" valign="top">
+         <h3>Open harness</h3>
+         <p>OMP runs the agent loop. Linewise owns the editor workflow and approvals without waiting for Copilot's harness releases.</p>
+      </td>
+   </tr>
+</table>
+
+Current model access uses OMP's GitHub Copilot provider and authentication. Open-source harness infrastructure does not mean free inference, support for every OMP provider, or independence from provider policies.
+
+## Keep What You Want
+
+Keep the Header hunk, then undo Footer. The accepted `HEADER:` remains while the pending change returns to `Footer:`. No extra model request is needed to make that review decision.
+
+<table>
+   <tr>
+      <td width="50%"><img src="docs/images/linewise-kept-header.png" alt="Header accepted, with only the Footer hunk still pending" width="100%"></td>
+      <td width="50%"><img src="docs/images/linewise-final.png" alt="Ordinary editor after undoing Footer, with HEADER retained" width="100%"></td>
+   </tr>
+   <tr>
+      <td align="center"><sub>Keep Header. Footer stays pending.</sub></td>
+      <td align="center"><sub>Undo Footer. The accepted Header stays.</sub></td>
+   </tr>
+</table>
+
+These are actual native controls exercised with synthetic file-tool changes. The [comparison page](docs/comparison.md) includes matched Linewise/Local transcript views, exact evidence limits, and image provenance. Creation, deletion, and moves use whole-operation review; arbitrary individual-line acceptance is not implemented.
+
+---
 
 ## Try It
 
-Verified private-release profile: local Linux x64, VS Code **1.146.0**, a trusted single-root filesystem workspace, and **OMP 18.21.0** installed separately on that host. Remote and other-platform release support remains deferred. See the [private release policy](RELEASE.md) for candidate validation and manual updates.
+The verified alpha profile is **Linux x64, VS Code 1.146.0, OMP 18.21.0, and a trusted single-root local filesystem workspace**. Other platforms, Remote-SSH, multi-root lifecycle, and untrusted/virtual workspaces are not certified.
 
-1. Run `omp` in a terminal on that host. Use `/login` and select GitHub Copilot if authentication is needed.
-2. Install a checksum-verified private-release VSIX using **Extensions: Install from VSIX**, or build a development package from source. Version 0.0.2 is currently unreleased; no new release artifact is implied by the version bump.
-3. Open a disposable workspace and run **OMP: Open Chat**. The view appears in the secondary sidebar.
-4. Start a session or send a prompt. Set `omp.executablePath` if `omp` is not on the host's PATH.
-5. Select a changed file to open full-file inline review with floating Keep/Undo controls. Keep accepts that hunk; Undo restores only that pending hunk.
+1. Install [Oh My Pi](https://github.com/can1357/oh-my-pi) separately. Check `omp --version` reports `omp/18.21.0`. Run `omp` and use its `/login` flow if your selected provider needs authentication; Linewise does not copy VS Code's Copilot credentials.
+2. Build a development VSIX with **Node 24.11+**:
 
-Keep/Discard is independent of Git. Multiple prompts accumulate against the same unresolved baseline. If the user or another process changes a pending file, Discard refuses to overwrite it. Keep resolves the record while retaining the live content.
+   ```sh
+   git clone https://github.com/qu-gg/linewise.git
+   cd linewise
+   npm ci
+   npm run check
+   npm run build
+   npm run package -- --target linux-x64 --out linewise-dev-linux-x64.vsix
+   ```
 
-## Supported Slice
+3. Use **Extensions: Install from VSIX**, then open a disposable workspace and run **Linewise: Open Chat**.
+4. Set `omp.executablePath` in user settings if OMP is not on PATH. Choose a model, attach context explicitly, and send a prompt.
+5. Select a changed file, then Keep or Undo individual pending hunks. Creation, deletion, and moves use whole-operation review.
 
-- One active OMP process/session per window, with stored session selection and resume.
-- Copilot model and thinking selectors, streamed responses, Stop and serialized queued follow-ups.
-- Explicit selection/editor, multiple-file, PNG/JPEG/WebP image, open-resource and workspace-diagnostic snapshots, with inspection/removal and original-snapshot historical replay.
-- Read-only, session-scoped Todos disclosure immediately above Changed Files in the composer dock, with provider ordering, status icons/counts and remembered collapse state.
-- Independently collapsible turn activity, thinking, and tools; thinking auto-closes when the agent moves on, and final answers remain outside collapsed activity.
-- Model output reveals a subtle timestamp/model footer at its bottom right on hover or keyboard focus, without a popup or layout shift. Touch devices show it directly. Metadata survives reloads and model switches; older responses retain explicit unknown values. User prompts are right-aligned, width-constrained bubbles, distinct from bordered code blocks. Per-block credits are not displayed.
-- Compact joined composer/file-review dock with file-level +/- counts and per-file/bulk Keep/Discard; granular review uses floating Keep/Undo controls in an OMP-owned inline editor. Operation history and terminal-style output retain copy controls.
-- Session Context popover with reported token usage/cost and a direct Compact Context action. Detailed inspection runs OMP's `/context`; compaction runs its advertised `/compact` command without consuming a pending editor attachment.
-- Inline historical prompt editing with Cancel/Send, before-prompt and after-answer forks, recoverable original conversations, and per-session composer drafts.
-- Canonical native history boundaries, private-file resume across process restarts, legacy filename recovery, and serialized prompt/history/configuration/review operations.
-- Workspace-tree file/directory reads with native line selectors, guarded UTF-8 mutations, file creation, cumulative per-file review, and reload-persisted snapshots.
-- Native hashline edits, explicit deletion and paired rename review, including edited moves and recoverable partial failures.
-- Linux command-only shell execution with selectable command permissions, bounded output and prompt-owned process cleanup.
-- Approve-once before outside-workspace operations, even when the file is already open in an editor.
-- Native-style one-time command approvals in the scrolling conversation and outside-file approvals above the composer, with inline details/expansion, Allow Once and Skip.
-- Existing CRLF preservation, unsaved-buffer baselines, symlink checks, and conflict detection.
-- Local memory enabled by default; no MCP servers.
-- Read-only storage inspection plus explicitly confirmed session export/deletion, retention plans and conservative orphan cleanup on the supported local Linux host.
+The extension ID remains `vs-omp-local.vs-omp`, and settings/command IDs retain their `omp.*` namespace for compatibility. A development package is not an accepted release candidate. See [development](docs/development.md) and [release policy](RELEASE.md).
 
-**This is not the full planned MVP.** The explicit allowlist is `read`, `write`, `todo`, `retain`, `recall`, `memory_edit`, `edit`, `bash`, `editor`, `ask`, `browser`, `rename`, `task`, `fetch`, `code_action`, and `notebook_edit`. Native `edit` uses captured pre/post images and the host journal; new files still use `write`. The read-only `editor` tool offers workspace glob discovery, literal search, diagnostics, symbols, definitions/references, workspace task metadata and live notebook cells through public VS Code APIs, with 1-based positions, at most 100 results and 64 KB output. Private/outside results are filtered; provider-dependent services require an available provider. Arbitrary LSP requests, unreviewed semantic mutations, delegation, unknown tools, archive/database writes, non-HTTP URI reads and executable-bit changes remain blocked. Binary, BOM, oversized and unsupported text mutation targets are rejected. There are no terminal side-effect snapshots. Save participants can cause a review conflict rather than silently changing the recorded result.
+## Control And Limits
 
-`rename` uses the installed language provider for a symbol at 1-based `line`/`column`, with `path`, `newName` and an explicit `paths` list of one to eight potentially affected files including the source. Discover references and read the files first. Only saved canonical workspace UTF-8 text is supported: 1 MiB per file, 4 MiB captured and at most 1000 edits. Dirty/stale captures, outside/private/uncaptured targets, overlapping edits and snippets are refused. Only enumerated text edits enter durable Keep/Discard review with real tool provenance; provider file operations and commands are never forwarded. Provider absence is an error, not a textual fallback. This is not an atomic multi-file transaction: interruption may leave some files changed, with all applied or interrupted changes still in review. Inspect and resolve review before retrying.
+Review is independent of Git. Pending edits accumulate across prompts; conflicts refuse to overwrite newer user or external changes. Keep/Undo covers journaled file-tool changes, **not shell side effects or conversation history**.
 
-`code_action` lists up to 32 resolved provider actions for `quickfix`, `refactor`, `source.organizeImports` or `source.fixAll`, then applies an exact fresh title. Supply `path`, an explicit one-based `line`/`column`/`endLine`/`endColumn` range (equal for an empty selection), and `paths` capturing one to eight saved workspace files including source. List uses `title: null`; apply requires an exact title and refuses ambiguity. Only resolved plain text edits enter the same capture/revalidation/review path as rename, with the same byte/edit bounds. Attached provider commands are always ignored (`commandIgnored` metadata), not executed; command-only, unresolved, disabled or mismatched-kind actions are unavailable. This is partial text-only action application, not full provider semantics. Provider file operations and snippets are never forwarded. Stop releases stalled discovery and late results cannot write; partial multi-file changes remain reviewable. Native TypeScript import organization is tested; arbitrary providers, commands and full refactoring parity are not certified.
+Commands run with your host permissions, **not in an OS sandbox**. Command Rules is the default; Ask, session-only Allow All, and explicitly confirmed YOLO are available. YOLO's static denylist is best effort, not a destruction detector. File-tool outside-workspace approval and URL/browser consent remain separate.
 
-`task` selects exact canonical-root `name`/`source` from `editor` metadata and runs a concrete process/bash snapshot in native Tasks UI. An optional OMP-owned `graph` contains one to four nodes with `id`, `name`, `source`, `dependsOn` and optional `readiness`; its final node matches the selected task. All commands require consent and whole-graph recapture before launch. Prerequisite layers may run in parallel; failure blocks dependents. Background prerequisites require an exact complete-line `readiness: {"line":"READY"}`; foreground nodes/final root use omitted or `readiness: null`. Standalone/final background tasks are refused. This is not the provider's original scheduler or problem matcher.
+Prompts, attached context, approved reads, and tool results can reach your selected model provider. Local transcripts, snapshots, and memory can contain sensitive code; private filesystem modes are not encryption. There is no extension telemetry. Read the [security and privacy policy](SECURITY.md) before using sensitive projects.
 
-Tasks share actual-command rules, sanitized inherited environment, four-command cap and process-group ownership with `bash`. Approval/execution wait indefinitely by default; positive `timeout` is 1-120 seconds after consent. Stop/native cancellation/prompt cleanup terminate owned work, never unrelated tasks. Results retain bounded output, truncation, readiness, cleanup and actual exit status; unknown/nonzero/early background exit is not success. Optional `diagnostics: "json-lines-v1"` accepts complete strict JSON-line failures with canonical workspace path, positive 1-based line/column, message and severity, at most 32 validated current-source Problems. Invalid/truncated/outside/stale rows are rejected; diagnostics retire with the prompt. Output is untrusted. Dirty text/notebook execution is refused unless the existing `task.saveBeforeRun` is `never`; production never changes it. Opaque/custom executors/shells, quoting objects, unresolved `${...}`, persistent watchers, Test Explorer, interactive stdin and secret input remain unavailable. Commands are unsandboxed and side effects are outside review rollback.
+## Build With Us
 
-`fetch` reads one HTTP(S) URL with GET. Every exact URL, including each redirect, requires one-time host consent independently of command rules or Allow All. URLs with credentials and alternate schemes are refused; no supplied headers, cookies, credentials, referrer, request body or browser profile are used. Up to four redirects and 256 KiB of response-stream bytes are read; decoded text is further bounded to 40,000 characters and the result includes status, MIME type, charset and truncation. Text/JSON/XML are supported; HTML is returned as untrusted source, without rendering, script execution or subresource requests. Binary responses are refused. Stop and prompt lifecycle cancel approval and transport; there is no configured elapsed-time deadline or automatic retry. Consent can authorize local/internal hosts, so this is not a network sandbox. GET can have server-side effects, not restored by file review. This is not authenticated GitHub/account access, article extraction, indexed search or an attachment tool.
+We want contributors who care about agent workflows **and** the ability to inspect, interrupt, and selectively accept their work. Useful starting points include fresh-user onboarding, accessibility, reproducible visual tests, provider compatibility, and platform acceptance.
 
-`editor` search accepts a literal query, workspace glob and optional case sensitivity. Its root-owned lexical cache includes fresh unsaved overlays and project `.gitignore` then `.ignore`, with canonical/private/vendor/build exclusions; caps are 256 candidate files, 1 MiB/file, 4 MiB aggregate and 100 results. Counts/`limited` disclose partial coverage. Explicit semantic search uses `local-lsa-v1`, corpus TF-IDF/SVD via `ml-matrix@6.12.1`, not pretrained embeddings: 64 files/1 MiB text/512 terms/32 dimensions/16 MiB derived snapshot/10-second build. Neither search attaches context, initiates inference, downloads a runtime or persists the index. Global/conditional ignore completeness, unlimited repositories and arbitrary backends remain unsupported.
+- [Contributing](CONTRIBUTING.md): setup, small pull requests, tests, and evidence.
+- [Roadmap](ROADMAP.md): priorities and dependencies.
+- [Shared task ledger](TODO.md): stable IDs, atomic changes, verification work, and how to claim a task.
+- [Capability matrix](PARITY.md): what works, what is partial, and what is unavailable.
+- [Issues](https://github.com/qu-gg/linewise/issues): bugs and concrete proposals.
+- [Discussions](https://github.com/qu-gg/linewise/discussions): questions and design conversations.
 
-`editor` with `action: "workspaceSymbols"` sends a nonblank query of at most 200 characters to the public workspace symbol provider. It inspects at most 1000 returned entries, applies canonical workspace/private/vendor/build/report exclusions, and returns bounded symbol names, containers, kinds and 1-based locations. `providerDependent`, `untrusted`, `inspectedSymbols` and `limited` describe the result. Provider names/ranges may represent whole declarations, not identifier spans; inspect source before requesting references. Empty results do not prove absence, and this is not semantic retrieval. Providers may compute more before returning; Stop releases the wait without promising to cancel provider work.
+Large changes to permission boundaries, storage, runtime integration, or supported hosts should begin with an issue or discussion. We welcome AI-assisted contributions; contributors remain responsible for understanding, provenance, and verification.
 
-`ask` presents up to four bounded questions through native Quick Pick/Input Box controls, with exact choices, multiple selection, optional free text and dismissal. Answers are prompt-scoped, not mutation grants or stored credentials. Never enter passwords, tokens or secrets. Stop and lifecycle cancellation close pending input; an unavailable or dismissed answer must not be invented. This is native editor input, not a byte-for-byte reproduction of Local Chat's question card.
+Remote-SSH, broader model providers, and alternate open harnesses are explicit workstreams in the shared ledger, not current support claims. A small, well-tested compatibility slice is useful progress; it need not solve the entire workstream.
 
-Current source includes interactive in-chat questions, searchable Recent/Archived sessions and reversible archiving, a temporary explicit active-editor context offer/right-click context actions, and configurable native attention notifications tied to the owning session. No context attaches, session changes or model continuation occur implicitly. Native question input remains available; broader providers/hosts/manual assistive technology are not certified. See the [roadmap](TODO.md#10-active-local-parity-roadmap) for bounded acceptance and exclusions.
+## License And Credits
 
-`browser` controls isolated OMP-owned Playwright Chromium pages. Set user-only `omp.browser.executablePath` to an absolute Chromium/Chrome/Brave executable, or leave it empty for already-installed Playwright Chromium. No browser is downloaded. Launch, navigation, viewport changes and interactions request one-time consent on each prompt, independent of shell Allow All. Up to four exact page handles support bounded text/control reads, single-element CSS interactions, navigation/history, last-64-message console inspection and actual viewport PNGs (512 KiB maximum). Pages, site state and background network activity persist across completed prompts in the same session/root/history owner. **OMP: Close Owned Browser** in the title bar or Command Palette revokes all pages, including pending consent; Stop, disconnect, failed prompts, workspace changes and history/session changes also close them. No browser state is persisted across reload/reconnect. Existing tabs/profiles, CDP attachment, arbitrary JavaScript, file URLs, uploads, downloads, cookie access and password-field interaction are not exposed. Browser content is untrusted; this is not an OS/network sandbox and web effects cannot be undone by review or rewind. Native tab-sharing remains unfinished.
+Project-owned code is [MIT licensed](LICENSE). [Attribution](ATTRIBUTION.md) identifies upstream projects and the distinction between inspiration and integration. Bundled components retain their [third-party licenses](THIRD_PARTY_NOTICES.txt).
 
-`editor` with `action: "notebook"` reads a canonical workspace notebook's live unsaved cells and text outputs, with optional 1-based `startCell`. Each cell exposes at most 8000 source characters and 8000 aggregate text-output bytes (2000 per item, up to 8 outputs/8 items). Binary/image metadata includes one-based `output` and `item` indices. Use `action: "notebookImage"` with `path`, `cell`, `output` and `item` to read exactly one current PNG/JPEG/WebP output as an actual model image, not base64 prose. It is capped at 512 KiB with MIME/signature checks; HTML/SVG rendering and other binary outputs remain unavailable. Notebook text/images are untrusted data, never instructions. `action: "tasks"` lists workspace task metadata, excluding global/outside/private scopes, commands and environments. These editor inspections do not edit notebooks or execute tasks, kernels or tests; the separate `task` tool requires concrete command approval.
-
-`notebook_edit` replaces one saved `nbformat: 4` `.ipynb` cell source through the durable serialized-text journal. Supply `path`, a 1-based `cell`, exact `expectedSource` from a fresh read, and replacement `source`. It supports strict unambiguous UTF-8 JSON up to 1 MiB, at most 1000 cells and bounded structure. Structural JSON editing preserves other serialized values, including high-precision numeric metadata, IDs, outputs and execution counts; existing outputs may be stale and are never presented as newly executed. Dirty notebook/text buffers, stale sources/files, outside/private/alias paths and unchanged sources are refused. Keep/Discard reviews serialized text, not a notebook-aware cell diff; persisted review and live cell refresh are tested with the isolated fixture serializer. This does not certify every Jupyter/provider serializer. No kernel selection/execution, output clearing, cell insertion/deletion or external effects are authorized. Stop cancels pending capture or unapplied durable intent; interrupted changes remain reviewable. Generic serialized-file mutation also refuses dirty open notebooks.
-
-[PARITY.md](PARITY.md) maps the broader Local Chat tool surface, missing and unconfirmed functionality, evidence levels, implementation order and bounded real-conversation program. Direct Playwright execution is not native browser-tab sharing; the latter remains unimplemented.
-
-The `read` tool admits regular files and directories throughout the selected workspace tree, without an extension allowlist or the mutation-size limit. Native selectors such as `src/file.ts:50-100` and `:raw` are supported. Canonical outside-workspace targets, including directories and symlink escapes, request one-time host approval rather than blanket rejection. Private extension control storage, device/special files and non-filesystem URI reads remain blocked. Native format/output limits still apply; broad read access does not broaden write/edit permissions or sandbox shell commands.
-
-Shell policy evaluates the actual executable, arguments, working directory and explicit environment. When confirmation is needed, the inline command card shows those values; Allow Once never saves a grant. **Approval and execution have no timeout by default.** Stop, root/trust change, disconnect and disposal still cancel owned work. Foreground `run` accepts ordinary nullable/default fields, an in-workspace `cwd`, and an optional positive timeout up to 120 seconds that starts after approval. Omitted, null or zero timeout means no execution deadline. Output limits, command permissions, process limits and cleanup remain enforced.
-
-For a preview server, use `action: "start"` with the foreground server command, then `action: "output"`/`"stop"` with the returned opaque `jobId`. Output waits accept `waitMs` up to 10,000. Managed jobs have no execution deadline but belong to the current prompt: completion, Stop or disconnect terminates them. They are not persistent workspace services. Four retained/pending commands and bounded output remain enforced. Do not background/detach with `&`, `nohup` or `setsid`; unmediated service/async routes and direnv/auto-background remain disabled. `runtime: "node"` treats `command` as JavaScript ESM source and uses the host Node 20+ runtime for Playwright instead of assuming shell `node` is compatible. It does not install Playwright or a browser. Capability instructions distinguish local file/image reads and independently owned browsing from unavailable URI reads and existing-tab sharing, and suggest `grep`/`find` when `rg` is absent.
-
-**Integrated terminals (current source, not the cycle-fourteen archive):** `pty: true` selects an owned real PTY; omitted/false preserves pipes. Independently choose `action: "run"` or `"start"`, and `visibility: "hidden"`, `"background"` or `"foreground"`. Background creates a named `OMP` terminal without opening the panel. The chat's OMP Terminals action offers exact-owned Reveal, Take Over and Stop; tool actions `reveal`/`takeover` use the owned `jobId`. This uses public VS Code pseudoterminals with a pinned independently owned process, not private Local terminal services or existing user-terminal sharing.
-
-Take Over reveals the terminal and enables direct human input only after permanently withholding that execution's model-visible capture. Enter sensitive values only in that terminal, never chat or tool arguments. **Resume Agent** and real process completion jointly release the hold; Resume alone is not success, and early confirmation still waits. Cancel, dismissal, Stop and close reject the hold; a rejected hand-back stays rejected for late waits. Capture does not reopen/backfill and scrollback is not erased. A fresh command is needed for captured output. Public display output is capped at 1 MiB. [T-04](TODO.md#t-04-acceptance-shared-integrated-terminals) has bounded local source/native/visual acceptance and separate frozen cycle-sixteen genuine-model acceptance. Wider hosts/manual assistive technology and real authentication are not certified.
-
-**Managed completion holds (current source, not the cycle-fourteen archive):** after `action: "start"`, use `action: "wait"` with its `jobId` to await final bounded output/status without repeated queries or a deadline. Other permitted work may happen before the hold. `wait` accepts no `waitMs` or timeout; Stop/disconnect cancels it. Completed handles retain their slot until `action: "stop"` or prompt cleanup, so late waits return retained results. Completion waits honor takeover hand-back. This is a pending tool result, not a desktop toast or automatic post-turn wake-up. Cross-turn services remain absent; bounded frozen cycle-sixteen wait/takeover acceptance is separately recorded.
-
-Commands run with host permissions, not in a sandbox. They can change unenumerated files or external state, and those effects are not covered by Keep/Discard or conversation rewind. Deliberately detached processes cannot be contained by process-group cleanup.
-
-Command approvals appear within the scrolling conversation, outside collapsible activity, not inside the composer or under Changed Files. Outside-workspace file approvals remain docked after Queued Prompts, Todos and Changed Files, outside their shared scroller. Exact command details and full proposed file diffs remain read-only and scrollable; expansion stays inline. Host-owned opaque IDs bind consent to the current operation, and Stop, stale replies, reload or disposal cannot grant it. The command menu only opens the existing global-user rule settings. No folder/session/workspace/Always Allow grants, command editing, model-backed Explain or inspector/pop-out are added. The stronger Allow All and YOLO elevation warnings remain native modals; Source Control guidance remains in command details.
-
-## Review, Tasks and Context
-
-Chat review stays file-level with +/- counts and per-file/bulk Keep/Discard. Selecting a file opens one full-file view with added green lines, removed red lines in place, and floating Keep/Undo controls. This is an OMP-owned readonly Monaco custom editor using stable VS Code APIs, not a comparison popup or Local's private ordinary-editor widget. It needs no diff/CodeLens settings overrides. Keep advances only that accepted baseline; Undo restores only that pending hunk, preserving accepted text and exact line endings. Stale, busy, conflicting and retired owners cannot mutate through the controls. Creation/deletion/rename retain whole-operation review. After final resolution, an existing file returns to the ordinary editor; a deleted file's review closes. History retains real turn/tool provenance where known; historical prompt editing and forks do not roll workspace files back.
-
-Todos show the latest turn's structured plan immediately above Changed Files in the composer dock, in provider order, with pending/in-progress/completed states. They are read-only. Queued Prompts is a separate, matching disclosure above Todos: it contains future user prompts, not the agent's task plan. All three sections use compact headers and a shared scrolling stack above the fixed composer. Plan entries persist with the transcript; Todos and Queued Prompts collapse state is remembered per session. A new turn without a plan clears the active list rather than showing stale tasks. Historical plans remain in their activity.
-
-Use **Add Context** for an explicit editor/selection, files, images, chosen open text resources or workspace problems. With no range selected, **Active Editor or Selection** captures the explicitly chosen whole editor, including unsaved text. Nothing automatically attaches unrelated tabs. Inspect a chip to open its immutable snapshot; remove it with its close button. Limits are eight snapshots, 64 KB UTF-8 per text snapshot and 128 KB total text. Problems include the first 200 workspace diagnostics, with an explicit count. Unsent snapshots are session-bound and transient; submitted snapshots persist with the turn and are reused by history edits/forks rather than rereading the editor.
-
-**Images...** explicitly selects regular PNG/JPEG/WebP on the workspace host, at most 512 KiB each/1 MiB aggregate. Captured bytes, not paths/base64 prose, are actual ACP image blocks. An image-capable model is required; OMP may normalize/resize them. SVG/HTML/GIF/remote URLs/foreign hosts are refused. Preview uses immutable read-only virtual files, never rereads originals or writes images to disk; eight handles/1 MiB remain until eviction/disposal. Removing a draft chip does not close an existing preview. Explicit JPEG/WebP pixel understanding passes separately on `github-copilot/gpt-6-luna` after source deletion, with zero tools; this does not certify other models, every decoder, OS-picker automation or automatic unattached older-image follow-up. The retained prior-image failure remains failed; explicit replay/resubmission is not its fix.
-
-Production instruction capture is root-only and bounded; the [six-format compatibility matrix](PARITY.md#instruction-compatibility) separates pinned raw OMP discovery from host policy. Automatic nested/user/rule/skill/template integrations remain unavailable and cannot broaden tool authority. Editor-only text still requires explicit attachment; historical context retains original snapshots rather than rereading current files.
-
-During a running prompt, **Queue Follow-up** (or Enter) queues the draft separately from **Stop**. Up to five prompts/512 KB of serialized queue data are held in memory for the active session, including captured attachment snapshots. Prompts run FIFO only after the previous prompt's tool/history/storage cleanup finishes. Remove pending items individually or clear the queue. Failure pauses remaining items until **Resume Follow-ups**; Stop clears pending items. New/switch/reconnect, history changes, disconnect and shutdown clear the queue. It is not restored or automatically sent after reload. This is extension-owned serialization, not in-flight ACP steering or Autopilot.
-
-Keyboard focus and text selections survive streaming renders; removed/disabled controls return focus to the composer. Stable live regions announce operation/task/queue/review/error changes, not every streamed token. Review, queue and attachment lists are bounded and scroll within short sidebars. Local browser acceptance covers dark/light/high-contrast themes and narrow/wide layouts; this is not exhaustive assistive-technology certification or full populated Copilot pixel parity.
-
-## Command Permissions
-
-Use the **Rules / Ask / Allow All** menu beside **Memory** in the bottom status bar while the session is idle. Stop an active turn before changing modes.
-
-- **Command Rules** is the default. Supported literal read-only commands (`pwd`, `ls`, `cat`, `head`, `tail`, `wc`, `grep`, constrained `rg`/`find`, and a small `git status` option set) can run automatically. Every part of a supported pipeline or chain must qualify. Other commands, including builds, tests and Blender, prompt unless a user rule permits them.
-- **Ask Every Time** prompts for every command except an explicit deny, which blocks it.
-- **Allow All Except Restrictions** requires a warning confirmation and permits unmatched ordinary commands. Explicit deny/ask rules and built-in sensitive-command prompts still apply. It resets on new sessions, session switches, forks, reconnects and window restarts, and can be revoked in the same menu.
-- **YOLO Commands** requires its own **Enable YOLO** warning confirmation, including when switching from Allow All. It auto-approves commands, shell substitutions, redirections, loops, environment overrides and project operations such as `rm -rf dist` or `git reset --hard`. Recognizable literal user deny/ask rules still apply. A non-overridable, small built-in denylist blocks formatting/partitioning/wiping tools, raw-disk writes, power-control commands, recognizable fork bombs and recursive removal of the current tree, root, home or major system directories. This is best-effort static matching, not a sandbox: scripts, variables, interpreters and obfuscation can hide destructive actions. Commands can delete data or send credentials; Keep/Undo does not undo their effects. File-tool approval/review, URL/browser consent, Stop, output/process limits and prompt ownership remain unchanged. YOLO has the same reset/revocation lifecycle as Allow All and cannot be saved as a default. Late confirmations after a reset or newer picker are discarded.
-
-Choose **Edit User Command Rules** to configure `omp.permissions.commandRules` in user settings. Only user-owned execution-host settings are read; workspace/folder overrides cannot grant approval. Copilot settings and OMP pattern rules are not imported.
-
-```json
-{
-  "omp.permissions.defaultMode": "rules",
-  "omp.permissions.useDefaultRules": true,
-  "omp.permissions.commandRules": [
-    { "command": ["npm", "test"], "action": "allow", "match": "exact" },
-    { "command": ["git", "push"], "action": "ask" },
-    { "command": ["git", "push", "--force"], "action": "deny" }
-  ]
-}
-```
-
-Rules match case-sensitive literal argument arrays, not substrings, regular expressions or shell globs. `prefix` is the default match; `exact` also requires the same argument count. Known `/bin` and `/usr/bin` executable paths normalize to their command name. Deny wins over ask, and ask wins over allow, regardless of rule order. Explicit allows can override built-in sensitive-command prompts, so prefer exact rules for commands that can execute other programs. Malformed rules disable execution until fixed. The conservative built-in rules can be disabled through the user-only setting; this does not disable explicit restrictions, conservative-mode syntax checks or the YOLO denylist.
-
-In Command Rules, Ask and Allow All, substitutions, redirections, globs, incomplete quotes, control characters, unsupported wrappers/shell forms and non-metadata environment overrides still require confirmation, even under a matching allow rule. YOLO intentionally skips those conservative prompts. The supported OMP Bash wrappers include its actual `-l`, `-c`, command argument form. Sensitive defaults include deletion/permission/process/remote commands, `find` execution/write options, `rg` preprocessors and non-status Git commands. The policy is a convenience, not a security boundary: executable behavior, scripts, aliases/configuration and obfuscation are not sandboxed. A deny matches recognized command invocations, not every equivalent operation hidden in a program. Outside-workspace file-tool approval remains unchanged; shell commands are not confined by that file-tool boundary.
-
-This follows the distinctions in [VS Code's approval documentation](https://code.visualstudio.com/docs/agents/run/approvals) and [security guidance](https://code.visualstudio.com/docs/agents/run/security): auto-approval is separate from tool availability and sandboxing. VS Code's negative terminal approval rule means prompt rather than block. OMP exposes explicit allow/prompt/deny outcomes; this host policy retains literal argument matching instead of copying an upstream wildcard list. YOLO is connection-scoped command auto-approval, not global VS Code auto-approval or Autopilot continuation. It does not automatically answer questions, enable unavailable tools, install a model judge or add an OS sandbox. No VS Code Copilot approval settings are changed.
-
-Native delete/move require exact preimages, clean source buffers and absent move destinations. A move has one paired review record and must be resolved before either path can be edited again. Multi-file calls are not atomic: completed or interrupted operations remain reviewable if a later operation fails. Discard refuses newer user/external content. See the [tool-expansion inventory](TODO.md).
-
-Context figures come from ACP usage updates, normally after a model turn. Unreported values are not estimated. Following compaction or a model switch, the meter marks its previous figures as stale until a new usage update arrives. Detailed `/context` reports can include additional OMP-specific breakdowns. Compaction uses OMP's configured summarization behavior and can consume model requests; it refuses sessions that are too small. Both session commands are disabled during an active turn. Bulk Undo stops rather than overwriting a file with newer user/external changes.
-
-History actions are **conversation-only**. Edit and Continue archives the original conversation, selects native history immediately before the edited prompt, and submits its replacement with the original attachment snapshot. Fork Before excludes that prompt and prefills it in the new session; Fork After includes the completed answer and paired tool history. Actions appear only for turns with verified native boundaries, so older unmapped turns remain read-only. Cancel does not contact the agent. Failed edit submissions retain their draft.
-
-History operations leave files, unsaved buffers, pending review records, and review ownership unchanged. All sessions still share the current workspace and long-lived memory. In particular, recalled memory can contain facts from an abandoned branch: this is not complete forgetting or a machine-state checkpoint. Subsequent model-driven writes retain the normal approval/review safeguards. Native local checks prove generated populated-session compaction, summary-only future-context exclusion/retention, identical-prompt identities, interrupted turns and hook refusal. Nine deterministic interruptions and twelve real extension-host/OMP SIGKILL cases prove conservative reopening without automatic replacement replay, including an actual unsaved editor. Ambiguous transitions refuse continuation and retain the archived original.
-
-The extension is configured to run on the workspace host in Remote-SSH, but **Remote-SSH has not been tested** and is deferred by request. Install/authenticate OMP separately there; local credentials and memory are never copied. Multi-root changes, other host platforms, power-loss durability and live Copilot screenshot parity remain validation work. The completed [local fault matrix](QUALITY.md#todo-4-fault-matrix) is not a claim about every possible combined failure.
-
-## Storage and Data Flow
-
-Prompts, explicitly selected editor/file/image/resource/diagnostic snapshots, approved file/web reads, and tool results go through OMP to the selected GitHub Copilot model using OMP's own login. OMP also loads its configured on-disk instructions. The extension does not obtain VS Code's Copilot tokens. There is no extension telemetry.
-
-Session transcripts, archives, submitted attachment snapshots and before/after review snapshots live in private extension workspace storage on the execution host, with global-storage fallback when workspace storage is unavailable. The state file is written atomically with mode `0600`; its directory is created with `0700`. OMP session artifacts live beneath that directory. A guarded private command exchanges bounded history metadata through temporary `0600` files, without a model request or arbitrary session paths. Treat this storage as potentially sensitive source code; private modes are not encryption or a sandbox against other programs running as the same user.
-
-Run **OMP: Inspect Storage** for a fresh read-only JSON report. It measures the current in-memory state's serialized UTF-8 bytes, session/turn counts, logical attachment text, decoded attachment-image bytes and all retained review-image text. Submitted images persist as base64 in private state and are included in session exports; they can contain sensitive pixels or embedded metadata. Per-session metadata includes the last recorded turn activity, native-file references and protection reasons: active/running work, pending-review ownership, or an unfinished history transition and its recovery archive. Missing protected session references are reported, not classified as disposable orphans. Legacy attachment aliases are counted once logically, while serialized byte totals include their actual duplicate storage.
-
-Inspection additionally measures regular native JSONL artifact bytes and ownership. It is not total disk usage: temporary exchange files, mutation envelopes, logs and OMP's separate memory database are not included. In-flight changes may not yet be committed. Reports omit transcript/snapshot bodies, but labels, filenames and the host storage path can still be sensitive. Inspection never deletes data or starts OMP.
-
-Storage commands run only while the host is idle and never invoke inference:
-
-- **OMP: Export Session** writes a new-only, private `0600` JSON file containing the selected transcript, submitted snapshots, review images and discoverable native history. It discloses sensitive contents before confirmation. This is inspection/export data, **not an importable or resumable backup**; `restoreSupported` is false. Existing destinations and symlinks are refused.
-- **OMP: Delete Session** offers only unprotected sessions and confirms irreversible removal. State is committed before native artifacts are unlinked; shared/referenced artifacts remain. Active/running sessions, every review owner and both sides of unfinished recovery are protected. Stale selections and missing protected references refuse deletion.
-- **OMP: Apply Retention Plan** proposes oldest eligible sessions after 30 inactive days or under state-size pressure. It requires confirmation, processes at most 128 sessions/artifacts per batch and does not run automatically. Unknown-age sessions require deliberate individual deletion. Archives and submitted snapshots share their owning session's lifetime; review/recovery data never expires while protected.
-- **OMP: Clean Orphaned Storage** confirms up to 128 unreferenced native JSONL artifacts older than 30 days. It refuses ambiguous populated legacy ownership, missing protected references and unfinished recovery, and rechecks age, references and file identity. Reconnect legacy sessions to establish native mappings first. Unknown files, symlinks, directories, memory and workspace files are never swept.
-
-The host-state growth budget is 64 MiB. Oversized legacy state may load and shrink but cannot grow further. Native sessions have a 32 MiB pre-prompt admission/export limit; an individual native operation can cross that threshold, so this is not an OS disk quota. Existing history is retained and another prompt is refused before provider dispatch. Exports are bounded to 128 MiB including escaped payloads; inventory scans stop at 4,096 directory entries. Protected or unknown-age data may keep usage above a planning target; it is never silently evicted. Unsent snapshots retain the eight-item limit, separate text/image byte limits above, remain transient, and are cleared with their deleted owner. The 512 KB serialized follow-up queue limit includes base64 image data and may refuse an image that fits the direct-prompt limit. Remembered sidebar drafts are pruned from authoritative saved-session membership, including after reopening.
-
-Persistence failures retain the previous committed state and allow explicit repaired retry. A later artifact-cleanup failure reports that session deletion already committed and leaves remaining artifacts for inspection and eligible orphan cleanup. Failed exports remove their partial new file when it is still the created file; no existing export is overwritten. Deletion is not secure erasure and does not remove independent exports, external backups, OMP memory or shell side effects. See the [storage and compatibility gates](QUALITY.md#todo-5-storage-and-retention) before changing these limits or widening support.
-
-Supported existing `local`/`mnemopi` memory configuration is reused. An `off` backend is overridden only for extension-managed sessions with per-project Mnemopi, full-text-only retrieval, and `llmMode: none`. The default performs no remote memory-service calls or model-backed extraction. Existing supported backend settings can have their own OMP data flow. Remote memory backends are refused. User OMP configuration is not rewritten. OMP manages its memory files in its configured host-side storage, independently of the review journal.
-
-## Develop
-
-Development installation and tests require **Node 24.11+**, preferably Node 24 LTS (`nvm use`). See [Repository Quality Gates](QUALITY.md) for enforced limits, coverage debt, architecture contracts and baseline-review policy. The extension runtime is unchanged; the compiler can still execute under Node 18 against an already installed dependency tree, but the complete DOM-enabled test suite requires Node 24.11+.
-
-```sh
-npm ci
-npm run check
-npm test
-npm run check:release
-npm run spike:handshake
-npm run spike:mutations
-npm run package
-```
-
-Press F5 to launch the development extension, then open a test workspace in that window. `test:extension` uses the installed Linux VS Code executable; set `VSCODE_EXECUTABLE` for another location. It creates isolated user data/workspace directories and does not change the current window's settings or authentication. History tests load a local fixture provider into the actual OMP process and use an enabled disposable Mnemopi database; they do not make paid model requests. The fixture and test-only control API are unavailable in ordinary extension mode.
-
-`npm test` currently runs 530 deterministic protocol, policy, review, state, history, host, workspace, terminal-backend, editor-service, notebook-image/review, image-attachment, question, owned-browser, semantic-rename, provider-action, owned-task, consented-web and Webview checks. `npm run check` adds 54 quality-tool/release/live-budget tests and metric/architecture gates. Production line coverage is at least 99%; all 14 TODO #5 metric exception entries are retired, with no raised limits or lowered floors. `check:native` and `check:release` additionally require real owned-browser form/history/console/PNG/Stop checks, native notebook/task/image inspection, immutable image preview/ACP transport/removal/deleted-source historical replay across process restart, reviewed notebook source edits with live refresh/persisted Discard/dirty-cell refusal, owned Tasks UI execution/failure/cancellation, consented web redirects/refusal/Stop with mixed task-fixture preflight, and installed TypeScript cross-file rename/import organization with durable-review recovery/Discard, alongside four raw-ACP terminal probes, nine integrated workbench approval/lifecycle cases, native question controls, permission-mode/rule acceptance, 15 native-parser cases, twelve hard-crash/reopen stages and history/attachment/restart tests. Production-extension checks also cover nested/arbitrary-extension reads, selectors and a selected line beyond 1 MiB, opaque provider tool IDs, nullable/default bash inputs, unsaved reads, review, historical replay, instruction discovery, queues and compaction. These tests use scripted model output and make no inference requests.
-
-The crash suite installs only a test companion in a fresh normal-workbench profile, blocks at a real production boundary, and lets an external controller SIGKILL the host and OMP without running cleanup. The renderer retains the dirty editor; recovery runs in a new extension-host process. `reports/history-crashes.json` records all twelve stages. This companion and its observers are excluded from the VSIX, and required gates cannot inherit a narrowed manual stage filter.
-
-Native approval checks use pinned `playwright-core` against the production Webview inside installed VS Code, without downloading a browser. Its unmodified runtime is also packaged for the owned-browser tool, with an exact 116-file SHA-256 inventory; no browser binary or user profile is packaged. A test-only companion runs in a separate disposable development window because VS Code suppresses the retained elevation dialog under its normal extension-test flag. Only that temporary window exposes a dynamic loopback debugging port; screenshots stay under `reports/native-dialogs/`. The companion/automation are excluded from the VSIX. Tests preserve dirty buffers/review and do not change this window's settings or run paid inference.
-
-Native source checks copy the package-shaped production files into a temporary directory without workspace `node_modules`, so development dependencies cannot hide runtime resolution failures. `VS_OMP_VSIX=reports/release/vs-omp-0.0.2-linux-x64.vsix npm run test:extension` instead checks an extracted private package using system `unzip`. An ignored local 0.0.2 rehearsal VSIX passed strict archive inspection, extracted-package native tests, clean-profile installation and an isolated update from the older 0.0.1 development VSIX. This uncommitted-source rehearsal is not an approved release candidate or rollback certification. The [release acceptance command](RELEASE.md#operator-commands) additionally enforces clean-commit identity, audit and exact-artifact checks.
-
-`OMP_SPIKE_PROMPT=1 npm run spike:handshake` makes a tiny real Copilot request. `spike:mutations` also uses the authenticated model and writes only disposable test targets. These commands consume model requests. `OMP_EXECUTABLE` selects another OMP binary for the mutation spike.
-
-### Live Model Acceptance
-
-Run the separate live lane for model/tool changes before claiming ordinary-conversation or replacement-VSIX acceptance:
-
-```sh
-VS_OMP_LIVE_TESTS=1 VS_OMP_LIVE_MODEL=github-copilot/gpt-6-luna \
-  VS_OMP_LIVE_REQUESTS=20 npm run test:live
-```
-
-This uses real authenticated Copilot responses through the production extension in disposable VS Code/workspace/memory storage. It checks a natural repository readout, two-turn edits and Discard, actual shell approval refusal, and Stop during a real request followed by recovery. Set `VS_OMP_LIVE_CASE=outside` for the focused outside-directory/file approval and fresh-refusal test, `readout` for an economical exact-model canary, or `shell` for command-refusal diagnosis. `VS_OMP_VSIX` selects the exact extracted package instead of package-shaped source files. Existing local OMP authentication is reused, not copied into test profiles or reports.
-
-`VS_OMP_LIVE_CASE=browser` separately checks a managed preview server, an approval delayed beyond the requested startup timeout, host-Node Playwright, actual mobile/desktop control interaction, PNG delivery to the model, and cleanup. It allows only two supplied fixture scripts, uses an ephemeral loopback port and an isolated headless browser, and never touches an existing preview. The installed browser defaults to `/opt/brave.com/brave/brave`; set `VS_OMP_LIVE_BROWSER_PATH` for another compatible executable. Screenshots remain in the private live report directory. This acceptance does not prove persistent services, arbitrary websites or another platform.
-
-`VS_OMP_LIVE_CASE=questions` runs six genuine-model turns combining literal/unsaved search, single/multiple/free-text answers, dismissal, Stop and fresh-state recovery. A test-only driver operates actual native controls through an isolated dynamic loopback debugging port; it does not replace the UI or model provider. Free-text-only requests use `options: null`, avoiding invented placeholder choices in strict model schemas.
-
-`VS_OMP_LIVE_CASE=owned-browser` checks generated browser-tool calls against a disposable loopback form: unique saved text, mobile/desktop PNG results delivered to the real model, console inspection, close and a second-turn empty-page check. The test only approves its exact fixture URL/inputs/selectors/viewports and makes no shell/script calls. This is independently owned browsing, not existing integrated-tab sharing.
-
-`VS_OMP_LIVE_CASE=browser-session` checks five turns of retained form state and an actual image across prompts, owner-triggered browser revocation, fresh state and idle Stop cleanup. Only browser calls are allowed. Its shared zero-inference native fixture also checks stale IDs, changed owners, in-flight Stop and an untouched separate disposable control page. Existing user tabs/profiles are never inspected.
-
-`VS_OMP_LIVE_CASE=workspace-symbols` checks public-provider discovery without a supplied file path, reference navigation, fresh implementation text after a fixture change and an honestly qualified empty-provider result. Only editor/read calls are allowed; multipliers are absent from prompts and the observer must contain both actual source reads. Installed TypeScript acceptance is separate from semantic search or other-provider certification.
-
-`VS_OMP_LIVE_CASE=notebook-review` checks five turns of current cell/output inspection, one saved-format source edit, durable review, exact Discard/fresh inspection, reapplication, Keep and a final fresh read. Only `editor notebook` and `notebook_edit` calls are allowed. Metadata and existing outputs must survive; no kernel is executed, and retained outputs are not fresh execution evidence. The isolated fixture serializer does not certify every Jupyter/provider implementation.
-
-`VS_OMP_LIVE_CASE=image-context` checks four generations with mixed image/text snapshots: remove a second chart before send, read the first pixel-only identifier, send a distinct chart/reference, edit the original prompt using original snapshots after source deletion, then reopen and edit/resubmit that historical prompt from persisted snapshots. No model tools are allowed. It does not certify that an unattached new question can make every provider revisit pixels in older history; that stronger cycle-thirteen assertion failed and is retained, not relabeled as passing. Native transport separately requires byte-exact PNG provider delivery and bounded rendered chart dimensions/colors; tiny images may be normalized differently by OMP. The observer retains cumulative request/tool budgets across process restarts and refuses corrupt or changed-budget reports.
-
-`VS_OMP_LIVE_CASE=rename` checks four genuine-model turns: reference discovery, provider-backed cross-file rename while preserving a shadowed local identifier, Discard and fresh reads, then another semantic rename with Keep. Only `read`, `editor` and `rename` calls are permitted by the checker; no shell or manual text replacement. This does not certify arbitrary refactorings or provider file operations.
-
-`VS_OMP_LIVE_CASE=notebook-images` checks three genuine-model turns: notebook output-index discovery and two separately requested PNG outputs with different charts and pixel-only identifiers absent from the prompts and cell text. The model must read each identifier and compare the bars. Only `editor` calls are permitted; no shell, notebook mutation or kernel execution. Fixtures are prepared in an independently owned headless browser, which closes before inference; screenshots remain private.
-
-`VS_OMP_LIVE_CASE=tasks` checks six genuine-model turns combining task metadata discovery, a real failing assertion, reviewed source repair, successful rerun, Discard and fresh failure, Stop of an actual waiting task process and fresh recovery. Only its two exact fixture commands can be approved; no shell tool, detached work or automatic retries. A zero-inference preflight first proves the fixture's failure/pass/restored-failure sequence. Native execution and model acceptance remain distinct from Test Explorer parity.
-
-`VS_OMP_LIVE_CASE=web-tasks` checks seven genuine-model turns combining a redirected policy GET, task metadata and an actual failing assertion, reviewed repair and successful rerun, Discard and fresh policy/source data, refused redirect consent, Stop of a stalled HTTP stream and fresh task/web recovery. Only exact fixture URLs and task commands can be approved; the refused destination must never be contacted. Policy identifiers change between reads and are absent from prompts. Native preflight proves the fixture without inference first. This does not certify external sites, authenticated requests or a network sandbox.
-
-`VS_OMP_LIVE_CASE=code-actions` checks five genuine-model turns using the installed TypeScript provider: read/list action metadata, organize imports through reviewed text-only application, Discard and fresh discovery, apply again with Keep, then reread and report no remaining text change. Only `read` and `code_action` are permitted; no shell, manual edits or provider-command execution. Native preflight uses the same fixture and proves post-organization no-change metadata before inference.
-
-Defaults are 16 requests, 32 tool calls, 2,048 output tokens/request and 90 seconds/prompt; explicit ceilings are 20/48/4,096/180 through `VS_OMP_LIVE_REQUESTS`, `VS_OMP_LIVE_TOOLS`, `VS_OMP_LIVE_TOKENS` and `VS_OMP_LIVE_SECONDS`. The test-only wrapper independently kills its owned OMP process group after six prompt deadlines. Unknown models/cases/payload APIs and exhausted limits fail rather than silently falling back or retrying the suite. This bounds requests, not actual Copilot billing; provider token-cost estimates and premium-request usage are not an account invoice. Reports stay private and ignored under `reports/live/`, with hashed tool IDs and no auth headers. Disposable directories are not an OS sandbox, and commands retain normal host approval rules. Live checks are never enabled by `check`, `check:native`, `check:release` or hosted CI.
-
-For a native rendering reference, build and run `VS_OMP_REFERENCE_CHAT=<private-chat-record> node scripts/chat-reference.mjs`. It explicitly selects the Local harness, registers a recorded-only test participant/tool and a selectable fixture model that throws on every response request. The six-turn native comparison asserts zero model-response calls and stores labelled screenshots/control inventory in private reports. This companion is excluded from the VSIX and is not a model substitute in live tests or native browser-sharing proof. Chat Participant APIs are deprecated for Copilot and remain Local-only compatibility APIs on the pinned version.
-
-`OMP_SPIKE_CONTEXT=1 npm run spike:handshake` verifies that the installed OMP advertises and handles `/context` and `/compact` in a disposable empty session. The empty-session compaction refusal is expected.
-
-`OMP_SPIKE_HISTORY=1 OMP_SPIKE_PROMPT=0 OMP_SPIKE_CONTEXT=0 node scripts/acp-spike.mjs` checks side-effect-free native history inspection, distinct fork identity, continued original access, historical navigation, excluded future conversation messages, and an unchanged protected file. It uses the local fixture provider with isolated enabled memory, without paid model requests. It does not test workspace rollback.
-
-`OMP_SPIKE_TERMINALS=1 OMP_SPIKE_PROMPT=0 OMP_SPIKE_CONTEXT=0 node scripts/acp-spike.mjs` uses test-only terminal capability and the real backend in a disposable workspace. It checks host rejection, successful output/exit/release, ACP permission rejection, and Stop during pending approval with a harmless late allow. It uses no paid inference; production capabilities and guard policy are unchanged.
-
-`OMP_SPIKE_TOOLS=1 OMP_SPIKE_PROMPT=0 OMP_SPIKE_CONTEXT=0 node scripts/acp-spike.mjs` exercises the installed native edit engine without paid inference: ranges, insertion, block editing, named/anonymous/persistent registers, multi-file edits, delete, edited/spaced rename, and stale/malformed/private-path refusals. Parser callbacks never mutate files; a private prompt-scoped broker submits captured changes to the host journal and waits for acknowledgement.
-
-`VS_OMP_LIVE_CASE=editor` runs a six-turn conversation using an actual TypeScript language provider: file discovery, diagnostics, symbols, definitions/references, repair, an allowlisted host-Node runtime check, Discard, fresh reread and restored diagnostics. It retains all existing request/tool limits. Successful cases additionally save bounded `.chat.json` records without thought blocks. These are private replay inputs, not resumable sessions or native Local Chat functional proof.
-
-For UI-only inspection, run `node scripts/preview.mjs` and open `http://127.0.0.1:5174`. This fixture reuses the built production assets with mocked host messages; it does not run an agent. `PORT` selects another loopback port. To inspect an actual completed test conversation, set `VS_OMP_PREVIEW_CHAT=reports/live/<run>/observer.json.chat.json` and choose an unused `PORT`. Replay is read-only, bounded and HTML-script safe. The native Local Chat/browser-sharing comparison remains separately tracked in [PARITY.md](PARITY.md).
-
-On Linux, packaging can use VS Code's bundled Node 24 when the shell's Node is older:
-
-```sh
-ELECTRON_RUN_AS_NODE=1 /usr/share/code/code node_modules/@vscode/vsce/vsce package --no-dependencies --no-rewrite-relative-links
-```
-
-The scoped `minimatch` override patches a separate packager advisory. The earlier picomatch advisory was withdrawn upstream; fresh full and production audits are clean, with mandatory audit gates unchanged. See [QUALITY.md](QUALITY.md#toolchain-assessment) for the assessment. VSIX packaging includes project and third-party licenses and omits development dependencies, tests, research fixtures, source maps, and the OMP executable.
+Linewise is independent of Microsoft, GitHub, and Oh My Pi's maintainers. Comparison does not imply endorsement or complete Local/Copilot parity.

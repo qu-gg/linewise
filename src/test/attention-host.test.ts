@@ -38,7 +38,7 @@ test('native notification actions focus the exact pending request without decidi
   state.approval = { id: 'approval' };
   chat.publish();
   await tick();
-  assert.deepEqual(shown, [['OMP: Need approval', 'Review Approval']]);
+  assert.deepEqual(shown, [['Linewise: Need approval', 'Review Approval']]);
   assert.deepEqual(state.approval, { id: 'approval' });
   assert.equal(fixture.commandCalls.filter((call) => call.id === 'omp.chat.focus').length, 1);
   assert.ok(
@@ -52,7 +52,7 @@ test('native notification actions focus the exact pending request without decidi
   state.question = { id: 'question' };
   chat.publish();
   await tick();
-  assert.deepEqual(shown[1], ['OMP: Has questions', 'Answer Questions']);
+  assert.deepEqual(shown[1], ['Linewise: Has questions', 'Answer Questions']);
   state.question = undefined;
   state.turns = [{ id: 'turn', status: 'running' }];
   state.busy = true;
@@ -61,7 +61,7 @@ test('native notification actions focus the exact pending request without decidi
   state.busy = false;
   chat.publish();
   await tick();
-  assert.deepEqual(shown[2], ['OMP: Session finished', 'Open Session']);
+  assert.deepEqual(shown[2], ['Linewise: Session finished', 'Open Session']);
   chat.dispose();
 });
 

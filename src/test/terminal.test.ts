@@ -64,13 +64,29 @@ function marker(cwd: string): Promise<{ parent: number; child: number }> {
   });
 }
 
-async function notRunning(pid: number): Promise<void> {
+async function notRunning(
+  pid: number,
+  readStatus: (file: string, encoding: 'utf8') => Promise<string> = readFile,
+): Promise<void> {
   try {
-    assert.match(await readFile(`/proc/${pid}/stat`, 'utf8'), /\) [ZX] /);
+    assert.match(await readStatus(`/proc/${pid}/stat`, 'utf8'), /\) [ZX] /);
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    if (!['ENOENT', 'ESRCH'].includes((error as NodeJS.ErrnoException).code ?? '')) throw error;
   }
 }
+
+test('process liveness accepts disappearing proc entries but rejects other errors and live processes', async () => {
+  const readError = (code: string) => () => Promise.reject(Object.assign(new Error(), { code }));
+  for (const code of ['ENOENT', 'ESRCH']) {
+    await notRunning(123, readError(code));
+  }
+  await assert.rejects(notRunning(123, readError('EACCES')), { code: 'EACCES' });
+  await assert.rejects(
+    notRunning(123, async () => '123 (fixture) S 0'),
+    assert.AssertionError,
+  );
+  await notRunning(123, async () => '123 (fixture) Z 0');
+});
 
 test('approved terminal captures both streams, cwd, explicit environment and exit status', async (context) => {
   const cwd = await mkdtemp(path.join(os.tmpdir(), 'omp-terminal-'));

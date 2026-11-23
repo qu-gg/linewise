@@ -1,4 +1,4 @@
-name: Private Alpha Release
+name: Linewise Alpha Release
 
 on:
   workflow_dispatch:
@@ -8,6 +8,11 @@ on:
         type: choice
         options: [candidate, publish]
         default: candidate
+      visibility:
+        description: Expected repository visibility; public publication must be explicit
+        type: choice
+        options: [private, public]
+        default: private
       candidate_run:
         description: Successful candidate workflow run ID (publish only)
         type: string
@@ -15,7 +20,7 @@ on:
         description: Exact local release-acceptance JSON (publish only)
         type: string
       approve_publication:
-        description: Approve creating a private prerelease and version tag
+        description: Approve creating a prerelease and version tag at the selected visibility
         type: boolean
         default: false
 
@@ -24,12 +29,32 @@ permissions:
   actions: read
 
 concurrency:
-  group: private-alpha-release
+  group: linewise-alpha-release
   cancel-in-progress: false
 
 jobs:
+  authorize:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      allowed: ${{ steps.authority.outputs.allowed }}
+      private: ${{ steps.authority.outputs.private }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Check Maintainer And Destination
+        id: authority
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VISIBILITY: ${{ inputs.visibility }}
+        run: node scripts/release-run.mjs authorize
+
   candidate:
-    if: github.ref == 'refs/heads/main' && github.actor == github.repository_owner && inputs.phase == 'candidate'
+    needs: authorize
+    if: github.ref == 'refs/heads/main' && needs.authorize.outputs.allowed == 'true' && inputs.phase == 'candidate'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -41,12 +66,11 @@ jobs:
         with:
           node-version: 24
           cache: npm
-      - name: Verify Private Main
+      - name: Recheck Maintainer And Destination
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          test "$(gh api "repos/$GITHUB_REPOSITORY" --jq '.private')" = true
-          test "$(gh api "repos/$GITHUB_REPOSITORY/branches/main" --jq '.commit.sha')" = "$GITHUB_SHA"
+          RELEASE_VISIBILITY: ${{ inputs.visibility }}
+        run: node scripts/release-run.mjs authorize
       - run: npm ci
       - run: npm run check
       - name: Audit Locked Dependencies
@@ -71,12 +95,14 @@ jobs:
           retention-days: 14
 
   preflight:
-    if: github.ref == 'refs/heads/main' && github.actor == github.repository_owner && inputs.phase == 'publish' && inputs.approve_publication
+    needs: authorize
+    if: github.ref == 'refs/heads/main' && needs.authorize.outputs.allowed == 'true' && inputs.phase == 'publish' && inputs.approve_publication
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     outputs:
       tag: ${{ steps.identity.outputs.tag }}
       vsix: ${{ steps.identity.outputs.vsix }}
+      private: ${{ needs.authorize.outputs.private }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
@@ -87,11 +113,12 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - name: Verify Candidate Run And Owner Evidence
+      - name: Verify Candidate Run And Maintainer Evidence
         env:
           GH_TOKEN: ${{ github.token }}
           CANDIDATE_RUN: ${{ inputs.candidate_run }}
           ACCEPTANCE_JSON: ${{ inputs.acceptance }}
+          RELEASE_VISIBILITY: ${{ inputs.visibility }}
         run: |
           mkdir -p reports
           node scripts/release-run.mjs
@@ -127,12 +154,14 @@ jobs:
     needs: preflight
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    environment: linewise-release
     permissions:
       contents: write
       actions: read
     env:
       TAG: ${{ needs.preflight.outputs.tag }}
       VSIX: ${{ needs.preflight.outputs.vsix }}
+      EXPECTED_PRIVATE: ${{ needs.preflight.outputs.private }}
     steps:
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
@@ -142,7 +171,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          test "$(gh api "repos/$GITHUB_REPOSITORY" --jq '.private')" = true
+          test "$(gh api "repos/$GITHUB_REPOSITORY" --jq '.private')" = "$EXPECTED_PRIVATE"
           test "$(gh api "repos/$GITHUB_REPOSITORY/branches/main" --jq '.commit.sha')" = "$GITHUB_SHA"
           test "$(gh api "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/$TAG" --jq 'map(select(.ref == ("refs/tags/" + env.TAG))) | length')" = 0
           cd release
@@ -151,7 +180,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --draft --prerelease --title "OMP $TAG (local Linux alpha)" --notes-file release/release-notes.md "release/$VSIX" release/SHA256SUMS release/release-candidate.json release/release-notes.md release/release-acceptance.json
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --draft --prerelease --title "Linewise $TAG (local Linux alpha)" --notes-file release/release-notes.md "release/$VSIX" release/SHA256SUMS release/release-candidate.json release/release-notes.md release/release-acceptance.json
       - name: Verify Downloaded Bytes Then Publish Prerelease
         env:
           GH_TOKEN: ${{ github.token }}

@@ -48,7 +48,7 @@ function nativeMutation(context) {
 function requestedWrite(latest) {
   const fixtures = [
     {
-      marker: 'NATIVE_UX_INLINE_REVIEW_FIXTURE',
+      marker: 'Change Header: and Footer: to uppercase in review-sample.ts.',
       path: 'review-sample.ts',
       content: [
         "export function formatHeader(value = '') {",

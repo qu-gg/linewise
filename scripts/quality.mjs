@@ -18,6 +18,7 @@ export function run(script, args = [], env = process.env) {
 }
 
 const tasks = {
+  public: () => run('scripts/public-check.mjs'),
   lint: () => run('node_modules/eslint/bin/eslint.js', ['.', '--max-warnings', '0']),
   format: () => run('node_modules/prettier/bin/prettier.cjs', ['--check', '.']),
   typecheck: () => run('node_modules/typescript-compiler/bin/tsc', ['-p', '.', '--noEmit']),

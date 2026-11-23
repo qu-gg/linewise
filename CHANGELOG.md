@@ -6,7 +6,13 @@ that a release exists.
 
 ## 0.0.2
 
-Private local-Linux x64 alpha with explicit host/runtime scope and manual updates.
+Unpublished Linewise local-Linux x64 alpha with explicit host/runtime scope and manual updates.
+
+- Adopt Linewise as the public name while preserving the extension identity,
+  command/settings IDs and persisted compatibility. Add public contributor,
+  security, attribution, roadmap and focused development/tool documentation.
+- Make manual release authorization explicitly maintainer-scoped and
+  visibility-bound, with default-private destination and protected publication.
 
 - Guarded local OMP/ACP coding sessions with command approvals, inspectable
   file/hunk review, conversation-only history, context and compaction.
@@ -16,7 +22,7 @@ Private local-Linux x64 alpha with explicit host/runtime scope and manual update
   Retire late permission dialogs after reset or a newer picker; keep independent
   file/web/browser consent, Stop and process ownership unchanged. This is not an
   OS sandbox, a complete destructive-action detector or Autopilot continuation.
-- Replace changed-file comparison tabs with an OMP-owned full-file inline review
+- Replace changed-file comparison tabs with a Linewise-owned full-file inline review
   editor and floating hunk Keep/Undo controls, without diff or CodeLens setting
   overrides. Preserve exact accepted baselines, line endings and stale-owner refusal.
 - Fix repository exploration: allow in-workspace directory listings and ordinary
@@ -42,8 +48,8 @@ Private local-Linux x64 alpha with explicit host/runtime scope and manual update
   interaction checks and script-safe, thought-free, read-only test-chat replay.
 - Private storage inspection, explicit retention/export/deletion and bounded
   recovery with the documented local deterministic/native acceptance matrix.
-- Manual candidate and private-prerelease automation with exact-package checksums,
-  owner-attested native acceptance and separate read-only/write-enabled jobs.
+- Manual candidate and prerelease automation with exact-package checksums,
+  maintainer-attested native acceptance and separate read-only/write-enabled jobs.
 - Requires trusted local single-root Linux x64, VS Code 1.146.0 and separately
   installed/authenticated OMP 18.21.0. Remote-SSH, multi-root lifecycle, other
   platforms/providers and untrusted/virtual workspaces are not release-supported.

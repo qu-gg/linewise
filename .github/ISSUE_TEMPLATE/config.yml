@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Questions and design discussions
+    url: https://github.com/qu-gg/linewise/discussions
+    about: Discuss workflows, contributor questions, and larger design changes.
+  - name: Security and privacy policy
+    url: https://github.com/qu-gg/linewise/blob/main/SECURITY.md
+    about: Arrange confidential vulnerability reporting; do not disclose an unpatched issue publicly.

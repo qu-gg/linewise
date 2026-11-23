@@ -412,7 +412,11 @@ async function nativeInlineReview(api: Api, root: vscode.Uri) {
     api.status()!.configs.find((config) => config.id === 'model')?.value,
     'vs-omp-fixture/history',
   );
-  await api.request!({ v: 1, type: 'prompt', text: 'NATIVE_UX_INLINE_REVIEW_FIXTURE' });
+  await api.request!({
+    v: 1,
+    type: 'prompt',
+    text: 'Change Header: and Footer: to uppercase in review-sample.ts.',
+  });
   const change = api.status()!.changes.find((entry) => entry.name === 'review-sample.ts')!;
   assert.equal(change.hunks.length, 2);
   const provider = await readFile(process.env.VS_OMP_FIXTURE_CONTEXT!, 'utf8');

@@ -1,0 +1,32 @@
+name: Scoped proposal
+description: Propose a user workflow and a bounded acceptance check
+title: 'proposal: '
+labels: []
+body:
+  - type: input
+    id: task
+    attributes:
+      label: Task ID and claim
+      description: If this comes from TODO.md, link its stable row and say whether you want to claim it; maintainer confirmation establishes scope/ownership.
+      placeholder: 'SSH-03: remote workspace URI mapping (requesting claim)'
+  - type: textarea
+    id: problem
+    attributes:
+      label: User problem
+      description: What workflow is blocked? Explain the need rather than a tool wishlist.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Smallest useful change
+      description: Describe scope, alternatives, and any permissions, data flow, storage, runtime, or compatibility impact.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance
+      description: How could a contributor demonstrate the behavior and detect a regression without private credentials or paid inference?
+    validations:
+      required: true

@@ -122,7 +122,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   context.subscriptions.push(participant);
   await writeFile(
     ready,
-    JSON.stringify({ ready: true, prompts: turns.map((turn) => turn.prompt) }),
+    JSON.stringify({
+      ready: true,
+      prompts: turns.map((turn) => turn.prompt),
+      environment: {
+        vscode: vscode.version,
+        theme: vscode.workspace.getConfiguration('workbench').get('colorTheme'),
+        zoomLevel: vscode.workspace.getConfiguration('window').get('zoomLevel'),
+        editorFontSize: vscode.workspace.getConfiguration('editor').get('fontSize'),
+      },
+    }),
     { mode: 0o600 },
   );
 }

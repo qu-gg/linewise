@@ -7,6 +7,7 @@ import { pathToFileURL } from 'node:url';
 import yauzl from 'yauzl';
 import { parseStringPromise } from 'xml2js';
 import { ptyRuntimeFiles } from './pty-runtime.mjs';
+import { validateMaintainer } from './release-run.mjs';
 
 export const profile = 'local-linux-x64-single-root';
 const browserFiles = JSON.parse(
@@ -224,7 +225,7 @@ export function validateAcceptance(acceptance, candidate) {
   assert.equal(acceptance.arch, 'x64');
   assert.equal(acceptance.omp, '18.21.0');
   assert.equal(acceptance.vscode, '1.146.0');
-  assert.equal(acceptance.owner, 'qu-gg');
+  validateMaintainer(acceptance.owner);
   assert.equal(acceptance.native, true);
   assert.equal(acceptance.packaged, true);
   assert.equal(acceptance.manualSmoke, true);

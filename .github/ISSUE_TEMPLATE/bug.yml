@@ -1,0 +1,34 @@
+name: Bug report
+description: Reproduce one unexpected Linewise behavior with a sanitized fixture
+title: 'bug: '
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: Do not post credentials, private source, profiles, or raw session logs. Vulnerabilities use SECURITY.md, not this form.
+  - type: textarea
+    id: behavior
+    attributes:
+      label: What happened?
+      description: Describe what you expected and what you observed.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Minimal reproduction
+      description: Steps and a small synthetic example, without private project content.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Linewise version/commit, VS Code and OMP versions, OS/architecture, local/remote and single/multi-root. No account identifiers or secrets.
+    validations:
+      required: true
+  - type: textarea
+    id: verification
+    attributes:
+      label: Evidence and impact
+      description: Sanitized screenshots or bounded error text, changed-file/Stop behavior, and checks already tried. Label fixtures versus actual model runs.
