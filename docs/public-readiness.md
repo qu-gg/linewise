@@ -2,6 +2,12 @@
 
 This is a launch checklist, not a security certification or permission to change repository visibility. Retain commits and keep raw private evidence/profile/runbooks ignored. [SECURITY.md](../SECURITY.md) defines disclosure and data-flow boundaries.
 
+## v0.1.0 Launch
+
+The maintainer authorized incorporating the selected README/logo edits, moving current release metadata to v0.1.0, and public launch if the gates pass. The earlier private Linewise candidate at `869d7ef` passed hosted, exact-package, native/crash and fresh/update installation checks. Visual window feedback is not evidence that every manual workflow passed. New version/icon bytes require a fresh committed hosted candidate and exact acceptance; previous candidate receipts remain historical.
+
+This authorizes reviewed GitHub source/release publication, not Marketplace distribution, paid inference, credential imports, a paid account upgrade or invented human approval. Public branch/environment/disclosure protection and all hosted-data audits still need actual verification before launch.
+
 ## Before Visibility Changes
 
 - Review source and all reachable Git history, untracked publication files, authorship metadata, dependency advisories, native/browser package provenance, and licenses.
@@ -26,9 +32,9 @@ Gitleaks uses default rules with inline allowances disabled and redacted output.
 
 Narrow source review includes process environment/ownership, canonical private artifact reads/new-only exports, consent and URL redirects, webview message/CSP boundaries, exact journal preimages, and cancellation. Wider host/provider/OS threat models remain unverified. Document identified defects and fix them before claiming their slice is checked.
 
-## Not Yet Granted
+## Authorization Boundaries
 
-No public visibility change, public release/tag/Marketplace listing, real-model allowance, or owner/manual artifact smoke follows from preparation. Uncommitted source cannot satisfy the clean-commit candidate contract. New branding/docs/UI bytes need a newly reviewed committed hosted candidate and exact acceptance before distribution.
+No public visibility change, release/tag, Marketplace listing, real-model allowance or owner/manual artifact smoke follows from preparation alone. The current conditional GitHub launch approval does not waive these gates. Uncommitted source cannot satisfy the clean-commit candidate contract. New branding/docs/UI bytes need a newly reviewed committed hosted candidate and exact acceptance before distribution.
 
 Private-plan limitations can prevent enforcing branch/environment protection or private vulnerability reporting. Record actual status and complete those settings at public launch; do not silently replace missing controls with a claim of approval.
 

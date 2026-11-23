@@ -4,9 +4,33 @@ Release status is recorded by the matching GitHub tag and published prerelease.
 Publication requires the release gates; the source version alone does not mean
 that a release exists.
 
+## 0.1.0
+
+Linewise's first public-release candidate: an early local-Linux x64 preview.
+The matching GitHub release records publication and provides the accepted VSIX
+and checksums. No Marketplace distribution is included.
+
+- Adopt the selected Line Decisions artwork in the README and extension package.
+  Keep the owner's personal motivation section verbatim.
+- Provide OMP/ACP chat, explicit context, model controls, questions, Stop and
+  conversation history through public VS Code APIs.
+- Review text changes hunk by hunk in a full-file editor with floating Keep/Undo;
+  preserve accepted baselines, pending review on reload and stale-change refusal.
+  Creation, deletion and moves use whole-operation review.
+- Keep command Rules/Ask and explicitly confirmed session permissions, independent
+  file/web consent, private local storage and owned-process cleanup. Commands run
+  with host permissions, not in an OS sandbox; shell effects are not undoable.
+- Preserve extension ID `vs-omp-local.vs-omp` and the `omp.*` settings/commands.
+  Require trusted local Linux x64, VS Code 1.146.0 and separately installed OMP
+  18.21.0. Remote-SSH, multi-root lifecycle, other platforms/providers and broad
+  accessibility support remain unvalidated.
+- Retain checksum-bound hosted candidate/native/install/update acceptance and
+  manual smoke gates. Install/update manually; no previous published rollback
+  package exists for this first release.
+
 ## 0.0.2
 
-Unpublished Linewise local-Linux x64 alpha with explicit host/runtime scope and manual updates.
+Historical private Linewise local-Linux x64 candidate; never publicly released.
 
 - Adopt Linewise as the public name while preserving the extension identity,
   command/settings IDs and persisted compatibility. Add public contributor,

@@ -18,6 +18,7 @@ const required = [
   'extension/readme.md',
   'extension/LICENSE.txt',
   'extension/THIRD_PARTY_NOTICES.txt',
+  'extension/docs/images/icon-building/line-decisions.png',
   'extension/dist/extension.cjs',
   'extension/dist/omp-guard.js',
   'extension/dist/review.js',
@@ -153,7 +154,7 @@ export async function inspectPackage(file, manifest) {
     );
   }
   const packaged = JSON.parse(contents.get('extension/package.json').toString('utf8'));
-  for (const key of ['name', 'publisher', 'version', 'license'])
+  for (const key of ['name', 'publisher', 'version', 'license', 'icon'])
     assert.equal(packaged[key], manifest[key]);
   const xml = await parseStringPromise(contents.get('extension.vsixmanifest').toString('utf8'));
   const identity = xml.PackageManifest.Metadata[0].Identity[0].$;
@@ -164,6 +165,10 @@ export async function inspectPackage(file, manifest) {
   for (const [packagedName, sourceName] of [
     ['LICENSE.txt', 'LICENSE'],
     ['THIRD_PARTY_NOTICES.txt', 'THIRD_PARTY_NOTICES.txt'],
+    [
+      'docs/images/icon-building/line-decisions.png',
+      'docs/images/icon-building/line-decisions.png',
+    ],
     ['dist/webview/monaco-LICENSE.txt', 'node_modules/monaco-editor/LICENSE'],
     [
       'dist/webview/monaco-ThirdPartyNotices.txt',

@@ -1,6 +1,6 @@
 # Capability Matrix
 
-Linewise is an independent alternative to the Local chat workflow, not an implementation of private Copilot services or a promise of complete parity. Current source is an early local Linux alpha. [README.md](README.md) explains the supported profile; [usage](docs/usage.md) and [tool contracts](docs/tools.md) describe the boundaries.
+Linewise is an independent alternative to the Local chat workflow, not an implementation of private Copilot services or a promise of complete parity. Current source targets the v0.1.0 early local Linux preview. [README.md](README.md) explains the supported profile; [usage](docs/usage.md) and [tool contracts](docs/tools.md) describe the boundaries.
 
 ## Current Capabilities
 
@@ -28,7 +28,7 @@ Linewise is an independent alternative to the Local chat workflow, not an implem
 - **Native:** actual pinned OMP parser and VS Code workbench with scripted providers, owned processes, approvals and hard-crash/reopen checks. No paid inference is needed.
 - **Visual:** production workbench captures or separately labeled browser fixtures. Theme/viewport checks do not certify every accessibility environment.
 - **Real model:** separately authorized, budgeted, observed scenarios. Historical success certifies that scenario and artifact, not every provider/model or new source bytes.
-- **Release:** clean commit and exact hosted VSIX with native/manual acceptance and verified download. Version 0.0.2 remains unpublished.
+- **Release:** clean commit and exact hosted VSIX with native/manual acceptance and verified download. The matching v0.1.0 GitHub release records whether an accepted package is published; source metadata is not acceptance.
 
 ## Local Comparison
 

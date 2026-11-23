@@ -2,7 +2,7 @@
   "name": "vs-omp",
   "displayName": "Linewise",
   "description": "Open agent coding. Granular review. Inside VS Code. Powered by Oh My Pi.",
-  "version": "0.0.2",
+  "version": "0.1.0",
   "private": true,
   "publisher": "vs-omp-local",
   "license": "MIT",
@@ -16,6 +16,7 @@
   "homepage": "https://github.com/qu-gg/linewise#readme",
   "type": "module",
   "main": "./dist/extension.cjs",
+  "icon": "docs/images/icon-building/line-decisions.png",
   "categories": [
     "AI",
     "Other"

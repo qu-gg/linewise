@@ -1,5 +1,10 @@
 <!-- markdownlint-configure-file { "MD033": { "allowed_elements": ["h1", "h3", "p", "b", "br", "a", "img", "sub", "table", "tr", "td"] } } -->
 
+<!-- markdownlint-disable-next-line MD041 -->
+<p align="center">
+   <img src="docs/images/icon-building/line-decisions.png" alt="Linewise logo" width="128" height="128">
+</p>
+
 <h1 align="center">Linewise</h1>
 
 <p align="center">
@@ -8,7 +13,7 @@
 </p>
 
 <p align="center">
-   <a href="#try-it"><b>Build the alpha</b></a> &middot;
+   <a href="#try-it"><b>Try v0.1.0</b></a> &middot;
    <a href="docs/comparison.md">See the review flow</a> &middot;
    <a href="TODO.md">Find a task</a> &middot;
    <a href="https://github.com/qu-gg/linewise/discussions">Join the discussion</a>
@@ -17,7 +22,7 @@
 <p align="center">
    <a href="LICENSE">MIT licensed</a> &middot;
    Public VS Code APIs + ACP &middot;
-   Linux x64 alpha
+   v0.1.0 &middot; Linux x64 preview
 </p>
 
 Linewise brings an open coding-agent harness into your editor, with a familiar chat experience inspired by VS Code's Local Harness, notably including its inspectable changes. Review text edits hunk by hunk and whole-file operations individually, keep the changes you want, and undo the ones you do not.
@@ -37,7 +42,7 @@ Of all the harnesses/agent experiences I have tried, the Local Harness in VSCode
 <!-- prettier-ignore-end -->
 
 > [!IMPORTANT]
-> **Early alpha, not yet published.** Contributors and careful testers are welcome. Start with a disposable workspace. Version 0.0.2 has no Marketplace listing or approved public download.
+> **v0.1.0 is an early preview.** Contributors and careful testers are welcome. Start with a disposable workspace. Accepted VSIX downloads and checksums are listed on [GitHub Releases](https://github.com/qu-gg/linewise/releases); a source version alone is not a published release. There is no Marketplace listing.
 
 <p align="center">
    <a href="docs/comparison.md">
@@ -99,10 +104,10 @@ These are actual native controls exercised with synthetic file-tool changes. The
 
 ## Try It
 
-The verified alpha profile is **Linux x64, VS Code 1.146.0, OMP 18.21.0, and a trusted single-root local filesystem workspace**. Other platforms, Remote-SSH, multi-root lifecycle, and untrusted/virtual workspaces are not certified.
+The v0.1.0 acceptance profile is **Linux x64, VS Code 1.146.0, OMP 18.21.0, and a trusted single-root local filesystem workspace**. Other platforms, Remote-SSH, multi-root lifecycle, and untrusted/virtual workspaces are not certified.
 
 1. Install [Oh My Pi](https://github.com/can1357/oh-my-pi) separately. Check `omp --version` reports `omp/18.21.0`. Run `omp` and use its `/login` flow if your selected provider needs authentication; Linewise does not copy VS Code's Copilot credentials.
-2. Build a development VSIX with **Node 24.11+**:
+2. Download the VSIX from the matching [v0.1.0 release](https://github.com/qu-gg/linewise/releases/tag/v0.1.0), when published, and verify it against the accompanying `SHA256SUMS`. Alternatively, build a development VSIX with **Node 24.11+**:
 
    ```sh
    git clone https://github.com/qu-gg/linewise.git

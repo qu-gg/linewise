@@ -3,6 +3,7 @@
 !README.md
 !LICENSE
 !THIRD_PARTY_NOTICES.txt
+!docs/images/icon-building/line-decisions.png
 !dist/extension.cjs
 !dist/omp-guard.js
 !dist/review.js

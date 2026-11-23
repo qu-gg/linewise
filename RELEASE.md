@@ -1,6 +1,6 @@
 # Linewise Release Policy
 
-Linewise is an early alpha. **0.0.2 is currently unpublished**, and no Marketplace distribution is approved. Public source preparation does not authorize a release, repository visibility change, model requests, or acceptance of newly changed bytes.
+Linewise v0.1.0 is an early local-Linux preview. The matching GitHub tag/release records publication; no Marketplace distribution is approved. Public source preparation does not authorize a release, repository visibility change, model requests, or acceptance of newly changed bytes. Explicit maintainer launch approval remains subject to every gate below.
 
 ## Supported Profile
 
@@ -19,7 +19,7 @@ Local acceptance records the authenticated GitHub maintainer login in the legacy
 ## Gates
 
 1. Review and commit the exact source, version/lock roots, curated changelog, license inventory, native/browser pins, and sanitized public docs. Keep commits; do not bundle private evidence or rewrite history as a cosmetic rename.
-2. On that exact current-main commit, dispatch **Linewise Alpha Release**, phase `candidate`, with the intended visibility. Locked install, complete deterministic/public checks, moderate audit, package build, and strict archive verification must pass. The bounded artifact has VSIX, checksum, candidate metadata, and curated notes only; no tag/release is created.
+2. On that exact current-main commit, dispatch **Linewise Release**, phase `candidate`, with the intended visibility. Locked install, complete deterministic/public checks, moderate audit, package build, and strict archive verification must pass. The bounded artifact has VSIX, checksum, candidate metadata, and curated notes only; no tag/release is created.
 3. Download the exact hosted candidate. Inspect inventory/licenses/checksum, extract and run native tests, install into a fresh isolated workbench, and verify reopening/update behavior. Preserve the candidate bytes and failed evidence.
 4. A maintainer performs actual desktop/narrow review and permission/Stop smoke on that exact artifact. A fixture runner cannot invent human approval. Record explicit rollback/scope acknowledgements and run official local acceptance from a clean matching checkout.
 5. Dispatch phase `publish` with exact successful candidate run, bounded acceptance JSON, intended visibility, and explicit publication approval. Preflight rechecks current-main, actor/destination, candidate provenance, complete deterministic gate, audit, exact bytes/licenses, and all acceptance flags. Approval is an input, not authorization to skip those checks.

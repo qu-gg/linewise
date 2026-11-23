@@ -1,4 +1,4 @@
-name: Linewise Alpha Release
+name: Linewise Release
 
 on:
   workflow_dispatch:
@@ -29,7 +29,7 @@ permissions:
   actions: read
 
 concurrency:
-  group: linewise-alpha-release
+  group: linewise-release
   cancel-in-progress: false
 
 jobs:
@@ -180,7 +180,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --draft --prerelease --title "Linewise $TAG (local Linux alpha)" --notes-file release/release-notes.md "release/$VSIX" release/SHA256SUMS release/release-candidate.json release/release-notes.md release/release-acceptance.json
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --draft --prerelease --title "Linewise $TAG (Linux x64 preview)" --notes-file release/release-notes.md "release/$VSIX" release/SHA256SUMS release/release-candidate.json release/release-notes.md release/release-acceptance.json
       - name: Verify Downloaded Bytes Then Publish Prerelease
         env:
           GH_TOKEN: ${{ github.token }}

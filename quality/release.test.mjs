@@ -31,16 +31,16 @@ import {
 } from '../scripts/public-check.mjs';
 import { marked } from 'marked';
 
-const manifest = { name: 'vs-omp', publisher: 'vs-omp-local', version: '0.0.2', license: 'MIT' };
+const manifest = { name: 'vs-omp', publisher: 'vs-omp-local', version: '0.1.0', license: 'MIT' };
 const commit = 'a'.repeat(40);
 const candidate = {
   schema: 1,
   commit,
-  version: '0.0.2',
-  tag: 'v0.0.2',
+  version: '0.1.0',
+  tag: 'v0.1.0',
   profile,
   target: 'linux-x64',
-  package: { file: 'vs-omp-0.0.2-linux-x64.vsix', sha256: 'b'.repeat(64), size: 100 },
+  package: { file: 'vs-omp-0.1.0-linux-x64.vsix', sha256: 'b'.repeat(64), size: 100 },
 };
 const acceptance = {
   schema: 1,
@@ -63,6 +63,7 @@ const names = [
   'extension/readme.md',
   'extension/LICENSE.txt',
   'extension/THIRD_PARTY_NOTICES.txt',
+  'extension/docs/images/icon-building/line-decisions.png',
   'extension/dist/extension.cjs',
   'extension/dist/omp-guard.js',
   'extension/dist/review.js',
@@ -85,11 +86,11 @@ const names = [
 const entries = () => names.map((name) => ({ name, size: 100, externalFileAttributes: 0 }));
 
 test('release versions require matching package and lock roots without changing identity', () => {
-  const lock = { version: '0.0.2', packages: { '': { version: '0.0.2' } } };
-  assert.equal(versionTag(manifest, lock), 'v0.0.2');
+  const lock = { version: '0.1.0', packages: { '': { version: '0.1.0' } } };
+  assert.equal(versionTag(manifest, lock), 'v0.1.0');
   assert.throws(() => versionTag(manifest, { ...lock, version: '0.0.1' }));
   assert.throws(() => versionTag({ ...manifest, publisher: 'other' }, lock));
-  assert.throws(() => versionTag({ ...manifest, version: '0.0.2-alpha' }, lock));
+  assert.throws(() => versionTag({ ...manifest, version: '0.1.0-alpha' }, lock));
 });
 
 test('release runtime identity accepts the actual pinned OMP CLI and refuses other output', () => {
@@ -160,13 +161,8 @@ test('candidate identity is bound to the exact commit, version, checksum and loc
   ]) {
     assert.throws(() => validateCandidate({ ...candidate, ...changed }, manifest, commit));
   }
-  assert.throws(() =>
-    validateCandidate(
-      { ...candidate, package: { ...candidate.package, file: '../other.vsix' } },
-      manifest,
-      commit,
-    ),
-  );
+  const wrongFile = { ...candidate, package: { ...candidate.package, file: '../other.vsix' } };
+  assert.throws(() => validateCandidate(wrongFile, manifest, commit));
 });
 
 test('publication refuses missing, cross-commit, cross-artifact or incomplete local acceptance', () => {
@@ -190,11 +186,11 @@ test('publication refuses missing, cross-commit, cross-artifact or incomplete lo
 test('release notes must be curated for the exact version, not generated from arbitrary commit text', () => {
   const notes = 'Local Linux private alpha. '.repeat(8);
   assert.equal(
-    releaseNotes(`# Changelog\n\n## 0.0.2\n\n${notes}\n\n## 0.0.1\n\nOlder.`, '0.0.2'),
+    releaseNotes(`# Changelog\n\n## 0.1.0\n\n${notes}\n\n## 0.0.1\n\nOlder.`, '0.1.0'),
     notes.trim(),
   );
-  assert.throws(() => releaseNotes('# Changelog\n\n## 0.0.1\n\nOld.', '0.0.2'));
-  assert.throws(() => releaseNotes('## 0.0.2\n\nTBD', '0.0.2'));
+  assert.throws(() => releaseNotes('# Changelog\n\n## 0.0.1\n\nOld.', '0.1.0'));
+  assert.throws(() => releaseNotes('## 0.1.0\n\nTBD', '0.1.0'));
 });
 
 test('release policy keeps remote evidence separate and audit failure blocking', () => {
@@ -417,6 +413,9 @@ async function archiveFixture(context, overrides = {}, packagedManifest = manife
   );
   files['extension/LICENSE.txt'] = await readFile('LICENSE');
   files['extension/THIRD_PARTY_NOTICES.txt'] = await readFile('THIRD_PARTY_NOTICES.txt');
+  files['extension/docs/images/icon-building/line-decisions.png'] = await readFile(
+    'docs/images/icon-building/line-decisions.png',
+  );
   for (const [name, source] of [
     ['monaco-LICENSE.txt', 'node_modules/monaco-editor/LICENSE'],
     ['monaco-ThirdPartyNotices.txt', 'node_modules/monaco-editor/ThirdPartyNotices.txt'],
@@ -454,9 +453,10 @@ test('real ZIP inspection refuses changed licenses, inconsistent identity and ex
     { 'extension/package.json': JSON.stringify({ ...manifest, version: '0.0.1' }) },
     {
       'extension.vsixmanifest':
-        '<PackageManifest><Metadata><Identity Id="vs-omp" Publisher="vs-omp-local" Version="0.0.2" TargetPlatform="win32-x64"/></Metadata></PackageManifest>',
+        '<PackageManifest><Metadata><Identity Id="vs-omp" Publisher="vs-omp-local" Version="0.1.0" TargetPlatform="win32-x64"/></Metadata></PackageManifest>',
     },
     { 'extension/.env': 'must not package' },
+    { 'extension/docs/images/icon-building/line-decisions.png': 'altered logo' },
     { 'extension/dist/webview/monaco-LICENSE.txt': 'altered license' },
     { 'extension/dist/webview/monaco-ThirdPartyNotices.txt': 'altered notices' },
     { 'extension/dist/webview/monaco-marked-LICENSE.txt': 'altered license' },

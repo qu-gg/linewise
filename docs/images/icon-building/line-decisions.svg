@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" fill="none">
+  <title>Linewise: Line Decisions</title>
+  <desc>Added and removed code lines above a separate neutral keep and revert action row; either action applies to either kind of change.</desc>
+  <rect width="512" height="512" rx="96" fill="#202523"/>
+  <g stroke-linecap="round" stroke-linejoin="round">
+    <path d="M112 112H320" stroke="#79847E" stroke-width="16"/>
+    <g id="diff">
+      <path d="M104 184H144M124 164V204M180 184H400" stroke="#65D69A" stroke-width="20"/>
+      <path d="M104 272H144M180 272H352" stroke="#F1848D" stroke-width="20"/>
+    </g>
+    <path d="M112 330H400" stroke="#48564E" stroke-width="8"/>
+    <g id="actions" stroke="#DCE5DE">
+      <path d="M148 408L172 432L220 368" stroke-width="20"/>
+      <path d="M300 382H324C346 382 362 394 362 410C362 426 350 434 332 434M300 382L316 366M300 382L316 398" stroke-width="16"/>
+    </g>
+  </g>
+</svg>
