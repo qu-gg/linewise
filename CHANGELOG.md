@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Add new-chat OpenRouter upstream provider selection. A secondary route picker lists providers from OpenRouter's public endpoint catalog, defaults to Auto routing, and pins the selected provider when the first prompt starts a new OMP session. Route changes are unavailable after a chat has turns; resumed chats keep their recorded model.
+
 Release status is recorded by the matching GitHub tag and published prerelease.
 Publication requires the release gates; the source version alone does not mean
 that a release exists.

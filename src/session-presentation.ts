@@ -4,6 +4,7 @@ import { providerOf } from './model-picker.js';
 import { updateTurn } from './session-updates.js';
 import { parseUsage, type SavedSession, type Turn } from './state.js';
 import type { HistorySnapshot } from './history.js';
+import type { AppliedRoute } from './model-route.js';
 
 export function applyNotification(
   client: OmpClient,
@@ -74,7 +75,7 @@ export function sessionPresentation(session: SavedSession | undefined) {
   };
 }
 
-export function configPresentation(client: OmpClient | undefined) {
+export function configPresentation(client: OmpClient | undefined, route?: AppliedRoute) {
   return (client?.configOptions ?? [])
     .filter((option) => ['model', 'thinking'].includes(option.id))
     .map((option) => {
@@ -88,6 +89,7 @@ export function configPresentation(client: OmpClient | undefined) {
           value,
           label: current?.name ?? value,
           provider: providerOf(value),
+          route,
         };
       }
       return { id: option.id, name: option.name, value, options };

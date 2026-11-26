@@ -384,6 +384,13 @@ export const webviewMessage = z.discriminatedUnion('type', [
   z
     .object({
       v: z.literal(1),
+      type: z.literal('modelRoute'),
+      value: z.union([z.literal('auto'), z.string().regex(/^[a-z0-9][a-z0-9-]{0,63}$/)]),
+    })
+    .strict(),
+  z
+    .object({
+      v: z.literal(1),
       type: z.literal('questionAnswer'),
       id: z.string().min(1).max(100),
       answers: questionAnswers,

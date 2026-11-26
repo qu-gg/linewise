@@ -82,7 +82,7 @@ Of all the harnesses/agent experiences I have tried, the Local Harness in VSCode
    </tr>
 </table>
 
-Model access uses whichever providers you have authenticated in OMP. Linewise shows OMP's advertised model catalog and does not store credentials. Open-source harness infrastructure does not mean free inference, support for every OMP provider, or independence from provider policies.
+Model access uses whichever providers you have authenticated in OMP. Linewise shows OMP's advertised model catalog and does not store credentials. For new chats on OpenRouter models, it may fetch OpenRouter's public endpoint catalog (model identifier only; no credentials or conversation content) to offer an upstream **Route** picker that defaults to Auto. Open-source harness infrastructure does not mean free inference, support for every OMP provider, or independence from provider policies.
 
 ## A Familiar Agent Workflow
 
@@ -126,7 +126,7 @@ Choose **Command Rules**, **Ask Every Time**, or separately confirmed **Allow Al
 
 ### Activity, Plans, And Follow-Ups
 
-Follow streamed replies with collapsible activity, thinking, and tool records, separate final answers, and the agent's structured Todos. Model/thinking controls and provider-reported context usage stay close to the composer; Linewise does not invent reasoning or billing figures.
+Follow streamed replies with collapsible activity, thinking, and tool records, separate final answers, and the agent's structured Todos. Model/thinking controls, a new-chat OpenRouter route picker, and provider-reported context usage stay close to the composer; Linewise does not invent reasoning or billing figures.
 
 Keep per-session drafts and queue follow-up prompts while work is running. Queued prompts run in order after cleanup, pause on failure, and clear on Stop or ownership changes; they are not in-flight steering or Autopilot. Local memory, owned terminal/browser controls, and approved editor/task integrations round out the workflow. See [usage](docs/usage.md) for the details and limits.
 

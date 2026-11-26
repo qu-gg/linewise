@@ -35,6 +35,25 @@
   opacity: 0.5;
   cursor: default;
 }
+.model-route {
+  appearance: none;
+  min-width: 0;
+  max-width: 40%;
+  flex: 0 1 auto;
+  border: 0;
+  border-left: 1px solid var(--vscode-widget-border);
+  padding: 2px 5px;
+  background: transparent;
+  color: var(--vscode-descriptionForeground);
+  font: inherit;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.model-route:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
 footer {
   position: relative;
 }

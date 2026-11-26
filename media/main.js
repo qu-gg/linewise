@@ -244,7 +244,8 @@ app.addEventListener('keydown', (event) => {
   }
 });
 app.addEventListener('change', (event) => {
-  if (event.target.dataset.config)
+  if (event.target.dataset.route) send('modelRoute', { value: event.target.value });
+  else if (event.target.dataset.config)
     send('config', { id: event.target.dataset.config, value: event.target.value });
 });
 function rememberDisclosure(summary, target) {

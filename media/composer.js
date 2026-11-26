@@ -1,6 +1,6 @@
 import { taskPanel } from './tasks.js';
 import { approvalCard } from './approvals.js';
-import { modelPicker, modelPickerPopover } from './model-picker.js';
+import { modelPicker, modelPickerPopover, modelRoutePicker } from './model-picker.js';
 
 export function canSubmit(state, draft) {
   return Boolean(
@@ -73,5 +73,5 @@ export function composer(state, draft, ui) {
     contextOpen,
     expanded,
   } = ui;
-  return `<footer><div class="chat-dock"><div class="dock-sections">${followUps(state, expanded, ui)}${taskPanel(state, expanded, ui)}${changesPanel()}</div>${approvalCard(state, ui, 'file')}<form id="composer">${attachments(state, ui)}<textarea id="prompt" rows="2" aria-label="Message OMP" placeholder="Describe what to build">${escape(draft)}</textarea><div class="composer-tools">${modelPicker(state, ui)}<div class="config-controls">${configs(state, ui)}</div>${sendButton(state, draft, ui)}</div></form></div><div class="statusbar">${sessionStatus(state, ui)}${permissions(state, working(), icon)}<span class="status-spacer"></span>${button('compact', 'collapse-all', 'Compact Context Now', !state.connected || !state.canCompact || working() ? 'disabled' : '')}${contextToggle(ui, contextOpen)}${contextPanel()}</div>${modelPickerPopover(state, ui)}</footer>`;
+  return `<footer><div class="chat-dock"><div class="dock-sections">${followUps(state, expanded, ui)}${taskPanel(state, expanded, ui)}${changesPanel()}</div>${approvalCard(state, ui, 'file')}<form id="composer">${attachments(state, ui)}<textarea id="prompt" rows="2" aria-label="Message OMP" placeholder="Describe what to build">${escape(draft)}</textarea><div class="composer-tools">${modelPicker(state, ui)}${modelRoutePicker(state, ui)}<div class="config-controls">${configs(state, ui)}</div>${sendButton(state, draft, ui)}</div></form></div><div class="statusbar">${sessionStatus(state, ui)}${permissions(state, working(), icon)}<span class="status-spacer"></span>${button('compact', 'collapse-all', 'Compact Context Now', !state.connected || !state.canCompact || working() ? 'disabled' : '')}${contextToggle(ui, contextOpen)}${contextPanel()}</div>${modelPickerPopover(state, ui)}</footer>`;
 }

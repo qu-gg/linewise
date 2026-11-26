@@ -8,16 +8,7 @@ import { assertPromptAllowed } from './history.js';
 import type { Attachment, SavedSession, StateStore, Turn } from './state.js';
 import type { HostTools } from './host-tools.js';
 import { initializeStorage } from './storage-view.js';
-import {
-  artifactsDirectory,
-  resumeArtifact,
-  startSessionClient,
-  startupConfig,
-  selectModel,
-  createConnection,
-  bindConnectedSession,
-  configureSession,
-} from './session-start.js';
+import { configureSession, establishConnection } from './session-start.js';
 import { branchConversation, historyBoundary } from './conversation.js';
 import { runPrompt, startTurn } from './session-prompt.js';
 import {
@@ -26,10 +17,13 @@ import {
   connectionPresentation,
   sessionPresentation,
 } from './session-presentation.js';
-import { HostView, type SidebarRequest } from './host-view.js';
+import { HostView } from './host-view.js';
 import { HostOperations, type Operation } from './host-operations.js';
 import { registerHostCommands, testSurface } from './host-activation.js';
 import { assertSessionResumable } from './sessions.js';
+import { ModelRoutes, type AppliedRoute, type LaunchRoute } from './model-route.js';
+import { OpenRouterRoutes } from './model-routes.js';
+import { routeRequest, type RequestHandlers } from './request-router.js';
 
 const execute = promisify(execFile);
 let application: OmpView | undefined;
@@ -66,6 +60,15 @@ class OmpView extends HostOperations implements vscode.WebviewViewProvider {
   private compacting = false;
   private commands: string[] = [];
   private error = '';
+  private activeRoute: AppliedRoute | undefined;
+  private readonly providerCatalog = new OpenRouterRoutes();
+  private readonly modelRoutes = new ModelRoutes(
+    (model) => this.providerCatalog.providers(model),
+    () => this.publish(),
+    () => this.client,
+    () => this.view.active(),
+    (session) => this.view.journal.list(session.id).length,
+  );
 
   protected operationStarted(kind: Operation): void {
     if (['connect', 'history', 'disconnect'].includes(kind)) this.view.followUps.clear();
@@ -90,7 +93,7 @@ class OmpView extends HostOperations implements vscode.WebviewViewProvider {
     super();
     this.view = new HostView(context, store, output, {
       snapshot: () => this.snapshot(),
-      dispatch: (request) => this.route(request),
+      dispatch: (request) => routeRequest(request, this.handlers),
       perform: (action) => this.perform(action),
       fileOwner: () => this.fileApprovalOwner(),
       idle: (kind, action) => this.idleOperation(kind, action),
@@ -110,68 +113,38 @@ class OmpView extends HostOperations implements vscode.WebviewViewProvider {
 
   attach = (snapshots: Attachment[]) => this.view.addSnapshots(snapshots);
 
-  private async route(request: SidebarRequest): Promise<void> {
-    switch (request.type) {
-      case 'connect':
-        await this.connect();
-        break;
-      case 'disconnect':
-        await this.disconnect();
-        break;
-      case 'new':
-        await this.connect(true);
-        break;
-      case 'sessions':
-        await this.switchSession();
-        break;
-      case 'cancel':
-        await this.cancel();
-        break;
-      case 'modelCatalog':
-        if (this.client && !this.operation) this.view.chat.postModelCatalog(this.client);
-        break;
-      default:
-        return this.conversationRequest(request);
-    }
-  }
+  private readonly handlers: RequestHandlers = {
+    connect: () => this.connect(),
+    disconnect: () => this.disconnect(),
+    newSession: () => {
+      this.modelRoutes.clear();
+      return this.connect(true);
+    },
+    switchSession: () => this.switchSession(),
+    cancel: () => this.cancel(),
+    postModelCatalog: () => {
+      if (this.client && !this.operation) this.view.chat.postModelCatalog(this.client);
+    },
+    selectModelRoute: (value) =>
+      this.idleOperation('config', async () => this.modelRoutes.select(value)),
+    prompt: (text) =>
+      this.view.followUps.run(
+        () => this.prompt(text),
+        () => this.drainQueue(),
+      ),
+    editPrompt: (id, text) =>
+      this.view.editPrompt(id, () => this.branchHistory(id, 'before', text)),
+    forkTurn: (id, boundary) => this.branchHistory(id, boundary),
+    permissions: () =>
+      this.idleOperation('config', async () => {
+        if (!this.tools) throw new Error('Start a session before changing permissions.');
+        await this.tools.pickPermissions();
+      }),
+    terminals: () => this.tools?.pickTerminal(this.view.chat.focusTerminals),
+    config: (id, value) => this.configure(id, value),
+    sessionCommand: (command) => this.sessionCommand(command),
+  };
 
-  private async conversationRequest(request: SidebarRequest): Promise<void> {
-    switch (request.type) {
-      case 'prompt':
-        await this.view.followUps.run(
-          () => this.prompt(request.text),
-          () => this.drainQueue(),
-        );
-        break;
-      case 'editPrompt': {
-        await this.view.editPrompt(request.id, () =>
-          this.branchHistory(request.id, 'before', request.text),
-        );
-        break;
-      }
-      case 'forkTurn':
-        await this.branchHistory(request.id, request.boundary);
-        break;
-      case 'permissions':
-        await this.idleOperation('config', async () => {
-          if (!this.tools) throw new Error('Start a session before changing permissions.');
-          await this.tools.pickPermissions();
-        });
-        break;
-      case 'terminals':
-        return this.tools?.pickTerminal(this.view.chat.focusTerminals);
-      case 'config': {
-        await this.configure(request.id, request.value);
-        break;
-      }
-      case 'compact':
-        await this.sessionCommand('compact');
-        break;
-      case 'inspectContext':
-        await this.sessionCommand('context');
-        break;
-    }
-  }
   async perform(action: () => Promise<void>): Promise<void> {
     try {
       await action();
@@ -190,75 +163,43 @@ class OmpView extends HostOperations implements vscode.WebviewViewProvider {
     return this.view.preflight(this.executable(), execute);
   }
 
-  async connect(fresh = false, selected?: SavedSession): Promise<void> {
+  async connect(fresh = false, selected?: SavedSession, launch?: LaunchRoute): Promise<void> {
     const saved = selected ?? (fresh ? undefined : this.view.active());
+    this.modelRoutes.clearPendingFor(fresh, selected, launch);
+    this.activeRoute = undefined;
     assertSessionResumable(saved);
     const operation = this.beginOperation('connect');
     this.commands = [];
     try {
       await this.finishTools();
       await this.client?.stop();
-      const root = this.view.root(saved);
-      const directory = this.store.directory;
-      const artifacts = await artifactsDirectory(directory);
-      const sessionFile = await resumeArtifact(artifacts, saved);
-      const result = await execute(
-        this.executable(),
-        ['config', 'get', 'memory.backend', '--json'],
-        { cwd: root.uri.fsPath, timeout: 15_000, maxBuffer: 65536 },
-      );
-      const fixture =
-        this.context.extensionMode === vscode.ExtensionMode.Test
-          ? process.env.VS_OMP_TEST_FIXTURE
-          : undefined;
-      const config = await startupConfig(directory, JSON.parse(result.stdout).value, fixture);
-      this.view.assertRoot(root);
-      const { tools, client } = createConnection(
-        this.view.files,
-        this.view.journal,
-        artifacts,
-        this.view.chat.requestApproval,
-        {
-          update: (notification) => this.update(notification),
-          closed: (closed, owned) => this.clientClosed(closed, owned),
-          log: (message) => this.output.append(message),
-          questions: this.view.chat.requestQuestions,
+      await establishConnection({
+        view: this.view,
+        store: this.store,
+        executable: this.executable(),
+        run: execute,
+        guard: vscode.Uri.joinPath(this.context.extensionUri, 'dist', 'omp-guard.js').fsPath,
+        fixture:
+          this.context.extensionMode === vscode.ExtensionMode.Test
+            ? process.env.VS_OMP_TEST_FIXTURE
+            : undefined,
+        configuredModel: vscode.workspace.getConfiguration('omp').get<string>('model', ''),
+        saved,
+        launch,
+        update: (notification) => this.update(notification),
+        closed: (closed, owned) => this.clientClosed(closed, owned),
+        setClient: (client, tools) => {
+          this.client = client;
+          this.tools = tools;
         },
-      );
-      this.tools = tools;
-      this.client = client;
-      await startSessionClient(
-        client,
-        {
-          executable: this.executable(),
-          cwd: root.uri.fsPath,
-          artifacts,
-          sessionFile,
-          config,
-          storage: directory,
-          guard: vscode.Uri.joinPath(this.context.extensionUri, 'dist', 'omp-guard.js').fsPath,
-          fixture,
+        setError: (message) => {
+          this.error = message;
         },
-        (target) => this.view.journal.inspect(target),
-      );
-      const configured = vscode.workspace.getConfiguration('omp').get<string>('model', '');
-      await selectModel(client, this.store, configured, Boolean(saved));
-      this.view.assertRoot(root);
-      if (
-        await bindConnectedSession(
-          this.store,
-          client,
-          { uri: root.uri.toString(), name: root.name },
-          saved,
-          this.view.attachments,
-        )
-      ) {
-        this.error =
-          'Recovered an interrupted conversation edit. Its full original is in Switch Session. Files were not changed.';
-      }
-      await this.view.journal.refresh();
-      await this.store.save();
-      this.view.assertRoot(root);
+        log: (message) => this.output.append(message),
+        clearPending: () => this.modelRoutes.clearPending(),
+        refreshRoutes: () => void this.modelRoutes.refresh(),
+      });
+      if (launch) this.activeRoute = { provider: launch.provider, label: launch.label };
     } catch (error) {
       await this.client?.stop();
       throw error;
@@ -267,11 +208,7 @@ class OmpView extends HostOperations implements vscode.WebviewViewProvider {
     }
   }
 
-  async switchSession(): Promise<void> {
-    await vscode.commands.executeCommand('omp.chat.focus');
-    this.view.chat.post({ v: 1, type: 'showSessions' });
-  }
-
+  switchSession = () => this.view.switchSession();
   private async sessionCommand(command: 'compact' | 'context'): Promise<void> {
     if (!this.client?.connected || !this.commands.includes(command))
       throw new Error(`OMP has not advertised /${command} for this session.`);
@@ -326,6 +263,8 @@ class OmpView extends HostOperations implements vscode.WebviewViewProvider {
     assertPromptAllowed(text);
     const attachmentOwner = this.view.owner();
     const attached = this.view.attachments.capture(attachmentOwner, originalAttachment, attach);
+    const launch = this.modelRoutes.pendingLaunch();
+    if (launch) await this.connect(true, undefined, launch);
     if (!this.client?.connected) await this.connect();
     const client = this.client!;
     const tools = this.tools!;
@@ -424,6 +363,8 @@ class OmpView extends HostOperations implements vscode.WebviewViewProvider {
   }
   private async disconnect(): Promise<void> {
     if (this.busy) this.operation = undefined;
+    this.activeRoute = undefined;
+    this.modelRoutes.clear();
     await this.idleOperation('disconnect', async () => {
       const client = this.client;
       const stopped = client?.stop();
@@ -465,7 +406,14 @@ class OmpView extends HostOperations implements vscode.WebviewViewProvider {
   }
 
   private async configure(id: string, value: string): Promise<void> {
-    await this.idleOperation('config', () => configureSession(this.client, this.store, id, value));
+    await this.idleOperation('config', async () => {
+      await configureSession(this.client, this.store, id, value);
+      if (id === 'model') {
+        this.modelRoutes.modelChanged();
+        this.activeRoute = undefined;
+      }
+    });
+    if (id === 'model') void this.modelRoutes.refresh();
   }
 
   snapshot() {
@@ -487,7 +435,8 @@ class OmpView extends HostOperations implements vscode.WebviewViewProvider {
       ...this.view.chat.presentation(),
       ...this.view.contextPresentation(),
       ...this.view.followUps.snapshot(this.view.owner()),
-      configs: configPresentation(this.client),
+      configs: configPresentation(this.client, this.activeRoute),
+      modelRoute: this.modelRoutes.presentation(),
       changes: this.view.changes(),
     };
   }

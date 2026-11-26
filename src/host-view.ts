@@ -200,6 +200,11 @@ export class HostView {
     return original;
   }
 
+  async switchSession(): Promise<void> {
+    await vscode.commands.executeCommand('omp.chat.focus');
+    this.chat.post({ v: 1, type: 'showSessions' });
+  }
+
   async preflight(
     executable: string,
     run: (

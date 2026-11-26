@@ -5,6 +5,18 @@ export function assertSessionResumable(saved: SavedSession | undefined) {
     throw new Error('Restore this archived session before resuming it.');
 }
 
+export function dropEmptySession(
+  store: StateStore,
+  replace: SavedSession,
+  activeId: string | undefined,
+  changes: (sessionId: string) => number,
+  clearAttachments: (sessionId: string) => void,
+): void {
+  if (replace.id === activeId || replace.turns.length > 0 || changes(replace.id)) return;
+  store.data.sessions = store.data.sessions.filter((session) => session.id !== replace.id);
+  clearAttachments(replace.id);
+}
+
 export type SessionAction = 'renameSession' | 'archiveSession' | 'restoreSession';
 export interface SessionRequest {
   type: SessionAction | 'openSession' | 'resumeSession';

@@ -49,12 +49,35 @@ function selectCurrent(render) {
   render();
 }
 
+function routeLabel(state, model) {
+  const route = state.modelRoute;
+  if (!route || !route.value || route.value === 'auto') return model.route?.label;
+  return route.options?.find((option) => option.value === route.value)?.name ?? model.route?.label;
+}
+
+function modelLabel(state, model) {
+  const via = routeLabel(state, model);
+  return `${model.label ?? model.value}${via ? ` · via ${via}` : ''}`;
+}
+
 export function modelPicker(state, { escape, icon, working }) {
   const model = modelConfig(state);
   if (!model) return '';
-  const label = model.label ?? model.value;
+  const label = modelLabel(state, model);
   const trigger = `<button type="button" id="model-picker" class="model-picker" data-action="pickModel" title="${escape(model.value)}" aria-label="Model: ${escape(label)}" aria-haspopup="listbox" aria-expanded="${display.open}" ${working() ? 'disabled' : ''}>${icon('symbol-method')}<span class="model-name">${escape(label)}</span>${icon('chevron-down')}</button>`;
   return `<div class="model-control">${trigger}</div>`;
+}
+
+export function modelRoutePicker(state, { escape, working }) {
+  const route = state.modelRoute;
+  if (!route?.visible || !route.options?.length) return '';
+  const selected = route.options.find((option) => option.value === route.value);
+  const title =
+    selected?.description ??
+    (route.loading
+      ? 'Loading OpenRouter providers...'
+      : 'OpenRouter provider routing for this new chat');
+  return `<select id="model-route" class="model-route" data-route="1" aria-label="OpenRouter provider" title="${escape(title)}" ${working() ? 'disabled' : ''}>${route.options.map((option) => `<option value="${escape(option.value)}" title="${escape(option.description ?? option.name)}" ${option.value === route.value ? 'selected' : ''}>${escape(option.name)}</option>`).join('')}</select>`;
 }
 
 export function modelPickerPopover(state, { escape, icon }) {

@@ -11,6 +11,10 @@ import { checkedReadPath } from './file-policy.js';
 import { reconcileHistory, type SavedSession, type StateStore } from './state.js';
 import type { SessionNotification } from '@agentclientprotocol/sdk';
 import type { ContextAttachments } from './context.js';
+import type { HostView } from './host-view.js';
+import { dropEmptySession } from './sessions.js';
+import { routeBaseModel } from './model-routes.js';
+import type { LaunchRoute } from './model-route.js';
 
 export function createConnection(
   files: ConstructorParameters<typeof HostTools>[0],
@@ -134,8 +138,10 @@ export function startupArguments(
   artifacts: string,
   fixture?: string,
   instructions?: string,
+  model?: string,
 ) {
   return [
+    ...(model ? ['--model', model] : []),
     '--config',
     config,
     ...instructionArguments(instructions),
@@ -161,20 +167,135 @@ export async function startSessionClient(
     storage: string;
     guard: string;
     fixture?: string;
+    model?: string;
   },
   read: (target: string) => Promise<string | null>,
 ): Promise<void> {
-  const { storage, config, guard, fixture, ...start } = options;
+  const { storage, config, guard, fixture, model, ...start } = options;
   const instructions = await workspaceInstructions(start.cwd, async (target) =>
     read(await checkedReadPath(target, start.cwd, storage)),
   );
   await withInstructionSnapshot(storage, instructions, (snapshot) =>
     client.start({
       ...start,
-      args: startupArguments(config, guard, start.artifacts, fixture, snapshot),
+      args: startupArguments(config, guard, start.artifacts, fixture, snapshot, model),
     }),
   );
   if (!client.sessionId) throw new Error('OMP did not return a session identifier.');
+}
+
+type Run = (
+  command: string,
+  args: string[],
+  options: { cwd: string; timeout: number; maxBuffer: number },
+) => Promise<{ stdout: string }>;
+
+export interface ConnectionHost {
+  view: HostView;
+  store: StateStore;
+  executable: string;
+  run: Run;
+  guard: string;
+  fixture?: string;
+  configuredModel: string;
+  saved?: SavedSession;
+  launch?: LaunchRoute;
+  update(notification: SessionNotification): void;
+  closed(client: OmpClient, tools: HostTools): void;
+  setClient(client: OmpClient, tools: HostTools): void;
+  setError(message: string): void;
+  log(message: string): void;
+  clearPending(): void;
+  refreshRoutes(): void;
+}
+
+export async function applyStartupModel(
+  client: OmpClient,
+  store: StateStore,
+  saved: SavedSession | undefined,
+  configured: string,
+  launch?: LaunchRoute,
+): Promise<void> {
+  if (!launch) {
+    await selectModel(client, store, configured, Boolean(saved));
+    return;
+  }
+  const current = client.configOptions.find((option) => option.id === 'model')?.currentValue;
+  const model = routeBaseModel(launch.selector);
+  if (current !== model) throw new Error('OMP did not start on the selected OpenRouter model.');
+  store.data.lastModel = model;
+}
+
+export async function establishConnection(host: ConnectionHost): Promise<void> {
+  const { view, store, executable, saved, launch } = host;
+  const root = view.root(saved);
+  const directory = store.directory;
+  const artifacts = await artifactsDirectory(directory);
+  const sessionFile = await resumeArtifact(artifacts, saved);
+  const backend = await host.run(executable, ['config', 'get', 'memory.backend', '--json'], {
+    cwd: root.uri.fsPath,
+    timeout: 15_000,
+    maxBuffer: 65536,
+  });
+  const config = await startupConfig(directory, JSON.parse(backend.stdout).value, host.fixture);
+  view.assertRoot(root);
+  const { tools, client } = createConnection(
+    view.files,
+    view.journal,
+    artifacts,
+    view.chat.requestApproval,
+    {
+      update: host.update,
+      closed: host.closed,
+      log: host.log,
+      questions: view.chat.requestQuestions,
+    },
+  );
+  host.setClient(client, tools);
+  await startSessionClient(
+    client,
+    {
+      executable,
+      cwd: root.uri.fsPath,
+      artifacts,
+      sessionFile,
+      config,
+      storage: directory,
+      guard: host.guard,
+      fixture: host.fixture,
+      model: launch?.selector,
+    },
+    (target) => view.journal.inspect(target),
+  );
+  await applyStartupModel(client, store, saved, host.configuredModel, launch);
+  view.assertRoot(root);
+  if (
+    await bindConnectedSession(
+      store,
+      client,
+      { uri: root.uri.toString(), name: root.name },
+      saved,
+      view.attachments,
+    )
+  )
+    host.setError(
+      'Recovered an interrupted conversation edit. Its full original is in Switch Session. Files were not changed.',
+    );
+  if (launch) {
+    const active = view.active();
+    host.clearPending();
+    dropEmptySession(
+      store,
+      launch.replace,
+      active?.id,
+      (id) => view.journal.list(id).length,
+      (id) => view.attachments.clear(id),
+    );
+  }
+  await view.journal.refresh();
+  await store.save();
+  view.assertRoot(root);
+  host.refreshRoutes();
 }
 
 export async function selectModel(
