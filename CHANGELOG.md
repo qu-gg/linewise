@@ -1,8 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.1.2
 
-- Add new-chat OpenRouter upstream provider selection. A secondary route picker lists providers from OpenRouter's public endpoint catalog, defaults to Auto routing, and pins the selected provider when the first prompt starts a new OMP session. Route changes are unavailable after a chat has turns; resumed chats keep their recorded model.
+Patch release for new-chat OpenRouter provider routing.
+
+- Add new-chat OpenRouter upstream provider selection. A secondary route picker lists providers from OpenRouter's public endpoint catalog, defaults to Auto routing, and pins the selected provider when the first prompt starts a new OMP session. Route changes are unavailable after a chat has turns. OMP 18.21.0 records the base model, not the upstream route, in its session journal, so resuming returns to Auto routing.
+- Keep the local Linux x64, VS Code 1.147.0 and OMP 18.21.0 acceptance profile. Remote-SSH, multi-root lifecycle and other platforms remain outside that profile. No Marketplace distribution is included.
 
 Release status is recorded by the matching GitHub tag and published prerelease.
 Publication requires the release gates; the source version alone does not mean
