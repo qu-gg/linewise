@@ -2,6 +2,12 @@
 
 Start with the [README setup](../README.md#try-it) on a disposable workspace. Use **Linewise: Open Chat**, configure `omp.executablePath` in user settings if needed, and select a model. Only one active OMP process/session runs per workbench window.
 
+## Models And Providers
+
+OMP owns provider configuration and credentials. Authenticate in OMP (`omp`, then `/login`) before starting Linewise, or reconnect after adding a provider; Linewise lists only the models OMP advertises and does not store credentials. The native model picker groups models by provider, sorts providers by their available model count (fewest first), and searches model names and `provider/model` identifiers.
+
+Selecting a model changes the active model for the current OMP session only. New sessions use `omp.model` when set, otherwise OMP's configured default; resumed sessions keep their stored model. `omp.model` must exactly match an advertised `provider/model` selector. Routing/effort suffixes and upstream pins (`@...`, `:...`) remain OMP-owned. Switching a model does not change provider authentication, OMP role models (smol/slow/plan/compaction), or guarantee image/tool support. A listed model is not a Linewise provider-certification claim.
+
 ## Review
 
 Changed Files shows cumulative unresolved file-tool changes, with counts and file/bulk Keep/Discard actions. Selecting a file opens the public readonly inline review editor: green additions, red deletions, floating hunk Keep/Undo. Keep advances only that accepted baseline; Undo restores the selected pending hunk while preserving accepted text and exact line endings. Creation/deletion/moves retain whole-operation review.

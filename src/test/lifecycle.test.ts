@@ -151,7 +151,7 @@ for (const failure of ['config', 'memory', 'model'] as const) {
               name: 'Model',
               type: 'select',
               currentValue: 'other/local',
-              options: [{ name: 'Other model', value: 'other/local' }],
+              options: [],
             },
           ];
       },
@@ -164,7 +164,7 @@ for (const failure of ['config', 'memory', 'model'] as const) {
         ? /EISDIR/
         : failure === 'memory'
           ? /Memory settings query failed/
-          : /No GitHub Copilot models are authenticated.*\/login/,
+          : /No OMP models are available.*\/login/,
     );
     assert.equal(host.status()!.connected, false);
     assert.equal(host.status()!.connecting, false);

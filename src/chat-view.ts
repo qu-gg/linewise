@@ -1,5 +1,7 @@
 import * as vscode from 'vscode';
 import { randomBytes } from 'node:crypto';
+import { selectOptions, type OmpClient } from './acp.js';
+import { groupModels, type ProviderGroup } from './model-picker.js';
 import { Approvals } from './approvals.js';
 import { Questions } from './questions.js';
 import { Attention, type AttentionEvent, type AttentionPolicy } from './attention.js';
@@ -7,6 +9,10 @@ import type { RequestApproval } from './approvals.js';
 import type { webviewMessage } from './state.js';
 import { fileApproval } from './approval-prompts.js';
 import type { Approval } from './review.js';
+
+interface ModelPickItem extends vscode.QuickPickItem {
+  value?: string;
+}
 
 export function isChatRequest(request: ReturnType<typeof webviewMessage.parse>): boolean {
   return [
@@ -167,6 +173,63 @@ export class ChatView {
     if (!this.attention.current(event, this.snapshot())) return;
     this.view?.show(false);
     this.post({ v: 1, type: 'focusAttention', ...event });
+  }
+
+  async pickModel(
+    client: Pick<OmpClient, 'configOptions'>,
+    apply: (value: string) => Promise<void>,
+  ): Promise<void> {
+    const option = client.configOptions.find((candidate) => candidate.id === 'model');
+    if (option?.type !== 'select') return;
+    const choices = selectOptions(option);
+    if (!choices.length) {
+      void vscode.window.showInformationMessage(
+        'No OMP models are available. Run omp in a terminal and use /login for a provider.',
+      );
+      return;
+    }
+    const selected = await this.showModelPicker(groupModels(choices), option.currentValue);
+    if (selected && selected !== option.currentValue) await apply(selected);
+  }
+
+  private showModelPicker(groups: ProviderGroup[], current: string): Promise<string | undefined> {
+    const items: ModelPickItem[] = [];
+    for (const group of groups) {
+      if (groups.length > 1)
+        items.push({
+          label: `${group.provider} (${group.count})`,
+          kind: vscode.QuickPickItemKind.Separator,
+        });
+      for (const model of group.models)
+        items.push({
+          label: model.name,
+          description: model.description ?? model.value,
+          value: model.value,
+          picked: model.value === current,
+        });
+    }
+    const picker = vscode.window.createQuickPick<ModelPickItem>();
+    picker.title = 'Select Model';
+    picker.placeholder = 'Search models by name, provider, or ID';
+    picker.matchOnDescription = true;
+    picker.items = items;
+    const active = items.find((item) => item.value === current);
+    if (active) picker.activeItems = [active];
+    const { promise, resolve } = Promise.withResolvers<string | undefined>();
+    let settled = false;
+    picker.onDidAccept(() => {
+      const selected = picker.selectedItems[0] ?? picker.activeItems[0];
+      settled = true;
+      picker.hide();
+      resolve(selected?.value);
+    });
+    picker.onDidHide(() => {
+      picker.dispose();
+      if (!settled) resolve(undefined);
+      this.view?.show(false);
+    });
+    picker.show();
+    return promise;
   }
 
   readonly focusTerminals = (sessionId: string): void => {

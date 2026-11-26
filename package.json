@@ -236,7 +236,8 @@
         "omp.model": {
           "type": "string",
           "default": "",
-          "description": "Preferred OMP github-copilot model ID; empty uses a valid configured Copilot model or gpt-4.1."
+          "scope": "machine",
+          "description": "Preferred provider-qualified OMP model selector (`provider/model`) for new sessions; empty uses OMP's configured default. Must match an advertised model exactly; routing and effort suffixes are owned by OMP."
         },
         "omp.permissions.defaultMode": {
           "type": "string",

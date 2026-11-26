@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { QuickPickFixture, resetPicker } from './quick-pick-fixture.js';
 import { Task, CustomExecution, EventEmitter } from './task-fixture.js';
 import type { TaskPty } from './task-fixture.js';
 import { createDiagnosticCollection } from './task-fixture.js';
@@ -37,7 +38,6 @@ export class Uri {
     return new Uri(base.scheme, base.authority, path.posix.join(base.path, ...parts));
   }
 }
-
 export class Position {
   constructor(
     readonly line: number,
@@ -101,7 +101,6 @@ export class WorkspaceEdit {
     this.edits.push({ type: 'replace', uri, range, content });
   }
 }
-
 export class Document {
   isDirty = true;
   version = 1;
@@ -140,7 +139,6 @@ export class Document {
     return true;
   }
 }
-
 export const fixture = {
   disk: new Map<string, { bytes: Uint8Array; type: number; size?: number }>(),
   documents: [] as Document[],
@@ -189,7 +187,6 @@ export const fixture = {
   viewDisposed: undefined as (() => void) | undefined,
   delivery: true as boolean | 'reject',
 };
-
 export function reset() {
   fixture.disk.clear();
   fixture.documents.length = 0;
@@ -213,6 +210,7 @@ export function reset() {
   fixture.outputShown = false;
   fixture.approval = undefined;
   fixture.quickPick = undefined;
+  resetPicker();
   fixture.openFiles = [];
   fixture.saveFile = undefined;
   fixture.resourcePicks = [];
@@ -399,6 +397,7 @@ export class CancellationTokenSource {
   }
 }
 export const ExtensionMode = { Production: 1, Development: 2, Test: 3 };
+export const QuickPickItemKind = { Separator: -1, Default: 0 };
 export class RelativePattern {
   constructor(
     readonly base: unknown,
@@ -424,6 +423,7 @@ export const languages = {
 };
 export const window = {
   registerCustomEditorProvider: disposable,
+  createQuickPick: () => new QuickPickFixture(fixture),
   onDidChangeActiveTextEditor: (listener: () => void) => {
     fixture.editorListeners.push(listener);
     return disposable();

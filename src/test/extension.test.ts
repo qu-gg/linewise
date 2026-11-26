@@ -86,7 +86,7 @@ test('host recovers from startup without an available model before accepting com
     await start.call(this, options);
     this.configOptions = [];
   };
-  await assert.rejects(host.request({ type: 'connect' }), /No Copilot models/);
+  await assert.rejects(host.request({ type: 'connect' }), /model selector/);
   assert.equal(host.status()!.connecting, false);
   assert.equal(host.status()!.approval, undefined);
   OmpClient.prototype.start = start;

@@ -1,5 +1,6 @@
 import type { SessionNotification } from '@agentclientprotocol/sdk';
 import { selectOptions, type OmpClient } from './acp.js';
+import { providerOf } from './model-picker.js';
 import { updateTurn } from './session-updates.js';
 import { parseUsage, type SavedSession, type Turn } from './state.js';
 import type { HistorySnapshot } from './history.js';
@@ -76,12 +77,19 @@ export function sessionPresentation(session: SavedSession | undefined) {
 export function configPresentation(client: OmpClient | undefined) {
   return (client?.configOptions ?? [])
     .filter((option) => ['model', 'thinking'].includes(option.id))
-    .map((option) => ({
-      id: option.id,
-      name: option.name,
-      value: option.currentValue,
-      options: selectOptions(option).filter(
-        (choice) => option.id !== 'model' || choice.value.startsWith('github-copilot/'),
-      ),
-    }));
+    .map((option) => {
+      const value = String(option.currentValue);
+      const options = selectOptions(option);
+      if (option.id === 'model') {
+        const current = options.find((choice) => choice.value === value);
+        return {
+          id: option.id,
+          name: option.name,
+          value,
+          label: current?.name ?? value,
+          provider: providerOf(value),
+        };
+      }
+      return { id: option.id, name: option.name, value, options };
+    });
 }

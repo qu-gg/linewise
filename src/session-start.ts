@@ -177,23 +177,31 @@ export async function startSessionClient(
   if (!client.sessionId) throw new Error('OMP did not return a session identifier.');
 }
 
-export async function selectCopilotModel(client: OmpClient, preferred: string): Promise<void> {
+export async function selectModel(
+  client: OmpClient,
+  preferred: string,
+  resume = false,
+): Promise<void> {
   const model = client.configOptions.find((option) => option.id === 'model');
-  if (!model)
+  if (!model) throw new Error('OMP did not advertise a model selector.');
+  if (resume) return;
+  const choices = selectOptions(model);
+  if (!choices.length)
     throw new Error(
-      'No Copilot models are available. Run omp in a terminal and use /login github-copilot.',
+      'No OMP models are available. Run omp in a terminal and use /login for a provider.',
     );
-  const choices = selectOptions(model).filter((option) =>
-    option.value.startsWith('github-copilot/'),
-  );
-  const chosen =
-    choices.find((option) => option.value === preferred) ??
-    choices.find((option) => option.value === model.currentValue) ??
-    choices.find((option) => option.value === 'github-copilot/gpt-4.1') ??
-    choices[0];
-  if (!chosen)
-    throw new Error('No GitHub Copilot models are authenticated. Run omp and use /login first.');
-  if (chosen.value !== model.currentValue) await client.setConfig('model', chosen.value);
+  const selection = preferred.trim();
+  if (selection) {
+    const chosen = choices.find((option) => option.value === selection);
+    if (!chosen)
+      throw new Error(
+        `The configured omp.model "${selection}" is not an advertised OMP model. Update the setting or run /login for that provider.`,
+      );
+    if (chosen.value !== model.currentValue) await client.setConfig('model', chosen.value);
+    return;
+  }
+  if (choices.some((option) => option.value === model.currentValue)) return;
+  await client.setConfig('model', choices[0]!.value);
 }
 
 export async function configureSession(

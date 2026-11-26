@@ -65,7 +65,7 @@ export function browserApproval(request: BrowserRequest, executablePath?: string
 export function fileApproval(operation: Parameters<Approval>[0]): ApprovalPrompt {
   const details =
     operation.kind === 'read'
-      ? 'The requested file content will be sent to the configured Copilot model.'
+      ? 'The requested file content will be sent to the configured model provider.'
       : createTwoFilesPatch(
           operation.path,
           operation.destination ?? operation.path,

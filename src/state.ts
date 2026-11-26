@@ -379,6 +379,7 @@ export const webviewMessage = z.discriminatedUnion('type', [
     id: z.enum(['model', 'thinking']),
     value: z.string().min(1).max(300),
   }),
+  z.object({ v: z.literal(1), type: z.literal('pickModel') }).strict(),
   z
     .object({
       v: z.literal(1),

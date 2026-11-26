@@ -266,17 +266,7 @@ select option {
   background: var(--vscode-dropdown-background);
   color: var(--vscode-foreground);
 }
-.config-controls select:first-child {
-  max-width: 65%;
-  flex: 0 1 auto;
-}
-.config-controls select + select {
-  max-width: 50%;
-  flex: 0 1 auto;
-  border-left: 1px solid var(--vscode-widget-border);
-  padding-left: 7px;
-  margin-left: 3px;
-}
+
 .send {
   color: var(--vscode-foreground);
 }

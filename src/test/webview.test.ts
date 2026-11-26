@@ -89,17 +89,15 @@ test('terminal picker focus restoration refuses stale, idle and disconnected mes
   }
 });
 
-test('model and thinking selectors retain accessible native menus and configuration messages', () => {
+test('model picker and thinking selector retain accessible controls and configuration messages', () => {
   update({
     configs: [
       {
         id: 'model',
         name: 'Model',
-        value: 'sol',
-        options: [
-          { name: 'GPT-6.1 Sol', value: 'sol' },
-          { name: '<other>', value: 'other' },
-        ],
+        value: 'openrouter/deepseek',
+        label: 'DeepSeek <V4.1>',
+        provider: 'openrouter',
       },
       {
         id: 'thinking',
@@ -112,20 +110,21 @@ test('model and thinking selectors retain accessible native menus and configurat
       },
     ],
   });
-  for (const [id, value] of [
-    ['model', 'other'],
-    ['thinking', 'medium'],
-  ]) {
-    const select = element<HTMLSelectElement>(`[data-config="${id}"]`);
-    assert.equal(select.getAttribute('aria-label'), id === 'model' ? 'Model' : 'Thinking');
-    select.value = value!;
-    select.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
-    assert.deepEqual(messages.at(-1), { v: 1, type: 'config', id, value });
-    update({ busy: true });
-    assert.equal(element<HTMLSelectElement>(`[data-config="${id}"]`).disabled, true);
-    update({ busy: false });
-  }
-  assert.equal(dom.window.document.querySelector('other'), null);
+  const model = element<HTMLButtonElement>('#model-picker');
+  assert.equal(model.getAttribute('aria-label'), 'Model: DeepSeek <V4.1>');
+  assert.equal(model.title, 'openrouter/deepseek');
+  assert.match(model.textContent!, /DeepSeek <V4\.1>/);
+  click('pickModel');
+  assert.deepEqual(messages.at(-1), { v: 1, type: 'pickModel' });
+  const thinking = element<HTMLSelectElement>('[data-config="thinking"]');
+  assert.equal(thinking.getAttribute('aria-label'), 'Thinking');
+  thinking.value = 'medium';
+  thinking.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+  assert.deepEqual(messages.at(-1), { v: 1, type: 'config', id: 'thinking', value: 'medium' });
+  update({ busy: true });
+  assert.equal(element<HTMLButtonElement>('#model-picker').disabled, true);
+  assert.equal(element<HTMLSelectElement>('[data-config="thinking"]').disabled, true);
+  update({ busy: false });
 });
 
 test('drafts stay with their session and selection survives state renders', () => {
@@ -440,10 +439,17 @@ test('context controls show reported values, preserve stale state, and close on 
       {
         id: 'model',
         name: 'Model',
-        value: 'one',
+        value: 'openrouter/one',
+        label: 'First',
+        provider: 'openrouter',
+      },
+      {
+        id: 'thinking',
+        name: 'Thinking',
+        value: 'high',
         options: [
-          { name: 'First', value: 'one' },
-          { name: 'Second', value: 'two' },
+          { name: 'High', value: 'high' },
+          { name: 'Medium', value: 'medium' },
         ],
       },
     ],
@@ -452,16 +458,18 @@ test('context controls show reported values, preserve stale state, and close on 
   assert.match(element('.context-numbers').textContent!, /50%/);
   assert.match(element('.session-cost').textContent!, /0.125 USD/);
   assert.ok(element('.context-note'));
+  assert.match(element('.context-popover').textContent!, /Provideropenrouter/);
+  assert.match(element('.context-popover').textContent!, /ModelFirst/);
   click('inspectContext');
   click('compact');
   assert.deepEqual(
     messages.map(({ type }) => type),
     ['inspectContext', 'compact'],
   );
-  const config = element<HTMLSelectElement>('[data-config="model"]');
-  config.value = 'two';
+  const config = element<HTMLSelectElement>('[data-config="thinking"]');
+  config.value = 'medium';
   config.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
-  assert.deepEqual(messages.at(-1), { v: 1, type: 'config', id: 'model', value: 'two' });
+  assert.deepEqual(messages.at(-1), { v: 1, type: 'config', id: 'thinking', value: 'medium' });
   click('context');
   dom.window.document.dispatchEvent(
     new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
