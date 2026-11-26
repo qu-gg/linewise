@@ -4,6 +4,16 @@ Release status is recorded by the matching GitHub tag and published prerelease.
 Publication requires the release gates; the source version alone does not mean
 that a release exists.
 
+## 0.1.1
+
+Patch release for the provider model picker and tool-schema compatibility.
+
+- Add a searchable, provider-grouped inline model picker with keyboard navigation, focus and scroll preservation, and an on-demand catalog. It replaces the native QuickPick.
+- Reuse the last active model for new sessions; an exact `omp.model` seeds the first session. Provider authentication and credentials remain owned by OMP.
+- Flatten provider-facing bash/browser/editor tool schemas to object roots so OpenAI-compatible providers such as OpenRouter Terra accept the full tool catalog. The runtime validators remain authoritative for action-specific fields and approval paths.
+- Disclose that switching to a model from another provider sends subsequent prompts and conversation context to that provider.
+- Keep the existing local Linux x64, VS Code 1.146.0 and OMP 18.21.0 acceptance profile. Remote-SSH, multi-root lifecycle and other platforms remain outside that profile. No Marketplace distribution is included.
+
 ## 0.1.0
 
 Linewise's first public-release candidate: an early local-Linux x64 preview.
@@ -14,12 +24,6 @@ and checksums. No Marketplace distribution is included.
   Keep the owner's personal motivation section verbatim.
 - Provide OMP/ACP chat, explicit context, model controls, questions, Stop and
   conversation history through public VS Code APIs.
-- Flatten provider-facing tool union schemas to object roots and mark the
-  flattened bash/browser/editor tools non-strict. OpenAI-compatible providers
-  such as OpenRouter reject a root `anyOf`/`oneOf` even when every branch is an
-  object; the runtime validators remain authoritative for action-specific fields.
-- Disclose that switching to a model from another provider sends subsequent
-  prompts and conversation context to that provider.
 - Review text changes hunk by hunk in a full-file editor with floating Keep/Undo;
   preserve accepted baselines, pending review on reload and stale-change refusal.
   Creation, deletion and moves use whole-operation review.
