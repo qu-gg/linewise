@@ -21,6 +21,8 @@ before(async () => {
     window: dom.window,
     document: dom.window.document,
     HTMLTextAreaElement: dom.window.HTMLTextAreaElement,
+    File: dom.window.File,
+    FileReader: dom.window.FileReader,
     acquireVsCodeApi: () => ({
       getState: () => ({}),
       setState: (value: typeof remembered) => {

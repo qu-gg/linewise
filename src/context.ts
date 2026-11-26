@@ -5,12 +5,17 @@ import { imageSchema, decodeImage, type ImagePayload } from './image-policy.js';
 type ContextRequest =
   | { type: 'attach' }
   | { type: 'attachContext' }
+  | { type: 'pasteImages'; images: ImagePayload[] }
   | { type: 'inspectAttachment'; id: string }
   | { type: 'removeAttachment'; id: string };
 export function isContextRequest(request: { type: string }): request is ContextRequest {
-  return ['attach', 'attachContext', 'inspectAttachment', 'removeAttachment'].includes(
-    request.type,
-  );
+  return [
+    'attach',
+    'attachContext',
+    'pasteImages',
+    'inspectAttachment',
+    'removeAttachment',
+  ].includes(request.type);
 }
 
 export function turnAttachments(turn: Pick<Turn, 'attachment' | 'attachments'>): Attachment[] {
@@ -37,6 +42,19 @@ export function imageContextSnapshot(label: string, uri: string, image: ImagePay
     ...contextSnapshot('image', label, uri, 'Untrusted image snapshot: ' + label),
     image: imageSchema.parse(image),
   };
+}
+
+export function pastedImageSnapshot(image: ImagePayload): Attachment {
+  const validated = imageSchema.parse(image);
+  const extension = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' }[
+    validated.mimeType
+  ];
+  const label = `Pasted ${extension.toUpperCase()} image`;
+  return imageContextSnapshot(
+    label,
+    `untitled:pasted-image-${randomUUID()}.${extension}`,
+    validated,
+  );
 }
 
 function validatedSnapshot(snapshot: Attachment): Attachment {
@@ -117,6 +135,8 @@ export class ContextAttachments {
   ): Promise<void> {
     if (request.type === 'attach') return this.add(owner, [files.editorContext()]);
     if (request.type === 'attachContext') return this.add(owner, await files.pickContext());
+    if (request.type === 'pasteImages')
+      return this.add(owner, request.images.map(pastedImageSnapshot));
     if (request.type === 'removeAttachment') return this.remove(owner, request.id);
     const selected = this.list(owner).find((item) => item.id === request.id);
     if (!selected) throw new Error('Attachment does not belong to this session.');

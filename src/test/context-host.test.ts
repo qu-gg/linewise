@@ -365,3 +365,79 @@ test('editor range capture excludes unselected text and attachment drafts stay w
   await host.request({ type: 'new' });
   assert.deepEqual(host.status()!.attachments, []);
 });
+
+test('pasted clipboard images become immutable untitled image attachments and reach ACP as pixels', async (context) => {
+  const host = await setup(context);
+  await host.request({ type: 'connect' });
+  const bytes = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 1, 2, 3]);
+  const data = bytes.toString('base64');
+  await host.request({
+    type: 'pasteImages',
+    images: [{ mimeType: 'image/png', data }],
+  });
+  const [pending] = host.status()!.attachments;
+  assert.equal(pending!.kind, 'image');
+  assert.equal(pending!.label, 'Pasted PNG image');
+  assert.match(pending!.uri, /^untitled:pasted-image-[\w-]+\.png$/);
+  assert.ok(!JSON.stringify(host.status()!.attachments).includes(data));
+  transport.onPrompt = async (blocks) => {
+    assert.equal(blocks.length, 3);
+    assert.equal(blocks[2]!.type, 'image');
+    assert.equal((blocks[2] as { data: string }).data, data);
+  };
+  await host.request({ type: 'prompt', text: 'Describe the pasted image' });
+  assert.equal(host.storedState!().sessions[0]!.turns[0]!.attachments![0]!.image!.data, data);
+  assert.deepEqual(host.status()!.attachments, []);
+});
+
+test('pasted image batches reject malformed, oversized, excessive and over-budget payloads without losing context', async (context) => {
+  const host = await setup(context);
+  const valid = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 1, 2, 3]);
+  const data = valid.toString('base64');
+  await host.request({
+    type: 'pasteImages',
+    images: [{ mimeType: 'image/png', data }],
+  });
+  await assert.rejects(
+    host.request({
+      type: 'pasteImages',
+      images: [{ mimeType: 'image/gif', data }],
+    }),
+    /Invalid sidebar message/,
+  );
+  await assert.rejects(
+    host.request({
+      type: 'pasteImages',
+      images: [{ mimeType: 'image/png', data: 'not-base64' }],
+    }),
+    /Invalid sidebar message/,
+  );
+  await assert.rejects(
+    host.request({
+      type: 'pasteImages',
+      images: [{ mimeType: 'image/png', data: Buffer.alloc(524_289).toString('base64') }],
+    }),
+    /Invalid sidebar message/,
+  );
+  await assert.rejects(
+    host.request({
+      type: 'pasteImages',
+      images: Array.from({ length: 9 }, () => ({ mimeType: 'image/png', data })),
+    }),
+    /Invalid sidebar message/,
+  );
+  const full = Buffer.alloc(524_288);
+  valid.copy(full);
+  await assert.rejects(
+    host.request({
+      type: 'pasteImages',
+      images: Array.from({ length: 3 }, () => ({
+        mimeType: 'image/png',
+        data: full.toString('base64'),
+      })),
+    }),
+    /1 MiB/,
+  );
+  assert.equal(host.status()!.attachments.length, 1);
+  assert.equal(host.status()!.attachments[0]!.id, host.status()!.attachments[0]!.id);
+});

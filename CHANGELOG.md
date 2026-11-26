@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.1.3
+
+Patch release for clipboard image context.
+
+- Paste PNG, JPEG or WebP images directly into the composer to attach them as
+  explicit context. The webview reads clipboard pixels, the host validates and
+  stores one bounded batch, and the existing composition path sends the image
+  with the submitted prompt and history replay. Text pasted alongside an image
+  is inserted into the draft.
+- Keep the existing limits: up to eight attachments, 512 KiB per image and 1 MiB
+  of images in total. Oversized or unsupported clipboard data stays local and
+  reports the reason without changing the current attachments.
+- Keep the local Linux x64, VS Code 1.147.0 and OMP 18.21.0 acceptance profile.
+  Remote-SSH, multi-root lifecycle and other platforms remain outside that
+  profile. No Marketplace distribution is included.
+
 ## 0.1.2
 
 Patch release for new-chat OpenRouter provider routing.

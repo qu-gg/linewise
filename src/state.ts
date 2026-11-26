@@ -303,6 +303,13 @@ export const webviewMessage = z.discriminatedUnion('type', [
       id: z.string().uuid(),
     })
     .strict(),
+  z
+    .object({
+      v: z.literal(1),
+      type: z.literal('pasteImages'),
+      images: z.array(imageSchema).min(1).max(8),
+    })
+    .strict(),
   z.object({
     v: z.literal(1),
     type: z.enum([
