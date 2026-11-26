@@ -88,7 +88,7 @@ export function modelPickerPopover(state, { escape, icon }) {
   else if (!options.length)
     status = `<p class="model-empty" role="status">No models match &quot;${escape(display.filter)}&quot;.</p>`;
   const activeId = active >= 0 ? `model-option-${active}` : '';
-  return `<div class="model-popover" role="dialog" aria-label="Select Model"><label class="model-search">${icon('search')}<input id="model-search" type="search" role="combobox" aria-label="Search models" aria-autocomplete="list" aria-expanded="true" aria-controls="model-list" aria-activedescendant="${activeId}" placeholder="Search models by name, provider, or ID" value="${escape(display.filter)}"></label><div id="model-list" class="model-list" role="listbox" aria-label="Models">${groupsHtml}</div>${status}<p class="model-note">Providers and credentials are managed in OMP.</p></div>`;
+  return `<div class="model-popover" role="dialog" aria-label="Select Model"><label class="model-search">${icon('search')}<input id="model-search" type="search" role="combobox" aria-label="Search models" aria-autocomplete="list" aria-expanded="true" aria-controls="model-list" aria-activedescendant="${activeId}" placeholder="Search models by name, provider, or ID" value="${escape(display.filter)}"></label><div id="model-list" class="model-list" role="listbox" aria-label="Models">${groupsHtml}</div>${status}<p class="model-note">Switching providers sends future prompts and conversation context to that provider. Credentials stay in OMP.</p></div>`;
 }
 
 let bound = false;

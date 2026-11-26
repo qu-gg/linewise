@@ -47,6 +47,7 @@ test('inline model picker groups providers, searches and selects with keyboard',
   );
   assert.equal(element('.model-option.active').getAttribute('data-model'), 'openrouter/deepseek');
   assert.equal(element('[data-model="openrouter/deepseek"]').getAttribute('aria-selected'), 'true');
+  assert.match(element('.model-note').textContent!, /future prompts and conversation context/);
   let search = element<HTMLInputElement>('#model-search');
   search.value = 'qwen';
   search.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
