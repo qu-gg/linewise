@@ -237,7 +237,7 @@
           "type": "string",
           "default": "",
           "scope": "machine",
-          "description": "Preferred provider-qualified OMP model selector (`provider/model`) for new sessions; empty uses OMP's configured default. Must match an advertised model exactly; routing and effort suffixes are owned by OMP."
+          "description": "Provider-qualified OMP model selector (`provider/model`) that seeds the first session; after a model is selected, new sessions reuse the last active model. Must match an advertised model exactly; routing and effort suffixes are owned by OMP."
         },
         "omp.permissions.defaultMode": {
           "type": "string",

@@ -179,12 +179,24 @@ export async function startSessionClient(
 
 export async function selectModel(
   client: OmpClient,
-  preferred: string,
+  store: StateStore,
+  configured: string,
   resume = false,
 ): Promise<void> {
+  const sticky = store.data.lastModel;
+  store.data.lastModel = await applyModel(client, sticky ?? configured, resume, Boolean(sticky));
+}
+
+async function applyModel(
+  client: OmpClient,
+  preferred: string,
+  resume: boolean,
+  fallback: boolean,
+): Promise<string> {
   const model = client.configOptions.find((option) => option.id === 'model');
   if (!model) throw new Error('OMP did not advertise a model selector.');
-  if (resume) return;
+  const current = String(model.currentValue);
+  if (resume) return current;
   const choices = selectOptions(model);
   if (!choices.length)
     throw new Error(
@@ -193,15 +205,19 @@ export async function selectModel(
   const selection = preferred.trim();
   if (selection) {
     const chosen = choices.find((option) => option.value === selection);
-    if (!chosen)
+    if (chosen) {
+      if (chosen.value !== current) await client.setConfig('model', chosen.value);
+      return chosen.value;
+    }
+    if (!fallback)
       throw new Error(
         `The configured omp.model "${selection}" is not an advertised OMP model. Update the setting or run /login for that provider.`,
       );
-    if (chosen.value !== model.currentValue) await client.setConfig('model', chosen.value);
-    return;
   }
-  if (choices.some((option) => option.value === model.currentValue)) return;
-  await client.setConfig('model', choices[0]!.value);
+  if (choices.some((option) => option.value === current)) return current;
+  const next = choices[0]!.value;
+  await client.setConfig('model', next);
+  return next;
 }
 
 export async function configureSession(
@@ -215,6 +231,9 @@ export async function configureSession(
     throw new Error('Unsupported session option.');
   await client!.setConfig(id, value);
   const session = store.data.sessions.find((saved) => saved.id === store.data.activeSessionId);
-  if (id === 'model' && session?.usage) session.usage.stale = true;
+  if (id === 'model') {
+    store.data.lastModel = value;
+    if (session?.usage) session.usage.stale = true;
+  }
   await store.save();
 }

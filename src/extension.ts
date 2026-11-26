@@ -242,11 +242,8 @@ class OmpView extends HostOperations implements vscode.WebviewViewProvider {
         },
         (target) => this.view.journal.inspect(target),
       );
-      await selectModel(
-        client,
-        vscode.workspace.getConfiguration('omp').get<string>('model', ''),
-        Boolean(saved),
-      );
+      const configured = vscode.workspace.getConfiguration('omp').get<string>('model', '');
+      await selectModel(client, this.store, configured, Boolean(saved));
       this.view.assertRoot(root);
       if (
         await bindConnectedSession(

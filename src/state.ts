@@ -130,6 +130,7 @@ const state = z.object({
   sessions: z.array(session),
   changes: z.array(change),
   activeSessionId: z.string().optional(),
+  lastModel: z.string().max(300).optional(),
 });
 export type ChatBlock = z.infer<typeof block>;
 export type Turn = z.infer<typeof turn>;

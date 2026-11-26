@@ -6,7 +6,7 @@ Start with the [README setup](../README.md#try-it) on a disposable workspace. Us
 
 OMP owns provider configuration and credentials. Authenticate in OMP (`omp`, then `/login`) before starting Linewise, or reconnect after adding a provider; Linewise lists only the models OMP advertises and does not store credentials. The native model picker groups models by provider, sorts providers by their available model count (fewest first), and searches model names and `provider/model` identifiers.
 
-Selecting a model changes the active model for the current OMP session only. New sessions use `omp.model` when set, otherwise OMP's configured default; resumed sessions keep their stored model. `omp.model` must exactly match an advertised `provider/model` selector. Routing/effort suffixes and upstream pins (`@...`, `:...`) remain OMP-owned. Switching a model does not change provider authentication, OMP role models (smol/slow/plan/compaction), or guarantee image/tool support. A listed model is not a Linewise provider-certification claim.
+Selecting a model makes it the active model and the default for new sessions in this workspace. Resumed sessions keep their stored model. Before any model has been selected, `omp.model` seeds the first session when set; otherwise OMP's configured default is used. If a remembered model is no longer advertised, the next new session falls back to OMP's current/default model. `omp.model` must exactly match an advertised `provider/model` selector. Routing/effort suffixes and upstream pins (`@...`, `:...`) remain OMP-owned. Switching a model does not change provider authentication, OMP role models (smol/slow/plan/compaction), or guarantee image/tool support. A listed model is not a Linewise provider-certification claim.
 
 ## Review
 

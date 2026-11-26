@@ -41,7 +41,7 @@ test('host selects advertised provider models and switches through the native pi
   assert.equal(model.currentValue, 'anthropic/claude');
 });
 
-test('host honors an exact omp.model selector and rejects unavailable ones', async (context) => {
+test('host seeds the first session from omp.model', async (context) => {
   const host = await setup(context);
   transport.configOptions = [
     {
@@ -61,9 +61,71 @@ test('host honors an exact omp.model selector and rejects unavailable ones', asy
     transport.client!.configOptions.find((option) => option.id === 'model')!.currentValue,
     'anthropic/claude',
   );
-  await host.request({ type: 'disconnect' });
+  assert.equal(host.storedState!().lastModel, 'anthropic/claude');
+});
+
+test('new sessions reuse the last active model', async (context) => {
+  const host = await setup(context);
+  const options = [
+    { name: 'DeepSeek', value: 'openrouter/deepseek' },
+    { name: 'Claude', value: 'anthropic/claude' },
+  ];
+  transport.configOptions = [
+    {
+      id: 'model',
+      name: 'Model',
+      type: 'select',
+      currentValue: 'openrouter/deepseek',
+      options,
+    },
+  ];
+  await host.request({ type: 'connect' });
+  fixture.quickPick = 'anthropic/claude';
+  await host.request({ type: 'pickModel' });
+  assert.equal(host.storedState!().lastModel, 'anthropic/claude');
+  transport.configOptions = [
+    {
+      id: 'model',
+      name: 'Model',
+      type: 'select',
+      currentValue: 'openrouter/deepseek',
+      options,
+    },
+  ];
+  await host.request({ type: 'new' });
+  assert.equal(
+    transport.client!.configOptions.find((option) => option.id === 'model')!.currentValue,
+    'anthropic/claude',
+  );
+  transport.configOptions = [
+    {
+      id: 'model',
+      name: 'Model',
+      type: 'select',
+      currentValue: 'openrouter/deepseek',
+      options: [{ name: 'DeepSeek', value: 'openrouter/deepseek' }],
+    },
+  ];
+  await host.request({ type: 'new' });
+  assert.equal(
+    transport.client!.configOptions.find((option) => option.id === 'model')!.currentValue,
+    'openrouter/deepseek',
+  );
+});
+
+test('host rejects an unavailable omp.model before the first session', async (context) => {
+  const host = await setup(context);
+  transport.configOptions = [
+    {
+      id: 'model',
+      name: 'Model',
+      type: 'select',
+      currentValue: 'openrouter/deepseek',
+      options: [{ name: 'DeepSeek', value: 'openrouter/deepseek' }],
+    },
+  ];
   fixture.configuration.set('omp.model', 'openrouter/deepseek@nebius');
-  await assert.rejects(host.request({ type: 'new' }), /not an advertised OMP model/);
+  await assert.rejects(host.request({ type: 'connect' }), /not an advertised OMP model/);
 });
 
 test('picker exposes thinking configuration and handles an empty model catalog', async (context) => {
