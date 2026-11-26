@@ -155,7 +155,9 @@ test('registered shell runs through host approvals and returns command errors in
   const current = await setup(context);
   assert.equal(current.tool.name, 'bash');
   assert.match(current.tool.description, /Approval and execution have no timeout by default/);
-  assert.ok(current.tool.parameters.anyOf);
+  assert.equal(current.tool.parameters.type, 'object');
+  assert.equal(current.tool.parameters.anyOf, undefined);
+  assert.equal(current.tool.strict, false);
   await current.tools.run(current.scope, async () => {
     const result = await current.execute({
       command: 'console.log(process.version)',

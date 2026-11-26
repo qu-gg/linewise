@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { NativeEditApi } from './native-edit.js';
 import { exchangeResult } from './mutations.js';
 import { shellRequest } from './shell-policy.js';
+import { providerObjectSchema } from './tool-schema.js';
 
 export function installNativeShell(api: Pick<NativeEditApi, 'registerTool'>): void {
   api.registerTool({
@@ -10,6 +11,7 @@ export function installNativeShell(api: Pick<NativeEditApi, 'registerTool'>): vo
     label: 'Command',
     approval: 'write',
     defaultInactive: true,
+    strict: false,
     description:
       'Run host-approved commands. Approval and execution have no timeout by default. A positive timeout (up to 120 seconds) opts into a post-approval execution deadline; 0, null or omission means no deadline. ' +
       'Default action run waits for completion. Use action start for a managed background job or foreground server, then action output, wait or stop with its jobId. ' +
@@ -19,7 +21,7 @@ export function installNativeShell(api: Pick<NativeEditApi, 'registerTool'>): vo
       'Input style pty:true and visibility hidden/background/foreground are independent of run/start scheduling; defaults are pty:false and hidden. Use reveal with an owned jobId to focus its terminal. Use takeover on a running PTY for direct human input/authentication: it holds until Resume Agent and actual command completion. Never put secrets into model tools. Capture is permanently withheld for that execution before human input is enabled; early Resume is not completion or success. Cancel/dismissal stops the command. ' +
       'No native service/async mode, proc://, xd:// or URL read tools. Read accepts local files only. ' +
       'Use grep/find when rg is unavailable. Shell effects are not sandboxed or covered by file review.',
-    parameters: z.toJSONSchema(shellRequest),
+    parameters: providerObjectSchema(z.toJSONSchema(shellRequest)),
     async execute(toolCallId, input: unknown, signal) {
       signal?.throwIfAborted();
       const request = shellRequest.parse(input);

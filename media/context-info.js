@@ -9,8 +9,13 @@ function configuration(state, escape) {
     .map((id) => {
       const config = state.configs.find((item) => item.id === id);
       if (!config) return '';
-      const selected = config.options.find((option) => option.value === config.value)?.name;
-      return `<div><dt>${id === 'model' ? 'Model' : 'Thinking'}</dt><dd>${escape(selected)}</dd></div>`;
+      const selected =
+        config.label ?? config.options?.find((option) => option.value === config.value)?.name;
+      const provider =
+        id === 'model' && config.provider
+          ? `<div><dt>Provider</dt><dd>${escape(config.provider)}</dd></div>`
+          : '';
+      return `${provider}<div><dt>${id === 'model' ? 'Model' : 'Thinking'}</dt><dd>${escape(selected ?? config.value)}</dd></div>`;
     })
     .join('');
 }

@@ -130,6 +130,7 @@ const state = z.object({
   sessions: z.array(session),
   changes: z.array(change),
   activeSessionId: z.string().optional(),
+  lastModel: z.string().max(300).optional(),
 });
 export type ChatBlock = z.infer<typeof block>;
 export type Turn = z.infer<typeof turn>;
@@ -379,6 +380,7 @@ export const webviewMessage = z.discriminatedUnion('type', [
     id: z.enum(['model', 'thinking']),
     value: z.string().min(1).max(300),
   }),
+  z.object({ v: z.literal(1), type: z.literal('modelCatalog') }).strict(),
   z
     .object({
       v: z.literal(1),

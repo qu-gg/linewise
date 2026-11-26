@@ -41,7 +41,7 @@ test('file cards distinguish reads and mutations and retain full proposed diffs'
   const read = fileApproval({ kind: 'read', path: '/private/file' });
   assert.equal(read.summary, '/private/file');
   assert.match(read.notice, /sent to the configured model/);
-  assert.match(read.details, /Copilot model/);
+  assert.match(read.details, /configured model provider/);
   const moved = fileApproval({
     kind: 'move',
     path: '/from',

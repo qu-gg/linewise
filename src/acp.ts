@@ -363,8 +363,16 @@ export class OmpClient {
   }
 }
 
-export function selectOptions(option: SessionConfigOption): { value: string; name: string }[] {
+export function selectOptions(
+  option: SessionConfigOption,
+): { value: string; name: string; description?: string }[] {
   return option.type === 'select'
-    ? option.options.flatMap((item) => ('group' in item ? item.options : [item]))
+    ? option.options
+        .flatMap((item) => ('group' in item ? item.options : [item]))
+        .map((item) => ({
+          value: item.value,
+          name: item.name,
+          ...(item.description ? { description: item.description } : {}),
+        }))
     : [];
 }

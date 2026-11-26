@@ -3,6 +3,7 @@
 @import '@vscode/codicons/dist/codicon.css';
 @import './conversation.css';
 @import './dock.css';
+@import './model-picker.css';
 @import './questions.css';
 @import './sessions.css';
 @import './markdown.css';

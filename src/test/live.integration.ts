@@ -275,7 +275,7 @@ async function connect(model: string): Promise<Api> {
   const selected = api.status()!.configs.find((option) => option.id === 'model');
   assert.equal(selected?.value, model, 'Live tests never silently fall back to another model.');
   const thinking = api.status()!.configs.find((option) => option.id === 'thinking');
-  if (thinking?.options.some((option) => option.value === 'off'))
+  if (thinking?.options?.some((option) => option.value === 'off'))
     await api.request!({ v: 1, type: 'config', id: 'thinking', value: 'off' });
   return api;
 }

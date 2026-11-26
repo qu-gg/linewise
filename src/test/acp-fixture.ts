@@ -13,6 +13,7 @@ export const transport = {
   version: '18.21.0',
   configError: undefined as Error | undefined,
   nextSessionId: undefined as string | undefined,
+  configOptions: undefined as SessionConfigOption[] | undefined,
 };
 
 export const execFile = Object.assign(
@@ -32,7 +33,7 @@ export class OmpClient {
   connected = false;
   historyAvailable = false;
   sessionId = transport.nextSessionId ?? 'native-session';
-  configOptions: SessionConfigOption[] = [
+  configOptions: SessionConfigOption[] = transport.configOptions ?? [
     {
       id: 'model',
       name: 'Model',

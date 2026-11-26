@@ -13,7 +13,7 @@ import {
   resumeArtifact,
   startSessionClient,
   startupConfig,
-  selectCopilotModel,
+  selectModel,
   createConnection,
   bindConnectedSession,
   configureSession,
@@ -127,6 +127,9 @@ class OmpView extends HostOperations implements vscode.WebviewViewProvider {
       case 'cancel':
         await this.cancel();
         break;
+      case 'modelCatalog':
+        if (this.client && !this.operation) this.view.chat.postModelCatalog(this.client);
+        break;
       default:
         return this.conversationRequest(request);
     }
@@ -238,10 +241,8 @@ class OmpView extends HostOperations implements vscode.WebviewViewProvider {
         },
         (target) => this.view.journal.inspect(target),
       );
-      await selectCopilotModel(
-        client,
-        vscode.workspace.getConfiguration('omp').get<string>('model', ''),
-      );
+      const configured = vscode.workspace.getConfiguration('omp').get<string>('model', '');
+      await selectModel(client, this.store, configured, Boolean(saved));
       this.view.assertRoot(root);
       if (
         await bindConnectedSession(

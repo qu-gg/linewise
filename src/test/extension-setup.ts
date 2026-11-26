@@ -9,6 +9,8 @@ import { setImmediate as tick } from 'node:timers/promises';
 import { fixture, reset, Uri, view } from './vscode-fixture.js';
 import { transport } from './acp-fixture.js';
 
+Object.assign(view, { show: () => {} });
+
 register(new URL('./vscode-loader.js', import.meta.url), import.meta.url);
 const vscode = await import('vscode');
 const { activate, deactivate } = await import('../extension.js');
@@ -20,6 +22,7 @@ export async function setup(context: TestContext, cleanupFailure = false) {
   transport.version = '18.21.0';
   transport.configError = undefined;
   transport.nextSessionId = undefined;
+  transport.configOptions = undefined;
   transport.onPrompt = async () => {};
   transport.onCancel = () => {};
   const directory = await mkdtemp(path.join(os.tmpdir(), 'omp-host-unit-'));

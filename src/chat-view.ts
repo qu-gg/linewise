@@ -1,5 +1,7 @@
 import * as vscode from 'vscode';
 import { randomBytes } from 'node:crypto';
+import { selectOptions, type OmpClient } from './acp.js';
+import { groupModels } from './model-picker.js';
 import { Approvals } from './approvals.js';
 import { Questions } from './questions.js';
 import { Attention, type AttentionEvent, type AttentionPolicy } from './attention.js';
@@ -167,6 +169,20 @@ export class ChatView {
     if (!this.attention.current(event, this.snapshot())) return;
     this.view?.show(false);
     this.post({ v: 1, type: 'focusAttention', ...event });
+  }
+
+  postModelCatalog(client: Pick<OmpClient, 'configOptions'>): void {
+    const option = client.configOptions.find((candidate) => candidate.id === 'model');
+    if (option?.type !== 'select') {
+      this.post({ v: 1, type: 'modelCatalog', groups: [], current: '' });
+      return;
+    }
+    this.post({
+      v: 1,
+      type: 'modelCatalog',
+      groups: groupModels(selectOptions(option)),
+      current: option.currentValue,
+    });
   }
 
   readonly focusTerminals = (sessionId: string): void => {

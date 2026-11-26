@@ -82,7 +82,7 @@ Of all the harnesses/agent experiences I have tried, the Local Harness in VSCode
    </tr>
 </table>
 
-Current model access uses OMP's GitHub Copilot provider and authentication. Open-source harness infrastructure does not mean free inference, support for every OMP provider, or independence from provider policies.
+Model access uses whichever providers you have authenticated in OMP. Linewise shows OMP's advertised model catalog and does not store credentials. Open-source harness infrastructure does not mean free inference, support for every OMP provider, or independence from provider policies.
 
 ## A Familiar Agent Workflow
 
