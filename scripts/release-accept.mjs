@@ -23,7 +23,7 @@ export function acceptanceArguments(args) {
 }
 
 export function validateRuntimeVersions(vscode, omp) {
-  assert.equal(vscode, '1.146.0');
+  assert.equal(vscode, '1.147.0');
   assert.equal(omp, 'omp/18.21.0');
   return { vscode, omp: '18.21.0' };
 }

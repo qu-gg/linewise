@@ -50,7 +50,7 @@ try {
       name: 'omp-test-provider-probe',
       publisher: 'vs-omp-fixture',
       version: '0.0.0',
-      engines: { vscode: '^1.146.0' },
+      engines: { vscode: '^1.147.0' },
     }),
     { mode: 0o600 },
   );

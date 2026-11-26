@@ -229,7 +229,7 @@ export function validateAcceptance(acceptance, candidate) {
   assert.equal(acceptance.platform, 'linux');
   assert.equal(acceptance.arch, 'x64');
   assert.equal(acceptance.omp, '18.21.0');
-  assert.equal(acceptance.vscode, '1.146.0');
+  assert.equal(acceptance.vscode, '1.147.0');
   validateMaintainer(acceptance.owner);
   assert.equal(acceptance.native, true);
   assert.equal(acceptance.packaged, true);

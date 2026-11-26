@@ -4,7 +4,7 @@ Linewise v0.1.1 is an early local-Linux preview. The matching GitHub tag/release
 
 ## Supported Profile
 
-The current acceptance profile is `local-linux-x64-single-root`: trusted local Linux x64, VS Code **1.146.0**, separately installed/authenticated OMP **18.21.0**, and the tested host glibc baseline **2.39**. Remote-SSH remains unvalidated; multi-root lifecycle, other platforms/runtime versions/providers, untrusted/virtual workspaces, and broad accessibility coverage require separate evidence.
+The current acceptance profile is `local-linux-x64-single-root`: trusted local Linux x64, VS Code **1.147.0**, separately installed/authenticated OMP **18.21.0**, and the tested host glibc baseline **2.39**. Remote-SSH remains unvalidated; multi-root lifecycle, other platforms/runtime versions/providers, untrusted/virtual workspaces, and broad accessibility coverage require separate evidence.
 
 Candidate and preflight builds use **Ubuntu 24.04**, not a moving native-build baseline. The packaged node-pty Node-API addon still needs exact-host loading/native acceptance; a module ABI number alone is neither proof of compatibility nor a failure diagnosis. ELF/hash inspection does not independently certify every glibc symbol or Electron combination.
 

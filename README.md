@@ -147,7 +147,7 @@ These are actual native controls exercised with synthetic file-tool changes. The
 
 ## Try It
 
-The v0.1.1 acceptance profile is **Linux x64, VS Code 1.146.0, OMP 18.21.0, and a trusted single-root local filesystem workspace**. Other platforms, Remote-SSH, multi-root lifecycle, and untrusted/virtual workspaces are not certified.
+The v0.1.1 acceptance profile is **Linux x64, VS Code 1.147.0, OMP 18.21.0, and a trusted single-root local filesystem workspace**. Other platforms, Remote-SSH, multi-root lifecycle, and untrusted/virtual workspaces are not certified.
 
 The VSIX's `linux-x64` target is not just a filename: it includes a matching native terminal dependency and currently Linux-only host behavior. Other compatible Linux distributions may work, but macOS, Windows, and ARM64 are not automatically supported. Help test or port a named target through the [platform compatibility workstream](TODO.md#platform-compatibility).
 

@@ -112,7 +112,7 @@ await writeFile(
     name: 'vs-omp-native-ui-test',
     publisher: 'vs-omp-fixture',
     version: '0.0.0',
-    engines: { vscode: '^1.146.0' },
+    engines: { vscode: '^1.147.0' },
     activationEvents: ['onStartupFinished'],
     main: './driver.cjs',
     contributes: {
@@ -144,7 +144,7 @@ await writeFile(
     name: 'vs-omp-chat-reference',
     publisher: 'vs-omp-fixture',
     version: '0.0.0',
-    engines: { vscode: '^1.146.0' },
+    engines: { vscode: '^1.147.0' },
     activationEvents: ['onStartupFinished'],
     main: './driver.cjs',
     contributes: {
@@ -213,7 +213,7 @@ await writeFile(
     name: 'vs-omp-crash-test',
     publisher: 'vs-omp-fixture',
     version: '0.0.0',
-    engines: { vscode: '^1.146.0' },
+    engines: { vscode: '^1.147.0' },
     activationEvents: ['onStartupFinished'],
     main: './driver.cjs',
     contributes: {
