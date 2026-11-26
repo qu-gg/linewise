@@ -30,6 +30,7 @@ export interface NativeEditApi {
     description: string;
     parameters: Record<string, unknown>;
     defaultInactive: boolean;
+    strict?: boolean;
     approval: 'read' | 'write';
     execute(
       id: string,

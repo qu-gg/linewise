@@ -14,6 +14,10 @@ and checksums. No Marketplace distribution is included.
   Keep the owner's personal motivation section verbatim.
 - Provide OMP/ACP chat, explicit context, model controls, questions, Stop and
   conversation history through public VS Code APIs.
+- Flatten provider-facing tool union schemas to object roots and mark the
+  flattened bash/browser/editor tools non-strict. OpenAI-compatible providers
+  such as OpenRouter reject a root `anyOf`/`oneOf` even when every branch is an
+  object; the runtime validators remain authoritative for action-specific fields.
 - Review text changes hunk by hunk in a full-file editor with floating Keep/Undo;
   preserve accepted baselines, pending review on reload and stale-change refusal.
   Creation, deletion and moves use whole-operation review.
