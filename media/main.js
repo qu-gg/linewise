@@ -1,5 +1,4 @@
-import DOMPurify from 'dompurify';
-import { marked } from 'marked';
+import { markdown } from './markdown.js';
 import { permissions, toolbar } from './toolbar.js';
 import { changesPanel as reviewPanel, reviewRequest } from './review.js';
 import { canSubmit, composer } from './composer.js';
@@ -13,7 +12,7 @@ import { approvalCard, bindApprovals, refreshApproval } from './approvals.js';
 import { questionCard, questionResults, bindQuestions } from './questions.js';
 import { sessionManager, showSessions, bindSessions, managerState } from './sessions.js';
 import { contextPanel as sessionInfo, usagePercentage } from './context-info.js';
-
+import * as picker from './model-picker.js';
 const vscode = acquireVsCodeApi();
 const remembered = vscode.getState() ?? {};
 const expanded = remembered.expanded ?? {};
@@ -44,37 +43,6 @@ function button(action, name, label, extra = '') {
     (action === 'disconnect' && state.busy && state.cancellable === false);
   return `<button type="button" class="icon-button" data-action="${action}" aria-label="${escape(label)}" title="${escape(label)}" ${blocked ? 'disabled' : ''} ${extra}>${icon(name)}</button>`;
 }
-const markdown = (text) =>
-  DOMPurify.sanitize(marked.parse(text, { gfm: true, breaks: false }), {
-    ALLOWED_TAGS: [
-      'p',
-      'br',
-      'hr',
-      'pre',
-      'code',
-      'blockquote',
-      'strong',
-      'em',
-      'del',
-      'ul',
-      'ol',
-      'li',
-      'a',
-      'h1',
-      'h2',
-      'h3',
-      'h4',
-      'table',
-      'thead',
-      'tbody',
-      'tr',
-      'th',
-      'td',
-    ],
-    ALLOWED_ATTR: ['href', 'title'],
-    ALLOW_DATA_ATTR: false,
-    ALLOW_ARIA_ATTR: false,
-  });
 const send = (type, extra = {}) => vscode.postMessage({ v: 1, type, ...extra });
 bindApprovals(send);
 bindQuestions(send, render);
@@ -206,6 +174,7 @@ function render() {
   transcript.scrollTop = follow ? transcript.scrollHeight : scroll;
   document.querySelector('.dock-sections').scrollTop = dockScroll;
   refreshApproval(app);
+  picker.refreshModelPicker(app);
   restoreFocus(app, focused);
   announce(state);
 }
@@ -328,6 +297,10 @@ function buttonAction(target) {
     edit: () => beginEdit(target.dataset.id),
     cancelEdit,
     applyEdit,
+    pickModel: () =>
+      picker.modelPickerOpen()
+        ? picker.closeModelPicker(render)
+        : picker.openModelPicker(send, render),
     forkBefore: () => send('forkTurn', { id: target.dataset.id, boundary: 'before' }),
     forkAfter: () => send('forkTurn', { id: target.dataset.id, boundary: 'after' }),
     context: () => contextAction('context'),
@@ -489,6 +462,7 @@ window.addEventListener('message', (event) => {
   if (event.data?.v !== 1) return;
   if (Object.hasOwn(messageActions, event.data.type)) messageActions[event.data.type](event.data);
 });
+picker.bindModelPicker(send, render);
 render();
 send('ready');
 send('focus', { focused: document.hasFocus() });

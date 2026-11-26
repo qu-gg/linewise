@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { randomBytes } from 'node:crypto';
 import { selectOptions, type OmpClient } from './acp.js';
-import { groupModels, type ProviderGroup } from './model-picker.js';
+import { groupModels } from './model-picker.js';
 import { Approvals } from './approvals.js';
 import { Questions } from './questions.js';
 import { Attention, type AttentionEvent, type AttentionPolicy } from './attention.js';
@@ -9,10 +9,6 @@ import type { RequestApproval } from './approvals.js';
 import type { webviewMessage } from './state.js';
 import { fileApproval } from './approval-prompts.js';
 import type { Approval } from './review.js';
-
-interface ModelPickItem extends vscode.QuickPickItem {
-  value?: string;
-}
 
 export function isChatRequest(request: ReturnType<typeof webviewMessage.parse>): boolean {
   return [
@@ -175,60 +171,18 @@ export class ChatView {
     this.post({ v: 1, type: 'focusAttention', ...event });
   }
 
-  async pickModel(
-    client: Pick<OmpClient, 'configOptions'>,
-    apply: (value: string) => Promise<void>,
-  ): Promise<void> {
+  postModelCatalog(client: Pick<OmpClient, 'configOptions'>): void {
     const option = client.configOptions.find((candidate) => candidate.id === 'model');
-    if (option?.type !== 'select') return;
-    const choices = selectOptions(option);
-    if (!choices.length) {
-      void vscode.window.showInformationMessage(
-        'No OMP models are available. Run omp in a terminal and use /login for a provider.',
-      );
+    if (option?.type !== 'select') {
+      this.post({ v: 1, type: 'modelCatalog', groups: [], current: '' });
       return;
     }
-    const selected = await this.showModelPicker(groupModels(choices), option.currentValue);
-    if (selected && selected !== option.currentValue) await apply(selected);
-  }
-
-  private showModelPicker(groups: ProviderGroup[], current: string): Promise<string | undefined> {
-    const items: ModelPickItem[] = [];
-    const grouped = groups.length > 1;
-    for (const group of groups) {
-      if (grouped)
-        items.push({
-          label: `${group.provider} (${group.count})`,
-          kind: vscode.QuickPickItemKind.Separator,
-        });
-      for (const model of group.models)
-        items.push({
-          label: model.name,
-          description: model.description ?? model.value,
-          value: model.value,
-          picked: model.value === current,
-        });
-    }
-    const picker = vscode.window.createQuickPick<ModelPickItem>();
-    picker.title = 'Select Model';
-    picker.placeholder = 'Search models by name, provider, or ID';
-    picker.matchOnDescription = true;
-    picker.items = items;
-    const active = items.find((item) => item.value === current);
-    if (active) picker.activeItems = [active];
-    const { promise, resolve } = Promise.withResolvers<string | undefined>();
-    let choice: string | undefined;
-    picker.onDidAccept(() => {
-      choice = (picker.selectedItems[0] ?? picker.activeItems[0])?.value;
-      picker.hide();
+    this.post({
+      v: 1,
+      type: 'modelCatalog',
+      groups: groupModels(selectOptions(option)),
+      current: option.currentValue,
     });
-    picker.onDidHide(() => {
-      picker.dispose();
-      resolve(choice);
-      this.view?.show(false);
-    });
-    picker.show();
-    return promise;
   }
 
   readonly focusTerminals = (sessionId: string): void => {

@@ -3,7 +3,13 @@ import assert from 'node:assert/strict';
 import { fixture } from './vscode-fixture.js';
 import { setup } from './extension-setup.js';
 import { transport } from './acp-fixture.js';
-import { picker } from './quick-pick-fixture.js';
+
+interface CatalogMessage {
+  v: number;
+  type: string;
+  groups?: { provider: string; count: number; models: { name: string; value: string }[] }[];
+  current?: string;
+}
 
 function modelCatalog(
   options: { name: string; value: string; description?: string }[],
@@ -12,35 +18,50 @@ function modelCatalog(
   return [{ id: 'model', name: 'Model', type: 'select' as const, currentValue, options }];
 }
 
-test('host selects advertised provider models and switches through the native picker', async (context) => {
+function lastCatalog(): CatalogMessage {
+  const message = (fixture.messages as CatalogMessage[])
+    .filter((candidate) => candidate.type === 'modelCatalog')
+    .at(-1);
+  assert.ok(message, 'model catalog was not published');
+  return message;
+}
+
+test('host publishes grouped provider catalogs and applies selected models', async (context) => {
   const host = await setup(context);
-  transport.configOptions = modelCatalog([
-    { name: 'DeepSeek', value: 'openrouter/deepseek', description: 'openrouter/deepseek' },
-    { name: 'Qwen', value: 'openrouter/qwen', description: 'openrouter/qwen' },
-    { name: 'Claude', value: 'anthropic/claude', description: 'anthropic/claude' },
-  ]);
+  transport.configOptions = [
+    ...modelCatalog([
+      { name: 'DeepSeek', value: 'openrouter/deepseek', description: 'openrouter/deepseek' },
+      { name: 'Qwen', value: 'openrouter/qwen', description: 'openrouter/qwen' },
+      { name: 'Claude', value: 'anthropic/claude', description: 'anthropic/claude' },
+    ]),
+    {
+      id: 'thinking',
+      name: 'Thinking',
+      type: 'select' as const,
+      currentValue: 'high',
+      options: [{ name: 'High', value: 'high' }],
+    },
+  ];
   await host.request({ type: 'connect' });
+  assert.deepEqual(host.status()!.configs.find((config) => config.id === 'thinking')!.options, [
+    { name: 'High', value: 'high' },
+  ]);
   const model = transport.client!.configOptions.find((option) => option.id === 'model')!;
-  assert.equal(model.currentValue, 'openrouter/deepseek');
-  fixture.quickPick = 'anthropic/claude';
-  await host.request({ type: 'pickModel' });
-  assert.equal(model.currentValue, 'anthropic/claude');
+  await host.request({ type: 'modelCatalog' });
+  const catalog = lastCatalog();
+  assert.equal(catalog.current, 'openrouter/deepseek');
   assert.deepEqual(
-    picker.items.filter((item) => item.value).map((item) => item.value),
+    catalog.groups!.map((group) => [group.provider, group.count]),
+    [
+      ['anthropic', 1],
+      ['openrouter', 2],
+    ],
+  );
+  assert.deepEqual(
+    catalog.groups!.flatMap((group) => group.models.map((choice) => choice.value)),
     ['anthropic/claude', 'openrouter/deepseek', 'openrouter/qwen'],
   );
-  assert.deepEqual(
-    picker.items.filter((item) => item.kind === -1).map((item) => item.label),
-    ['anthropic (1)', 'openrouter (2)'],
-  );
-  assert.deepEqual(
-    picker.active.map((item) => item.value),
-    ['openrouter/deepseek'],
-  );
-  await host.request({ type: 'pickModel' });
-  assert.equal(model.currentValue, 'anthropic/claude');
-  fixture.quickPick = undefined;
-  await host.request({ type: 'pickModel' });
+  await host.request({ type: 'config', id: 'model', value: 'anthropic/claude' });
   assert.equal(model.currentValue, 'anthropic/claude');
 });
 
@@ -67,8 +88,7 @@ test('new sessions reuse the last active model', async (context) => {
   ];
   transport.configOptions = modelCatalog(options);
   await host.request({ type: 'connect' });
-  fixture.quickPick = 'anthropic/claude';
-  await host.request({ type: 'pickModel' });
+  await host.request({ type: 'config', id: 'model', value: 'anthropic/claude' });
   assert.equal(host.storedState!().lastModel, 'anthropic/claude');
   transport.configOptions = modelCatalog(options);
   await host.request({ type: 'new' });
@@ -91,34 +111,19 @@ test('host rejects an unavailable omp.model before the first session', async (co
   await assert.rejects(host.request({ type: 'connect' }), /not an advertised OMP model/);
 });
 
-test('picker exposes thinking configuration and handles an empty model catalog', async (context) => {
+test('host publishes an empty catalog when models are unavailable', async (context) => {
   const host = await setup(context);
-  transport.configOptions = [
-    {
-      id: 'model',
-      name: 'Model',
-      type: 'select',
-      currentValue: 'openrouter/deepseek',
-      options: [{ name: 'DeepSeek', value: 'openrouter/deepseek' }],
-    },
-    {
-      id: 'thinking',
-      name: 'Thinking',
-      type: 'select',
-      currentValue: 'high',
-      options: [{ name: 'High', value: 'high' }],
-    },
-  ];
-  await host.request({ type: 'connect' });
-  assert.deepEqual(host.status()!.configs.find((config) => config.id === 'thinking')!.options, [
-    { name: 'High', value: 'high' },
+  transport.configOptions = modelCatalog([
+    { name: 'DeepSeek', value: 'openrouter/deepseek' },
+    { name: 'Claude', value: 'anthropic/claude' },
   ]);
+  await host.request({ type: 'connect' });
   const model = transport.client!.configOptions.find((option) => option.id === 'model')!;
   if (model.type !== 'select') throw new Error('Expected a model selector.');
   model.options = [];
-  await host.request({ type: 'pickModel' });
-  assert.deepEqual(picker.items, []);
+  await host.request({ type: 'modelCatalog' });
+  assert.deepEqual(lastCatalog().groups, []);
   transport.client!.configOptions = [];
-  await host.request({ type: 'pickModel' });
-  assert.deepEqual(picker.items, []);
+  await host.request({ type: 'modelCatalog' });
+  assert.deepEqual(lastCatalog().groups, []);
 });

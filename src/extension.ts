@@ -127,9 +127,8 @@ class OmpView extends HostOperations implements vscode.WebviewViewProvider {
       case 'cancel':
         await this.cancel();
         break;
-      case 'pickModel':
-        if (this.client && !this.operation)
-          await this.view.chat.pickModel(this.client, (value) => this.configure('model', value));
+      case 'modelCatalog':
+        if (this.client && !this.operation) this.view.chat.postModelCatalog(this.client);
         break;
       default:
         return this.conversationRequest(request);

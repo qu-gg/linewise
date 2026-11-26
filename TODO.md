@@ -196,7 +196,7 @@ Broader OMP providers and local/custom endpoints are planned. A provider is a mo
 | <a id="prv-08"></a> `PRV-08` | open     | Add provider-switch session/history compatibility checks.               | Reject unsafe cross-provider resume; retain drafts, selected identity, immutable attachments, and review ownership.                                                                            |
 | <a id="prv-09"></a> `PRV-09` | open     | Verify one provider's edit/tool conformance cases.                      | Synthetic text/create/move/dirty/stale/refusal/Keep/Undo and Stop tests pass; opaque direct writes cannot bypass the journal.                                                                  |
 | <a id="prv-10"></a> `PRV-10` | blocked  | Certify one real non-Copilot model-provider profile.                    | Prior fixture/authority work plus separately approved finite live requests and exact native evidence; do not generalize to all models/endpoints.                                               |
-| <a id="prv-11"></a> `PRV-11` | open     | Add a provider-grouped, searchable native model picker.                 | OMP-authenticated models only; providers sorted by available count; picked model persists for new sessions; exact `omp.model` seeds the first; no credential import or provider-support claim. |
+| <a id="prv-11"></a> `PRV-11` | open     | Add a provider-grouped, searchable in-composer model picker.            | OMP-authenticated models only; providers sorted by available count; picked model persists for new sessions; exact `omp.model` seeds the first; no credential import or provider-support claim. |
 
 ## Alternate Open Harnesses
 

@@ -242,9 +242,6 @@ textarea::placeholder {
   min-height: 30px;
   color: var(--vscode-descriptionForeground);
 }
-.model-icon .codicon {
-  font-size: 13px;
-}
 .config-controls {
   display: flex;
   min-width: 0;

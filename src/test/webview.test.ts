@@ -89,44 +89,6 @@ test('terminal picker focus restoration refuses stale, idle and disconnected mes
   }
 });
 
-test('model picker and thinking selector retain accessible controls and configuration messages', () => {
-  update({
-    configs: [
-      {
-        id: 'model',
-        name: 'Model',
-        value: 'openrouter/deepseek',
-        label: 'DeepSeek <V4.1>',
-        provider: 'openrouter',
-      },
-      {
-        id: 'thinking',
-        name: 'Thinking',
-        value: 'high',
-        options: [
-          { name: 'Extra High', value: 'high' },
-          { name: 'Medium', value: 'medium' },
-        ],
-      },
-    ],
-  });
-  const model = element<HTMLButtonElement>('#model-picker');
-  assert.equal(model.getAttribute('aria-label'), 'Model: DeepSeek <V4.1>');
-  assert.equal(model.title, 'openrouter/deepseek');
-  assert.match(model.textContent!, /DeepSeek <V4\.1>/);
-  click('pickModel');
-  assert.deepEqual(messages.at(-1), { v: 1, type: 'pickModel' });
-  const thinking = element<HTMLSelectElement>('[data-config="thinking"]');
-  assert.equal(thinking.getAttribute('aria-label'), 'Thinking');
-  thinking.value = 'medium';
-  thinking.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
-  assert.deepEqual(messages.at(-1), { v: 1, type: 'config', id: 'thinking', value: 'medium' });
-  update({ busy: true });
-  assert.equal(element<HTMLButtonElement>('#model-picker').disabled, true);
-  assert.equal(element<HTMLSelectElement>('[data-config="thinking"]').disabled, true);
-  update({ busy: false });
-});
-
 test('drafts stay with their session and selection survives state renders', () => {
   update({ sessionId: 'draft-first' });
   input('#prompt', 'first draft');
