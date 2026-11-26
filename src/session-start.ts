@@ -183,15 +183,20 @@ export async function selectModel(
   configured: string,
   resume = false,
 ): Promise<void> {
-  const sticky = store.data.lastModel;
-  store.data.lastModel = await applyModel(client, sticky ?? configured, resume, Boolean(sticky));
+  const lastModel = store.data.lastModel;
+  store.data.lastModel = await applyModel(
+    client,
+    lastModel ?? configured,
+    resume,
+    Boolean(lastModel),
+  );
 }
 
 async function applyModel(
   client: OmpClient,
   preferred: string,
   resume: boolean,
-  fallback: boolean,
+  allowFallback: boolean,
 ): Promise<string> {
   const model = client.configOptions.find((option) => option.id === 'model');
   if (!model) throw new Error('OMP did not advertise a model selector.');
@@ -209,7 +214,7 @@ async function applyModel(
       if (chosen.value !== current) await client.setConfig('model', chosen.value);
       return chosen.value;
     }
-    if (!fallback)
+    if (!allowFallback)
       throw new Error(
         `The configured omp.model "${selection}" is not an advertised OMP model. Update the setting or run /login for that provider.`,
       );

@@ -194,8 +194,9 @@ export class ChatView {
 
   private showModelPicker(groups: ProviderGroup[], current: string): Promise<string | undefined> {
     const items: ModelPickItem[] = [];
+    const grouped = groups.length > 1;
     for (const group of groups) {
-      if (groups.length > 1)
+      if (grouped)
         items.push({
           label: `${group.provider} (${group.count})`,
           kind: vscode.QuickPickItemKind.Separator,
@@ -216,16 +217,14 @@ export class ChatView {
     const active = items.find((item) => item.value === current);
     if (active) picker.activeItems = [active];
     const { promise, resolve } = Promise.withResolvers<string | undefined>();
-    let settled = false;
+    let choice: string | undefined;
     picker.onDidAccept(() => {
-      const selected = picker.selectedItems[0] ?? picker.activeItems[0];
-      settled = true;
+      choice = (picker.selectedItems[0] ?? picker.activeItems[0])?.value;
       picker.hide();
-      resolve(selected?.value);
     });
     picker.onDidHide(() => {
       picker.dispose();
-      if (!settled) resolve(undefined);
+      resolve(choice);
       this.view?.show(false);
     });
     picker.show();
