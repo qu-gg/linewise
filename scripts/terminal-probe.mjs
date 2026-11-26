@@ -32,7 +32,7 @@ async function prepare() {
       name: 'omp-terminal-probe',
       publisher: 'vs-omp-fixture',
       version: '0.0.0',
-      engines: { vscode: '^1.146.0' },
+      engines: { vscode: '^1.147.0' },
     }),
   );
   await writeFile(

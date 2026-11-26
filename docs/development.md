@@ -4,7 +4,7 @@
 
 - Node **24.11+**, preferably Node 24 LTS; `.nvmrc` selects Node 24.
 - npm and the committed lockfile.
-- For native acceptance: Linux x64, **VS Code 1.146.0**, **OMP 18.21.0**, and disposable trusted single-root workspaces.
+- For native acceptance: Linux x64, **VS Code 1.147.0**, **OMP 18.21.0**, and disposable trusted single-root workspaces.
 - For owned-browser tests: an installed compatible Chromium browser. The extension does not download one.
 
 ```sh

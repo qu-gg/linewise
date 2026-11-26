@@ -302,7 +302,7 @@
     }
   },
   "engines": {
-    "vscode": "^1.146.0"
+    "vscode": "^1.147.0"
   },
   "scripts": {
     "build:pty": "node scripts/pty-runtime.mjs rebuild",

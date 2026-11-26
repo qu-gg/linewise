@@ -12,7 +12,7 @@ Patch release for the provider model picker and tool-schema compatibility.
 - Reuse the last active model for new sessions; an exact `omp.model` seeds the first session. Provider authentication and credentials remain owned by OMP.
 - Flatten provider-facing bash/browser/editor tool schemas to object roots so OpenAI-compatible providers such as OpenRouter Terra accept the full tool catalog. The runtime validators remain authoritative for action-specific fields and approval paths.
 - Disclose that switching to a model from another provider sends subsequent prompts and conversation context to that provider.
-- Keep the existing local Linux x64, VS Code 1.146.0 and OMP 18.21.0 acceptance profile. Remote-SSH, multi-root lifecycle and other platforms remain outside that profile. No Marketplace distribution is included.
+- Keep the local Linux x64, VS Code 1.147.0 and OMP 18.21.0 acceptance profile. Remote-SSH, multi-root lifecycle and other platforms remain outside that profile. No Marketplace distribution is included.
 
 ## 0.1.0
 

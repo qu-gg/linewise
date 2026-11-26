@@ -50,7 +50,7 @@ const acceptance = {
   platform: 'linux',
   arch: 'x64',
   omp: '18.21.0',
-  vscode: '1.146.0',
+  vscode: '1.147.0',
   owner: 'qu-gg',
   native: true,
   packaged: true,
@@ -94,15 +94,15 @@ test('release versions require matching package and lock roots without changing 
 });
 
 test('release runtime identity accepts the actual pinned OMP CLI and refuses other output', () => {
-  assert.deepEqual(validateRuntimeVersions('1.146.0', 'omp/18.21.0'), {
-    vscode: '1.146.0',
+  assert.deepEqual(validateRuntimeVersions('1.147.0', 'omp/18.21.0'), {
+    vscode: '1.147.0',
     omp: '18.21.0',
   });
   for (const output of ['', '18.21.0', 'other/18.21.0', 'omp/18.21.1', 'omp/18.21.0 extra']) {
-    assert.throws(() => validateRuntimeVersions('1.146.0', output));
+    assert.throws(() => validateRuntimeVersions('1.147.0', output));
   }
   assert.throws(() => validateRuntimeVersions('', 'omp/18.21.0'));
-  assert.throws(() => validateRuntimeVersions('1.146.1', 'omp/18.21.0'));
+  assert.throws(() => validateRuntimeVersions('1.147.1', 'omp/18.21.0'));
 });
 
 test('private installed/extracted artifacts are not source lint targets; source rules stay enforced', async () => {

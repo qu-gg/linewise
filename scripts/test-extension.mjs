@@ -131,7 +131,7 @@ try {
       name: 'omp-native-resource-fixture',
       publisher: 'vs-omp-fixture',
       version: '0.0.0',
-      engines: { vscode: '^1.146.0' },
+      engines: { vscode: '^1.147.0' },
       contributes: {
         notebooks: [
           {
