@@ -20,9 +20,9 @@ Review is independent of Git, includes unsaved text baselines where supported, a
 
 ## Context And Conversations
 
-**Add Context** explicitly captures editor/selection, multiple files, images, chosen open resources, or workspace problems. Active-editor offers are suggestions, not automatic attachments. Inspect/remove chips before sending. Submitted snapshots persist with the turn and are reused by history replay rather than rereading changed files.
+**Add Context** explicitly captures editor/selection, multiple files, images, chosen open resources, or workspace problems. Paste a PNG, JPEG or WebP image directly into the composer to attach it as context; text from the same clipboard is inserted into the draft. Active-editor offers are suggestions, not automatic attachments. Inspect/remove chips before sending. Submitted snapshots persist with the turn and are reused by history replay rather than rereading changed files.
 
-Text context is bounded to eight snapshots, 64 KiB per snapshot and 128 KiB total. PNG/JPEG/WebP images are explicit regular host files, at most 512 KiB each and 1 MiB aggregate; model image support is required. Notebook output images use separate indexed inspection. Do not attach secrets or expect every provider to revisit unattached historical image pixels.
+Text context is bounded to eight snapshots, 64 KiB per snapshot and 128 KiB total. Images may be chosen as regular host files or pasted from the clipboard, at most 512 KiB each and 1 MiB aggregate; model image support is required. Notebook output images use separate indexed inspection. Do not attach secrets or expect every provider to revisit unattached historical image pixels.
 
 Todos is the agent's latest structured plan; Queued Prompts contains your future follow-ups. The queue runs serially only after cleanup, pauses on failure, and clears on Stop or ownership/history changes. It is transient, not restored after reload, and does not steer an already running model request.
 

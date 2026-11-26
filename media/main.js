@@ -1,5 +1,4 @@
-import { markdown } from './markdown.js';
-import { permissions, toolbar } from './toolbar.js';
+import { toolbar, permissions } from './toolbar.js';
 import { changesPanel as reviewPanel, reviewRequest } from './review.js';
 import { canSubmit, composer } from './composer.js';
 import {
@@ -12,6 +11,8 @@ import { approvalCard, bindApprovals, refreshApproval } from './approvals.js';
 import { questionCard, questionResults, bindQuestions } from './questions.js';
 import { sessionManager, showSessions, bindSessions, managerState } from './sessions.js';
 import { contextPanel as sessionInfo, usagePercentage } from './context-info.js';
+import { activity, modelOutput } from './activity.js';
+import { pasteImages } from './clipboard.js';
 import * as picker from './model-picker.js';
 const vscode = acquireVsCodeApi();
 const remembered = vscode.getState() ?? {};
@@ -24,6 +25,7 @@ let editing = remembered.editing ?? null;
 let pendingRender = false;
 let activeThoughts = new Set();
 let contextOpen = false;
+let notice = '';
 const app = document.querySelector('#app');
 const announce = announcements(document);
 const escape = (text) =>
@@ -43,6 +45,7 @@ function button(action, name, label, extra = '') {
     (action === 'disconnect' && state.busy && state.cancellable === false);
   return `<button type="button" class="icon-button" data-action="${action}" aria-label="${escape(label)}" title="${escape(label)}" ${blocked ? 'disabled' : ''} ${extra}>${icon(name)}</button>`;
 }
+const activityUi = { escape, icon, itemButton, expanded };
 const send = (type, extra = {}) => vscode.postMessage({ v: 1, type, ...extra });
 bindApprovals(send);
 bindQuestions(send, render);
@@ -55,39 +58,6 @@ bindSessions(
   () => state,
   remembered.sessions,
 );
-
-function modelOutput(block, className = '') {
-  const date = new Date(block.receivedAt ?? NaN);
-  const timestamp = Number.isNaN(date.getTime())
-    ? '<span>Timestamp not recorded</span>'
-    : `<time datetime="${date.toISOString()}">${escape(new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'medium' }).format(date))}</time>`;
-  return `<div class="model-output ${className}" data-focus="${escape(block.id)}" tabindex="0" role="group" aria-label="Model output"><div class="markdown">${markdown(block.text)}</div><div class="output-metadata">${timestamp}<span>${escape(block.model ?? 'Model not recorded')}</span></div></div>`;
-}
-
-function thoughtActivity(block, current) {
-  const thinking = current.status === 'running' && current.blocks.at(-1) === block;
-  return `<details class="thought" data-disclosure="${escape(block.id)}" ${(expanded[block.id] ?? thinking) ? 'open' : ''}><summary>${icon(thinking ? 'loading codicon-modifier-spin' : 'lightbulb')}${thinking ? 'Thinking' : 'Thought'}</summary>${modelOutput(block)}</details>`;
-}
-
-function terminalActivity(block) {
-  const running = !['completed', 'failed', 'cancelled'].includes(block.status);
-  const command = escape(block.command ?? block.title);
-  const label = running ? 'Running' : block.status === 'failed' ? 'Failed' : 'Ran';
-  return `<details class="tool terminal-tool" data-disclosure="${escape(block.id)}" ${(expanded[block.id] ?? running) ? 'open' : ''}><summary>${icon('terminal')}<span class="terminal-label">${label} <code title="${command}">${command}</code></span><span class="show-output">Show</span></summary><div class="terminal-pane"><div class="terminal-heading">${icon('terminal')}<code>${command}</code>${itemButton('copyTool', 'copy', 'Copy Command Output', block.id)}</div><pre class="tool-output">${escape(block.text || (running ? 'Running...' : 'No output.'))}</pre></div></details>`;
-}
-
-function toolActivity(block) {
-  const status =
-    block.status === 'failed' ? 'error' : block.status === 'completed' ? 'pass' : 'loading';
-  return `<details class="tool" data-disclosure="${escape(block.id)}" ${expanded[block.id] ? 'open' : ''}><summary>${icon(status === 'loading' ? 'loading codicon-modifier-spin' : status)}<span>${escape(block.title ?? 'Tool')}</span></summary>${block.input ? `<pre class="command">${escape(block.input)}</pre>` : ''}${block.text ? `<pre class="tool-output">${escape(block.text)}</pre>` : ''}</details>`;
-}
-
-function activity(block, current) {
-  if (block.kind === 'text') return modelOutput(block, 'progress');
-  if (block.kind === 'thought') return thoughtActivity(block, current);
-  if (block.kind === 'plan') return `<pre class="plan">${escape(block.text)}</pre>`;
-  return block.toolKind === 'execute' ? terminalActivity(block) : toolActivity(block);
-}
 
 function promptEditor(disabled) {
   return `<textarea id="history-prompt" aria-label="Edit Previous Prompt" ${disabled ? 'readonly' : ''}>${escape(editing.text)}</textarea><p class="history-note">Files and shared memory stay unchanged.</p><div class="edit-actions"><button type="button" class="text-button secondary" data-action="cancelEdit" ${editing.pending ? 'disabled' : ''}>Cancel</button><button type="button" class="text-button" data-action="applyEdit" ${disabled || !state.canHistory || !editing.text.trim() ? 'disabled' : ''}>${icon('arrow-up')}Send</button></div>`;
@@ -118,7 +88,7 @@ function turnActivity(current, details) {
     failed: 'Failed',
   }[current.status];
   const open = expanded[current.id] ?? current.status === 'running';
-  return `<details class="activity" data-disclosure="${escape(current.id)}" ${open ? 'open' : ''}><summary><span>${label}${count ? ` ${count} step${count === 1 ? '' : 's'}` : ''} <span class="elapsed">${seconds}s</span></span></summary><div class="activity-body">${details.map((block) => activity(block, current)).join('')}</div></details>`;
+  return `<details class="activity" data-disclosure="${escape(current.id)}" ${open ? 'open' : ''}><summary><span>${label}${count ? ` ${count} step${count === 1 ? '' : 's'}` : ''} <span class="elapsed">${seconds}s</span></span></summary><div class="activity-body">${details.map((block) => activity(block, current, activityUi)).join('')}</div></details>`;
 }
 
 function afterAnswer(current) {
@@ -137,7 +107,7 @@ function turn(current) {
       !(block.kind === 'plan' && block.entries && current === state.turns.at(-1)),
   );
   const failures = details.filter((block) => block.kind === 'tool' && block.status === 'failed');
-  return `<article class="turn">${promptRow(current)}${turnActivity(current, details)}${questionResults(current, { escape, icon })}${failures.map((block) => `<div class="failure" role="status">${icon('warning')}${escape(block.title)} failed</div>`).join('')}${answer ? modelOutput(answer, 'answer') : ''}${afterAnswer(current)}</article>`;
+  return `<article class="turn">${promptRow(current)}${turnActivity(current, details)}${questionResults(current, { escape, icon })}${failures.map((block) => `<div class="failure" role="status">${icon('warning')}${escape(block.title)} failed</div>`).join('')}${answer ? modelOutput(answer, 'answer', activityUi) : ''}${afterAnswer(current)}</article>`;
 }
 
 const percentage = () => usagePercentage(state.context);
@@ -150,6 +120,13 @@ function changesPanel() {
   return reviewPanel(state, expanded, { escape, icon, button, itemButton });
 }
 
+function statusBanner() {
+  const message = state.error || notice;
+  return message
+    ? `<div class="attention">${icon('warning')}<span>${escape(message)}</span></div>`
+    : '';
+}
+
 function render() {
   const oldTranscript = document.querySelector('.transcript');
   const follow =
@@ -160,7 +137,7 @@ function render() {
   const focused = captureFocus(app);
   const manager = sessionManager(state, { escape, icon, button });
   app.innerHTML = `${toolbar(state, button, escape)}
-    ${state.error ? `<div class="attention">${icon('warning')}<span>${escape(state.error)}</span></div>` : ''}${manager}
+    ${statusBanner()}${manager}
     <section class="transcript" aria-label="Conversation">${state.turns.map(turn).join('')}${approvalCard(state, { escape, icon }, 'command')}${questionCard(state, { escape, icon })}${!state.workspace ? '<button class="text-button" data-action="openFolder">Open Folder</button>' : ''}</section>
     ${composer(state, draft, { button, itemButton, escape, icon, working, changesPanel, permissions, contextPanel, contextOpen, percentage, expanded })}`;
   const transcript = document.querySelector('.transcript');
@@ -181,6 +158,7 @@ function render() {
 
 function submit() {
   if (!canSubmit(state, draft)) return;
+  notice = '';
   send(state.busy ? 'queuePrompt' : 'prompt', { text: draft });
   draft = '';
   remember();
@@ -248,6 +226,24 @@ app.addEventListener('change', (event) => {
   else if (event.target.dataset.config)
     send('config', { id: event.target.dataset.config, value: event.target.value });
 });
+app.addEventListener(
+  'paste',
+  (event) =>
+    void pasteImages(event, {
+      working,
+      setDraft: (value) => {
+        draft = value;
+      },
+      setNotice: (value) => {
+        notice = value;
+      },
+      canSubmit: (value) => canSubmit(state, value),
+      send: (images) => send('pasteImages', { images }),
+      remember,
+      render,
+      focus: () => document.querySelector('#prompt')?.focus({ preventScroll: true }),
+    }),
+);
 function rememberDisclosure(summary, target) {
   if (summary?.parentElement.dataset.disclosure && !target) {
     const details = summary.parentElement;
