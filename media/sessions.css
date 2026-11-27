@@ -201,9 +201,10 @@
   transform: translateY(-50%);
   padding-left: 2px;
   border-radius: 3px;
+  z-index: 1;
   background: var(--vscode-list-hoverBackground);
   opacity: 0;
-  pointer-events: none;
+  pointer-events: auto;
 }
 .session-row:hover .session-row-actions,
 .session-row:focus-within .session-row-actions {
