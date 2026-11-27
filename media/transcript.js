@@ -1,5 +1,6 @@
 import { activity, modelOutput, toolStatus } from './activity.js';
 import { approvalCard } from './approvals.js';
+import { promptRow } from './prompt-card.js';
 import { questionCard, questionResults } from './questions.js';
 
 const turnStatus = {
@@ -9,19 +10,18 @@ const turnStatus = {
   failed: { label: 'Failed', icon: 'error' },
 };
 
-function promptEditor(ui) {
-  const disabled = ui.disabled;
-  return `<textarea id="history-prompt" aria-label="Edit Previous Prompt" ${disabled ? 'readonly' : ''}>${ui.escape(ui.editing.text)}</textarea><p class="history-note">Files and shared memory stay unchanged.</p><div class="edit-actions"><button type="button" class="text-button secondary" data-action="cancelEdit" ${ui.editing.pending ? 'disabled' : ''}>Cancel</button><button type="button" class="text-button secondary" data-action="applyEdit" ${disabled || !ui.canHistory || !ui.editing.text.trim() ? 'disabled' : ''}>${ui.icon('arrow-up')}Send</button></div>`;
-}
-
-function promptRow(current, ui) {
-  const editor = ui.editing?.id === current.id;
-  const prompt = editor ? promptEditor(ui) : ui.escape(current.prompt);
-  const actions =
-    ui.canHistory && current.history && !editor
-      ? `<div class="prompt-actions">${ui.itemButton('edit', 'edit', 'Edit and Continue', current.id, ui.disabled)}${ui.itemButton('forkBefore', 'repo-forked', 'Fork Before This Prompt', current.id, ui.disabled)}</div>`
-      : '';
-  return `<div class="prompt-row"><span class="role-label user-role">${ui.icon('comment')}You</span><div class="user-message ${editor ? 'editing' : ''}">${prompt}</div>${actions}</div>`;
+export function transcriptUi({ escape, icon, itemButton, expanded, editing, state, working }) {
+  return {
+    escape,
+    icon,
+    itemButton,
+    expanded,
+    editing,
+    state,
+    working,
+    disabled: working() || editing?.pending,
+    canHistory: Boolean(state.canHistory),
+  };
 }
 
 function activityStats(details) {

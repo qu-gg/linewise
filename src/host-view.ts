@@ -6,6 +6,7 @@ import { PathGuard, ReviewJournal } from './review.js';
 import { webviewMessage, type Attachment, type SavedSession, type StateStore } from './state.js';
 import { ReviewEditor, WorkspaceFiles } from './workspace.js';
 import { reviewSummary } from './review-presentation.js';
+import { promptRecents } from './session-presentation.js';
 import {
   OMP_TESTED_VERSION,
   ompVersionRequirement,
@@ -290,6 +291,7 @@ export class HostView {
     return {
       sessionIds: this.sessionIds(),
       sessions: sessionList(this.store.data, (id) => this.attachments.count(id)),
+      promptHistory: promptRecents(this.store.data.sessions, this.active()),
     };
   }
 

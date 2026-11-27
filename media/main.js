@@ -32,9 +32,11 @@ import {
   reconcileTurns,
   transcriptMarkup as renderTranscript,
   transcriptSignature,
+  transcriptUi as createTranscriptUi,
 } from './transcript.js';
 import { pasteImages } from './clipboard.js';
 import * as picker from './model-picker.js';
+import { bindPromptRecall, recallPrompts } from './prompt-history.js';
 const vscode = acquireVsCodeApi();
 const remembered = vscode.getState() ?? {};
 const expanded = remembered.expanded ?? {};
@@ -70,6 +72,14 @@ function button(action, name, label, extra = '') {
   return `<button type="button" class="icon-button" data-action="${action}" aria-label="${escape(label)}" title="${escape(label)}" ${blocked ? 'disabled' : ''} ${extra}>${icon(name)}</button>`;
 }
 const send = (type, extra = {}) => vscode.postMessage({ v: 1, type, ...extra });
+const promptRecall = bindPromptRecall(app, {
+  prompts: () => recallPrompts(state.turns, state.promptHistory),
+  getDraft: () => draft,
+  setDraft: (value) => {
+    draft = value;
+  },
+  canSubmit: (value) => canSubmit(state, value),
+});
 bindApprovals(send);
 bindQuestions(send, render);
 bindPermissions(send, render, () => state);
@@ -82,17 +92,9 @@ bindSessions(
   () => state,
   remembered.sessions,
 );
-const transcriptUi = () => ({
-  escape,
-  icon,
-  itemButton,
-  expanded,
-  editing,
-  disabled: working() || editing?.pending,
-  canHistory: Boolean(state.canHistory),
-});
+const transcriptUi = () =>
+  createTranscriptUi({ escape, icon, itemButton, expanded, editing, state, working });
 const percentage = () => usagePercentage(state.context);
-
 function contextPanel() {
   return sessionInfo(state, contextOpen, { escape, icon, button, working });
 }
@@ -152,6 +154,7 @@ function render() {
   refreshApproval(app);
   picker.refreshModelPicker(app);
   restoreFocus(app, focused);
+  promptRecall.restore();
   announce(state);
 }
 
@@ -182,6 +185,7 @@ function submit() {
   if (!canSubmit(state, draft)) return;
   notice = '';
   send(state.busy ? 'queuePrompt' : 'prompt', { text: draft });
+  promptRecall.reset();
   draft = '';
   remember();
   render();
@@ -197,7 +201,7 @@ function applyEdit() {
 
 function remember() {
   vscode.setState({
-    draft,
+    draft: promptRecall.draft,
     drafts,
     sessionId: draftSession,
     editing,
@@ -218,6 +222,7 @@ app.addEventListener('input', (event) => {
     return;
   }
   if (event.target.id !== 'prompt') return;
+  promptRecall.reset();
   draft = event.target.value;
   remember();
   const submitButton = document.querySelector('.send');
@@ -387,9 +392,11 @@ function editResult(data) {
 function switchDraft(incoming) {
   const owner = incoming.sessionId ?? 'new';
   if (owner === draftSession) return;
-  if (draftSession) drafts[draftSession] = draft;
+  const outgoing = promptRecall.draft;
+  if (draftSession) drafts[draftSession] = outgoing;
+  promptRecall.reset();
   const initialDraft = !draftSession || draftSession === 'new';
-  draft = drafts[owner] ?? (initialDraft ? draft : '');
+  draft = drafts[owner] ?? (initialDraft ? outgoing : '');
   if (draftSession === 'new') delete drafts.new;
   if (draftSession) editing = null;
   draftSession = owner;
@@ -412,6 +419,7 @@ function pruneDrafts(ids) {
   const retained = new Set(ids);
   for (const id of Object.keys(drafts)) if (!retained.has(id)) delete drafts[id];
   if (draftSession && !retained.has(draftSession)) {
+    promptRecall.reset();
     draft = '';
     editing = null;
     draftSession = undefined;
@@ -464,6 +472,7 @@ window.addEventListener('blur', () => send('focus', { focused: false }));
 const messageActions = {
   editResult,
   draft: (data) => {
+    promptRecall.reset();
     draft = data.text;
     remember();
     render();
