@@ -1,4 +1,4 @@
-import { activity, modelOutput, outputMeta, toolStatus } from './activity.js';
+import { activity, modelOutput, outputMeta, toolStatus, toolVisual } from './activity.js';
 import { approvalCard } from './approvals.js';
 import { promptRow } from './prompt-card.js';
 import { questionCard, questionResults } from './questions.js';
@@ -89,11 +89,152 @@ function toolChainKey(block) {
   return `toolchain:${block.id}`;
 }
 
+function baseName(target) {
+  const value = String(target);
+  return value.split(/[\\/]/).filter(Boolean).at(-1) ?? value;
+}
+
+function noteStatus(facts, status) {
+  if (status.key === 'failed') {
+    facts.failed += 1;
+    return true;
+  }
+  if (status.key === 'cancelled') {
+    facts.cancelled += 1;
+    return true;
+  }
+  if (status.key === 'running') {
+    facts.unfinished += 1;
+    return true;
+  }
+  return false;
+}
+
+function noteTool(facts, block) {
+  const visual = toolVisual(block);
+  if (visual.kind === 'edit' && visual.target) {
+    facts.edits.add(visual.target);
+    facts.editSteps += 1;
+    return;
+  }
+  if (visual.kind === 'command') {
+    facts.commands += 1;
+    return;
+  }
+  if (visual.kind === 'read' && visual.target) {
+    facts.reads.add(visual.target);
+    facts.readSteps += 1;
+    return;
+  }
+  if (visual.kind === 'search' && visual.target) {
+    facts.searches.add(visual.target);
+    facts.searchSteps += 1;
+    return;
+  }
+  facts.other += 1;
+}
+
+function toolChainFacts(blocks) {
+  const facts = {
+    edits: new Set(),
+    editSteps: 0,
+    commands: 0,
+    reads: new Set(),
+    readSteps: 0,
+    searches: new Set(),
+    searchSteps: 0,
+    failed: 0,
+    cancelled: 0,
+    unfinished: 0,
+    other: 0,
+  };
+  for (const block of blocks) {
+    const status = toolStatus(block);
+    if (noteStatus(facts, status)) continue;
+    noteTool(facts, block);
+  }
+  return facts;
+}
+
+function countLabel(count, singular, plural) {
+  return count === 1 ? singular : plural.replace('{0}', String(count));
+}
+
+function addEditLabel(labels, facts) {
+  if (facts.edits.size === 1)
+    labels.push({ text: `Edited ${baseName([...facts.edits][0])}`, steps: facts.editSteps });
+  else if (facts.edits.size > 1)
+    labels.push({
+      text: countLabel(facts.edits.size, 'Edited 1 file', 'Edited {0} files'),
+      steps: facts.editSteps,
+    });
+}
+
+function addCommandLabel(labels, facts) {
+  if (facts.commands > 0)
+    labels.push({
+      text: countLabel(facts.commands, 'Ran 1 command', 'Ran {0} commands'),
+      steps: facts.commands,
+    });
+}
+
+function addReadLabel(labels, facts) {
+  if (facts.reads.size === 1)
+    labels.push({ text: `Read ${baseName([...facts.reads][0])}`, steps: facts.readSteps });
+  else if (facts.reads.size > 1)
+    labels.push({
+      text: countLabel(facts.reads.size, 'Read 1 file', 'Read {0} files'),
+      steps: facts.readSteps,
+    });
+}
+
+function addSearchLabel(labels, facts) {
+  if (facts.searches.size === 1)
+    labels.push({ text: 'Searched for 1 phrase', steps: facts.searchSteps });
+  else if (facts.searches.size > 1)
+    labels.push({
+      text: countLabel(facts.searches.size, 'Searched for 1 phrase', 'Searched for {0} phrases'),
+      steps: facts.searchSteps,
+    });
+}
+
+function addOutcomeLabel(labels, count, singular, plural) {
+  if (count > 0) labels.push({ text: countLabel(count, singular, plural), steps: count });
+}
+
+function toolChainLabels(facts) {
+  const labels = [];
+  addEditLabel(labels, facts);
+  addCommandLabel(labels, facts);
+  addReadLabel(labels, facts);
+  addSearchLabel(labels, facts);
+  addOutcomeLabel(labels, facts.failed, '1 tool call failed', '{0} tool calls failed');
+  addOutcomeLabel(labels, facts.cancelled, '1 tool call cancelled', '{0} tool calls cancelled');
+  addOutcomeLabel(labels, facts.unfinished, '1 unfinished tool call', '{0} unfinished tool calls');
+  return labels;
+}
+
+function toolChainSummary(blocks) {
+  const facts = toolChainFacts(blocks);
+  const labels = toolChainLabels(facts);
+  if (labels.length === 0) return undefined;
+  const visible = labels.slice(0, 3);
+  const overflow = labels.slice(3).reduce((total, label) => total + label.steps, 0);
+  const other = facts.other + overflow;
+  if (other > 0)
+    visible.push({
+      text: countLabel(other, '1 other step', '{0} other steps'),
+      steps: other,
+    });
+  return visible.map((label) => label.text).join(', ');
+}
+
 function toolChain(blocks, current, ui) {
   const key = toolChainKey(blocks[0]);
   const open = ui.expanded[key] ?? true;
+  const summary = toolChainSummary(blocks) ?? `Finished with ${activityStepCount(blocks.length)}`;
   const body = blocks.map((block) => activity(block, current, ui)).join('');
-  return `<details class="tool-chain" data-disclosure="${ui.escape(key)}" ${open ? 'open' : ''}><summary>Finished with ${activityStepCount(blocks.length)}</summary><div class="tool-chain-body">${body}</div></details>`;
+  return `<details class="tool-chain" data-disclosure="${ui.escape(key)}" ${open ? 'open' : ''}><summary><span class="tool-chain-label" title="${ui.escape(summary)}">${ui.escape(summary)}</span></summary><div class="tool-chain-body">${body}</div></details>`;
 }
 
 function activityBody(current, details, ui) {

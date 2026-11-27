@@ -74,7 +74,10 @@ test('activity and tool states are labelled and survive without color-only cues'
     element('.activity > summary').getAttribute('aria-label')!,
     /Completed 5 steps in 1s; 1 passed, 1 failed, 1 cancelled, 1 running/,
   );
-  assert.equal(element('.tool-chain > summary').textContent!.trim(), 'Finished with 4 steps');
+  assert.equal(
+    element('.tool-chain-label').textContent!.trim(),
+    'Read README.md, 1 tool call failed, 1 tool call cancelled, 1 other step',
+  );
   assert.equal(element<HTMLDetailsElement>('.tool-chain').open, true);
   assert.equal(element('.tool-chain').querySelectorAll('.tool').length, 4);
   assert.equal(element('.activity-body > .thought').parentElement, element('.activity-body'));
@@ -141,6 +144,55 @@ test('single-tool activity stays inline while multi-tool runs group', () => {
   });
   assert.equal(dom.window.document.querySelector('.tool-chain'), null);
   assert.ok(element('.activity-body > .tool'));
+});
+
+test('tool chains summarize recognizable activity like Local', () => {
+  update({
+    turns: [
+      turn([
+        {
+          id: 'read-summary',
+          kind: 'tool',
+          toolName: 'Read',
+          status: 'completed',
+          input: '{"path":"README.md"}',
+          text: 'contents',
+        },
+        {
+          id: 'run-summary',
+          kind: 'tool',
+          toolKind: 'execute',
+          status: 'completed',
+          command: 'echo hi',
+          text: 'hi',
+        },
+        {
+          id: 'edit-summary',
+          kind: 'tool',
+          toolName: 'Write',
+          status: 'completed',
+          input: '{"path":"src/file.ts"}',
+          text: 'written',
+        },
+      ]),
+    ],
+  });
+  assert.equal(
+    element('.tool-chain-label').textContent,
+    'Edited file.ts, Ran 1 command, Read README.md',
+  );
+});
+
+test('tool chains fall back to Finished with N steps', () => {
+  update({
+    turns: [
+      turn([
+        { id: 'unknown-one', kind: 'tool', toolName: 'Old Task', status: 'completed' },
+        { id: 'unknown-two', kind: 'tool', toolName: 'Old Task', status: 'completed' },
+      ]),
+    ],
+  });
+  assert.equal(element('.tool-chain-label').textContent, 'Finished with 2 steps');
 });
 
 test('activity shows only unambiguous per-turn change totals', () => {

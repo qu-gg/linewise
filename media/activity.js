@@ -31,20 +31,20 @@ function toolTarget(block) {
   }
 }
 
-function toolVisual(block) {
+export function toolVisual(block) {
   const name = block.toolName ?? block.title ?? 'Tool';
   const kind = block.toolKind === 'execute' ? 'execute' : name.toLowerCase();
   if (kind === 'execute' || /bash|terminal|shell/.test(kind))
-    return { icon: 'terminal', action: 'Ran', target: block.command };
+    return { kind: 'command', icon: 'terminal', action: 'Ran', target: block.command };
   if (/read|open|view/.test(kind))
-    return { icon: 'file', action: 'Read', target: toolTarget(block) };
+    return { kind: 'read', icon: 'file', action: 'Read', target: toolTarget(block) };
   if (/search|grep|glob|find/.test(kind))
-    return { icon: 'search', action: 'Searched', target: toolTarget(block) };
+    return { kind: 'search', icon: 'search', action: 'Searched', target: toolTarget(block) };
   if (/edit|write|rename|notebook|code_action/.test(kind))
-    return { icon: 'edit', action: 'Edited', target: toolTarget(block) };
+    return { kind: 'edit', icon: 'edit', action: 'Edited', target: toolTarget(block) };
   if (/fetch|browser|web/.test(kind))
-    return { icon: 'globe', action: 'Fetched', target: toolTarget(block) };
-  return { icon: 'tools', action: name, target: toolTarget(block) };
+    return { kind: 'other', icon: 'globe', action: 'Fetched', target: toolTarget(block) };
+  return { kind: 'other', icon: 'tools', action: name, target: toolTarget(block) };
 }
 
 function timestamp(block, escape) {
