@@ -1,4 +1,5 @@
 import { markdown } from './markdown.js';
+import { liveFor } from './terminal-stream.js';
 
 const toolStates = {
   completed: { key: 'passed', label: 'Passed', icon: 'pass' },
@@ -39,12 +40,27 @@ function failureLine(block, escape, icon) {
   return `<div class="failure tool-failure" role="status">${icon('warning')}<span>${escape(block.toolName ?? block.title ?? 'Tool')} failed</span></div>`;
 }
 
+function terminalBadges(live, running, icon) {
+  const streaming = `<span class="terminal-live" ${live?.running ? '' : 'hidden'}>Live</span><span class="terminal-truncated" ${live?.truncated ? '' : 'hidden'}>Truncated</span>`;
+  const controls = running
+    ? `<button type="button" class="icon-button terminal-controls" data-action="terminals" aria-label="Stop or Reveal Owned Terminal" title="Owned Terminals">${icon('terminal')}</button>`
+    : '';
+  return `${streaming}${controls}`;
+}
+
+function terminalText(block, live, running) {
+  if (live) return live.output || (live.running ? 'Running...' : 'No output.');
+  return block.text || (running ? 'Running...' : 'No output.');
+}
+
 function terminalActivity(block, { escape, icon, itemButton, expanded }) {
   const status = toolStatus(block);
+  const running = status.key === 'running';
+  const live = running ? liveFor(block.id) : undefined;
   const command = escape(block.command ?? block.title);
-  const open = expanded[block.id] ?? status.key === 'running';
-  const output = escape(block.text || (status.key === 'running' ? 'Running...' : 'No output.'));
-  return `<details class="tool terminal-tool status-${status.key}" data-disclosure="${escape(block.id)}" data-tool-status="${status.key}" ${open ? 'open' : ''}><summary aria-label="Terminal ${status.label.toLowerCase()}: ${command}">${icon('terminal')}<span class="terminal-label"><span class="tool-name">Terminal</span><code title="${command}">${command}</code></span><span class="tool-status ${status.key}">${status.label}</span><span class="show-output">${open ? 'Hide' : 'Show'}</span></summary><div class="terminal-pane" data-terminal-tool="${escape(block.id)}"><div class="terminal-heading">${icon('terminal')}<code>${command}</code>${itemButton('copyTool', 'copy', 'Copy Command Output', block.id)}</div>${failureLine(block, escape, icon)}<pre class="tool-output">${output}</pre></div></details>`; // keep terminal-pane/tool-output stable for live output
+  const open = expanded[block.id] ?? running;
+  const output = escape(terminalText(block, live, running));
+  return `<details class="tool terminal-tool status-${status.key}" data-terminal-block="${escape(block.id)}" data-disclosure="${escape(block.id)}" data-tool-status="${status.key}" ${open ? 'open' : ''}><summary aria-label="Terminal ${status.label.toLowerCase()}: ${command}">${icon('terminal')}<span class="terminal-label"><span class="tool-name">Terminal</span><code title="${command}">${command}</code></span><span class="tool-status ${status.key}">${status.label}</span><span class="show-output">${open ? 'Hide' : 'Show'}</span></summary><div class="terminal-pane" data-terminal-tool="${escape(block.id)}"><div class="terminal-heading">${icon('terminal')}<code>${command}</code>${terminalBadges(live, running, icon)}${itemButton('copyTool', 'copy', 'Copy Command Output', block.id)}</div>${failureLine(block, escape, icon)}<pre class="tool-output">${output}</pre></div></details>`; // keep terminal-pane/tool-output stable for live output
 }
 
 function toolActivity(block, { escape, icon, expanded }) {

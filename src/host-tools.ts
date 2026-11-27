@@ -6,12 +6,13 @@ import type {
   RequestPermissionRequest,
   RequestPermissionResponse,
   TerminalOutputRequest,
+  TerminalOutputResponse,
   WriteTextFileRequest,
 } from '@agentclientprotocol/sdk';
 import type { ReviewJournal } from './review.js';
 import type { WorkspaceFiles } from './workspace.js';
 import type { TerminalManager } from './terminal.js';
-import type { TerminalCommand } from './terminal.js';
+import type { TerminalCommand, TerminalObservation } from './terminal.js';
 import { MutationBroker, permissionInput, isReviewedService } from './mutations.js';
 import type { Mutation } from './mutations.js';
 import { checkedPath, checkedReadPath, hasShebang } from './file-policy.js';
@@ -41,6 +42,7 @@ export interface ToolScope {
   cwd: string;
   signal: AbortSignal;
   valid(): boolean;
+  observeTerminal?(terminal: TerminalObservation): void;
 }
 
 type ActiveScope = ToolScope & {
@@ -184,6 +186,7 @@ export class HostTools {
       scope,
       (command, signal) => this.approve(scope, command, signal),
       () => this.assertCurrent(scope),
+      (terminal) => scope.observeTerminal?.(terminal),
     ));
   }
 
@@ -316,6 +319,7 @@ export class HostTools {
       scope.cwd,
       mutation.request,
       scope.signal,
+      toolCallId,
     );
   }
 
@@ -429,6 +433,12 @@ export class HostTools {
 
   output(request: TerminalOutputRequest) {
     return this.manager(request).output(request);
+  }
+  observeOutput(
+    request: TerminalOutputRequest,
+    listener: (snapshot: TerminalOutputResponse) => void,
+  ) {
+    return this.manager(request).observeOutput(request, listener);
   }
   waitForExit(request: TerminalOutputRequest) {
     return this.manager(request).waitForExit(request);

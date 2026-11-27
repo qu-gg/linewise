@@ -25,6 +25,8 @@ class HostTerminal implements ManagedTerminal, vscode.Pseudoterminal {
   private readonly name = `OMP ${randomUUID().slice(0, 8)}`;
   readonly label = this.name;
   private backend: PtyTerminal | RunningTerminal | undefined;
+  private readonly observers = new Map<(snapshot: TerminalOutputResponse) => void, () => void>();
+  private readonly queuedObservers = new Set<(snapshot: TerminalOutputResponse) => void>();
   private closed = false;
   private human = false;
   private displayBytes = 0;
@@ -78,6 +80,8 @@ class HostTerminal implements ManagedTerminal, vscode.Pseudoterminal {
       this.backend = this.execution.pty
         ? new PtyTerminal(this.command, this.timeoutMs, write)
         : new RunningTerminal(this.command, this.timeoutMs, write);
+      for (const listener of this.queuedObservers) this.attachObserver(listener);
+      this.queuedObservers.clear();
       if (dimensions) this.setDimensions(dimensions);
       void this.backend.ready.then(this.resolveReady, this.rejectReady);
       void this.backend.done.then((status) => {
@@ -106,6 +110,9 @@ class HostTerminal implements ManagedTerminal, vscode.Pseudoterminal {
       this.resolveDone({ exitCode: null, signal: null, _meta: { 'vs-omp/termination': reason } });
     }
     this.terminal?.dispose();
+    for (const unsubscribe of this.observers.values()) unsubscribe();
+    this.observers.clear();
+    this.queuedObservers.clear();
     this.writes.dispose();
     this.names.dispose();
   }
@@ -188,6 +195,31 @@ class HostTerminal implements ManagedTerminal, vscode.Pseudoterminal {
     }
   }
 
+  observeOutput(listener: (snapshot: TerminalOutputResponse) => void): () => void {
+    if (this.closed) return () => {};
+    this.attachObserver(listener);
+    return () => this.detachObserver(listener);
+  }
+
+  private attachObserver(listener: (snapshot: TerminalOutputResponse) => void): void {
+    const backend = this.backend;
+    if (!backend) {
+      this.queuedObservers.add(listener);
+      return;
+    }
+    try {
+      this.observers.set(listener, backend.observeOutput(listener));
+    } catch {
+      // Streaming is presentation-only; an unavailable tap cannot block the terminal.
+    }
+  }
+
+  private detachObserver(listener: (snapshot: TerminalOutputResponse) => void): void {
+    this.queuedObservers.delete(listener);
+    this.observers.get(listener)?.();
+    this.observers.delete(listener);
+  }
+
   snapshot(): TerminalOutputResponse {
     return this.backend?.snapshot() ?? { output: '', truncated: false };
   }
@@ -216,10 +248,12 @@ export function createTerminalManager(
   scope: Pick<TerminalOptions, 'sessionId' | 'cwd' | 'signal'>,
   approve: TerminalOptions['approve'],
   valid: () => void,
+  onTerminal?: TerminalOptions['onTerminal'],
 ): TerminalManager {
   return new TerminalManager({
     ...scope,
     approve,
+    onTerminal,
     launch: (command, timeout, execution) =>
       createHostTerminal(command, timeout, execution, {
         signal: scope.signal,

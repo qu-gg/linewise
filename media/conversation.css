@@ -425,6 +425,27 @@ pre code {
   height: 22px;
   color: var(--vscode-descriptionForeground);
 }
+.terminal-live,
+.terminal-truncated {
+  flex: none;
+  padding: 1px 5px;
+  border-radius: 8px;
+  font-size: 10px;
+  line-height: 1.4;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--vscode-badge-foreground);
+  background: var(--vscode-badge-background);
+}
+.terminal-truncated {
+  color: var(--vscode-editorWarning-foreground);
+  background: none;
+  border: 1px solid var(--vscode-editorWarning-foreground);
+}
+.terminal-live[hidden],
+.terminal-truncated[hidden] {
+  display: none;
+}
 a,
 .file-link {
   color: var(--vscode-textLink-foreground);
