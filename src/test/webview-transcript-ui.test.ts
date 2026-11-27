@@ -74,6 +74,10 @@ test('activity and tool states are labelled and survive without color-only cues'
     element('.activity > summary').getAttribute('aria-label')!,
     /Completed 5 steps in 1s; 1 passed, 1 failed, 1 cancelled, 1 running/,
   );
+  assert.equal(element('.tool-chain > summary').textContent!.trim(), 'Finished with 4 steps');
+  assert.equal(element<HTMLDetailsElement>('.tool-chain').open, true);
+  assert.equal(element('.tool-chain').querySelectorAll('.tool').length, 4);
+  assert.equal(element('.activity-body > .thought').parentElement, element('.activity-body'));
   assert.equal(element('.tool[data-tool-status="passed"] .tool-status').textContent, 'Passed');
   assert.equal(element<HTMLElement>('.tool[data-tool-status="passed"] .tool-status').hidden, true);
   assert.equal(element('.tool[data-tool-status="passed"]').dataset.toolIcon, 'file');
@@ -118,6 +122,25 @@ test('activity and tool states are labelled and survive without color-only cues'
   assert.equal(element('.activity-label').textContent, 'Running');
   assert.equal(element<HTMLDetailsElement>('.activity').open, true);
   assert.match(element('.activity > summary').textContent!, /1 step/);
+});
+
+test('single-tool activity stays inline while multi-tool runs group', () => {
+  update({
+    turns: [
+      turn([
+        {
+          id: 'single',
+          kind: 'tool',
+          toolName: 'Read',
+          status: 'completed',
+          input: '{"path":"one.ts"}',
+          text: 'contents',
+        },
+      ]),
+    ],
+  });
+  assert.equal(dom.window.document.querySelector('.tool-chain'), null);
+  assert.ok(element('.activity-body > .tool'));
 });
 
 test('activity shows only unambiguous per-turn change totals', () => {
