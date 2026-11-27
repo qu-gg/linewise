@@ -64,6 +64,13 @@ async function conversationRequest(
     case 'permissionSettings':
       await handlers.permissionSettings();
       break;
+    default:
+      await sessionRequest(request, handlers);
+  }
+}
+
+async function sessionRequest(request: SidebarRequest, handlers: RequestHandlers): Promise<void> {
+  switch (request.type) {
     case 'terminals':
       await handlers.terminals();
       break;

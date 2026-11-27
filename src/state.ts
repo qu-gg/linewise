@@ -8,7 +8,6 @@ import type { HistorySnapshot } from './history.js';
 import { retentionPolicy } from './storage-policy.js';
 import { imageSchema } from './image-policy.js';
 import { permissionMode } from './terminal-policy.js';
-
 const block = z.object({
   id: z.string(),
   kind: z.enum(['text', 'thought', 'tool', 'plan']),
@@ -482,7 +481,6 @@ export class StateStore {
     this.queue = next.catch(() => {});
     return next;
   }
-
   private async persist(): Promise<void> {
     const snapshot = JSON.stringify(this.data);
     const bytes = Buffer.byteLength(snapshot);

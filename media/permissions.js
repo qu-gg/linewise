@@ -80,13 +80,24 @@ function popover(state, icon) {
   return `<section class="permission-popover" role="dialog" aria-labelledby="permission-title" tabindex="-1"><header><h2 id="permission-title">Command Permissions</h2><button type="button" class="icon-button" id="permission-close" data-permission="close" aria-label="Close Command Permissions" title="Close">${icon('close')}</button></header>${body}</section>`;
 }
 
+function modeOf(state) {
+  return state.permissions ?? 'rules';
+}
+
+function permissionTitle(mode) {
+  return `Command Permissions: ${mode === 'all' ? 'Allow All Except Restrictions' : triggerLabel(mode)}`;
+}
+
+function permissionTrigger(state, busy, icon, mode, title) {
+  return `<button type="button" class="icon-button context-toggle permission-control" data-action="permissions" aria-label="${title}" title="${title}" aria-haspopup="dialog" aria-expanded="${display.open}" ${!state.connected || busy ? 'disabled' : ''}>${icon(modes.find((entry) => entry.mode === mode)?.icon ?? 'checklist')}<span>${triggerLabel(mode)}</span>${icon('chevron-down')}</button>`;
+}
+
 export function permissionControl(state, busy, icon) {
   if (!state.connected || busy || display.session !== state.sessionId) {
     display = { open: false, pending: undefined, session: state.sessionId };
   }
-  const mode = state.permissions ?? 'rules';
-  const title = `Command Permissions: ${mode === 'all' ? 'Allow All Except Restrictions' : triggerLabel(mode)}`;
-  const trigger = `<button type="button" class="icon-button context-toggle permission-control" data-action="permissions" aria-label="${title}" title="${title}" aria-haspopup="dialog" aria-expanded="${display.open}" ${!state.connected || busy ? 'disabled' : ''}>${icon(modes.find((entry) => entry.mode === mode)?.icon ?? 'checklist')}<span>${triggerLabel(mode)}</span>${icon('chevron-down')}</button>`;
+  const mode = modeOf(state);
+  const trigger = permissionTrigger(state, busy, icon, mode, permissionTitle(mode));
   return display.open ? `${trigger}${popover(state, icon)}` : trigger;
 }
 
@@ -98,65 +109,76 @@ export function togglePermissions(render, currentState) {
   const state = currentState();
   display = { open: true, pending: undefined, session: state.sessionId };
   render();
-  focus(`#permission-mode-${state.permissions ?? 'rules'}`);
+  focus(`#permission-mode-${modeOf(state)}`);
+}
+
+function dismissPending(render, currentState) {
+  display.pending = undefined;
+  render();
+  focus(`#permission-mode-${modeOf(currentState())}`);
+}
+
+function chooseMode(send, render, currentState, mode) {
+  if (mode === modeOf(currentState())) close(render);
+  else if (mode === 'all' || mode === 'yolo') {
+    display.pending = mode;
+    render();
+    focus('#permission-confirm');
+  } else {
+    send('permissions', { mode });
+    close(render);
+  }
+}
+
+function handlePermissionAction(event, send, render, currentState) {
+  const target = event.target.closest?.('[data-permission]');
+  if (!target) return false;
+  event.preventDefault();
+  const action = target.dataset.permission;
+  if (action === 'mode') chooseMode(send, render, currentState, target.dataset.mode);
+  else if (action === 'confirm' && display.pending) {
+    send('permissions', { mode: display.pending, confirmed: true });
+    close(render);
+  } else if (action === 'cancel') dismissPending(render, currentState);
+  else if (action === 'settings') {
+    send('permissionSettings');
+    close(render);
+  } else if (action === 'close') close(render);
+  return true;
+}
+
+function moveModeFocus(mode, key) {
+  const options = [...document.querySelectorAll('.permission-mode')];
+  const index = options.indexOf(mode);
+  const next =
+    key === 'Home'
+      ? 0
+      : key === 'End'
+        ? options.length - 1
+        : (index + (key === 'ArrowDown' ? 1 : -1) + options.length) % options.length;
+  options[next]?.focus({ preventScroll: true });
+}
+
+function handlePermissionKey(event, render, currentState) {
+  if (!display.open) return;
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    if (display.pending) dismissPending(render, currentState);
+    else close(render);
+    return;
+  }
+  const mode = event.target.closest?.('.permission-mode');
+  if (!mode || !['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+  event.preventDefault();
+  moveModeFocus(mode, event.key);
 }
 
 export function bindPermissions(send, render, currentState) {
   document.addEventListener('click', (event) => {
-    const target = event.target.closest?.('[data-permission]');
-    if (target) {
-      event.preventDefault();
-      const action = target.dataset.permission;
-      if (action === 'mode') {
-        const mode = target.dataset.mode;
-        if (mode === (currentState().permissions ?? 'rules')) close(render);
-        else if (mode === 'all' || mode === 'yolo') {
-          display.pending = mode;
-          render();
-          focus('#permission-confirm');
-        } else {
-          send('permissions', { mode });
-          close(render);
-        }
-      } else if (action === 'confirm' && display.pending) {
-        send('permissions', { mode: display.pending, confirmed: true });
-        close(render);
-      } else if (action === 'cancel') {
-        display.pending = undefined;
-        render();
-        focus(`#permission-mode-${currentState().permissions ?? 'rules'}`);
-      } else if (action === 'settings') {
-        send('permissionSettings');
-        close(render);
-      } else if (action === 'close') close(render);
-      return;
-    }
+    if (handlePermissionAction(event, send, render, currentState)) return;
     if (!display.open) return;
     if (event.target.closest?.('.permission-popover, [data-action="permissions"]')) return;
     close(render, false);
   });
-  document.addEventListener('keydown', (event) => {
-    if (!display.open) return;
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      if (display.pending) {
-        display.pending = undefined;
-        render();
-        focus(`#permission-mode-${currentState().permissions ?? 'rules'}`);
-      } else close(render);
-      return;
-    }
-    const mode = event.target.closest?.('.permission-mode');
-    if (!mode || !['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
-    const options = [...document.querySelectorAll('.permission-mode')];
-    const index = options.indexOf(mode);
-    const next =
-      event.key === 'Home'
-        ? 0
-        : event.key === 'End'
-          ? options.length - 1
-          : (index + (event.key === 'ArrowDown' ? 1 : -1) + options.length) % options.length;
-    event.preventDefault();
-    options[next]?.focus({ preventScroll: true });
-  });
+  document.addEventListener('keydown', (event) => handlePermissionKey(event, render, currentState));
 }
