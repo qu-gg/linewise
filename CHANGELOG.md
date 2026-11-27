@@ -15,6 +15,9 @@ Feature release for the inline command-permission menu.
   the first prompt after connecting. Elevated modes reset on extension reload,
   workspace trust change, or history rollback; a prompt blocked by an in-flight
   permission change now reports that boundary directly.
+- Preserve host-side read, write, permission and terminal failure reasons in ACP
+  responses. A denied write or pending-review conflict no longer reaches the
+  model as only `Internal error`.
 - Upgrade the tested OMP profile to 19.2.1. Runtime preflight accepts newer
   19.x releases; release acceptance remains pinned to the tested version.
 - Treat only a leading interpreter shebang as an executable-bit mutation. A

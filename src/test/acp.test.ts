@@ -85,7 +85,10 @@ test('denied mediated writes propagate as failures instead of succeeding silentl
       protocolVersion: PROTOCOL_VERSION,
       clientCapabilities: {},
     });
-    await assert.rejects(connection.agent.request('session/new', { cwd: '/test', mcpServers: [] }));
+    await assert.rejects(
+      connection.agent.request('session/new', { cwd: '/test', mcpServers: [] }),
+      /Not approved/,
+    );
     assert.equal(writeAttempted, true);
   } finally {
     connection.close();
