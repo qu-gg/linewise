@@ -10,14 +10,30 @@ interface Plan {
   paths?: string[];
 }
 
+export const recordedSnapshots: Array<{ target: string; seenLines?: number[] | null }> = [];
+
 export class EditStore {
   private readonly contents = new Map<string, string>();
   headText(target: string): string | undefined {
     return this.contents.get(target);
   }
-  recordSnapshotFile(target: string): string {
+  private readonly seen = new Map<string, number[]>();
+  recordSnapshotFile(target: string, seenLines?: number[] | null): string {
+    recordedSnapshots.push({ target, seenLines });
     this.contents.set(target, readFileSync(target, 'utf8'));
+    this.seen.delete(target);
     return 'FAKE';
+  }
+  recordSeenLines(target: string, _tag: string, lines: number[]): void {
+    this.seen.set(
+      target,
+      [...new Set([...(this.seen.get(target) ?? []), ...lines])].sort(
+        (left, right) => left - right,
+      ),
+    );
+  }
+  seenLines(target: string, _tag?: string): number[] | null {
+    return this.seen.get(target) ?? null;
   }
   recordSeenLinesFromBody(): void {}
 }

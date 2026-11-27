@@ -64,7 +64,8 @@ export class HostTools {
   private failed = false;
   private readonly commandPermissions = new CommandPermissions(() => this.assertPermissionIdle());
   constructor(
-    private readonly files: Pick<WorkspaceFiles, 'normalize'>,
+    private readonly files: Pick<WorkspaceFiles, 'normalize'> &
+      Partial<Pick<WorkspaceFiles, 'isDirty'>>,
     private readonly journal: Pick<ReviewJournal, 'read' | 'write'> &
       Partial<Pick<ReviewJournal, 'authorizeRead' | 'inspect' | 'delete' | 'move'>>,
     private readonly mutationDirectory?: string,
@@ -237,22 +238,31 @@ export class HostTools {
       if (!this.journal.inspect) throw new Error('Native mutation journal is unavailable.');
       return this.journal.inspect(target, scope.signal);
     }
-    if (mutation.op === 'write') {
-      const content = await this.files.normalize(target, mutation.content);
-      this.assertCurrent(scope);
-      if (content.includes('#!')) throw new Error('Executable-bit side effects are disabled.');
-      await this.journal.write(
-        scope.owner,
-        target,
-        content,
-        scope.signal,
-        mutation.before,
-        provenance,
-      );
-      return content;
-    }
+    if (mutation.op === 'write') return this.applyNativeWrite(scope, mutation, target, provenance);
     await this.applyDestructive(scope, mutation, target, provenance);
     return mutation.op === 'delete' ? '' : mutation.content;
+  }
+
+  private async applyNativeWrite(
+    scope: ActiveScope,
+    mutation: Extract<Mutation, { op: 'write' }>,
+    target: string,
+    provenance: Provenance,
+  ): Promise<string> {
+    const content = await this.files.normalize(target, mutation.content);
+    this.assertCurrent(scope);
+    if (content.includes('#!')) throw new Error('Executable-bit side effects are disabled.');
+    if (this.files.isDirty?.(target))
+      throw new Error('Save or close the dirty buffer before applying a native edit.');
+    await this.journal.write(
+      scope.owner,
+      target,
+      content,
+      scope.signal,
+      mutation.before,
+      provenance,
+    );
+    return content;
   }
 
   private async nativeService(

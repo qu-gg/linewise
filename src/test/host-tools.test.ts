@@ -300,9 +300,7 @@ test('cleanup errors latch the controller closed and remain observable on repeat
 test('host prompt brokers native images and permits only the exact one-shot call', async (context) => {
   const { scope, cwd } = await setup(context);
   process.env.VS_OMP_ARTIFACTS_ROOT = path.join(cwd, 'private');
-  context.after(() => {
-    delete process.env.VS_OMP_ARTIFACTS_ROOT;
-  });
+  context.after(() => delete process.env.VS_OMP_ARTIFACTS_ROOT);
   const directory = path.join(cwd, 'private', 'mutations');
   const writes: unknown[] = [];
   const tools = new HostTools(
@@ -363,7 +361,6 @@ test('host prompt brokers native images and permits only the exact one-shot call
     });
     assert.equal((await tools.permission(shell)).outcome.outcome, 'cancelled');
   });
-  await assert.rejects(exchangeMutations(directory, []), /ENOENT/);
 });
 
 test('outside read authorization includes directories and is consumed once by text reads', async (context) => {
@@ -409,9 +406,7 @@ test('outside read authorization includes directories and is consumed once by te
 test('host brokers read/delete/move preimages and rejects executable side effects and missing adapters', async (context) => {
   const { scope, cwd } = await setup(context);
   process.env.VS_OMP_ARTIFACTS_ROOT = path.join(cwd, 'private');
-  context.after(() => {
-    delete process.env.VS_OMP_ARTIFACTS_ROOT;
-  });
+  context.after(() => delete process.env.VS_OMP_ARTIFACTS_ROOT);
   const directory = path.join(cwd, 'private', 'mutations');
   const calls: unknown[] = [];
   const journal = {
@@ -467,4 +462,36 @@ test('host brokers read/delete/move preimages and rejects executable side effect
     ])
       await assert.rejects(exchangeMutations(directory, [mutation]), /journal is unavailable/);
   });
+});
+
+test('native writes refuse a dirty open buffer before staging review', async (context) => {
+  const { scope, cwd } = await setup(context);
+  process.env.VS_OMP_ARTIFACTS_ROOT = path.join(cwd, 'private');
+  context.after(() => delete process.env.VS_OMP_ARTIFACTS_ROOT);
+  const directory = path.join(cwd, 'private', 'mutations');
+  const target = path.join(cwd, 'dirty.txt');
+  await writeFile(target, 'before');
+  const writes: unknown[] = [];
+  const tools = new HostTools(
+    {
+      normalize: async (_target, content) => content,
+      isDirty: (candidate) => candidate === target,
+    },
+    {
+      read: async () => '',
+      write: async (...args) => {
+        writes.push(args);
+      },
+    },
+    directory,
+  );
+  await tools.run(scope, async () => {
+    await assert.rejects(
+      exchangeMutations(directory, [
+        { op: 'write', path: target, before: 'before', content: 'after' },
+      ]),
+      /dirty buffer/,
+    );
+  });
+  await assert.rejects(exchangeMutations(directory, []), /ENOENT/);
 });
