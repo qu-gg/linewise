@@ -10,6 +10,7 @@ import { MutationBroker } from '../mutations.js';
 import type { Mutation } from '../mutations.js';
 import * as runtime from './native-edit-fixture.js';
 import type { NativeEditApi } from '../native-edit.js';
+import type { EditStore } from '@oh-my-pi/pi-natives';
 
 register(new URL('./vscode-loader.js', import.meta.url), import.meta.url);
 const { installNativeEdit } = await import('../native-edit.js');
@@ -176,4 +177,41 @@ test('read results record a snapshot without a line-0 provenance sentinel', asyn
     runtime.recordedSnapshots.map(({ seenLines }) => seenLines),
     [undefined],
   );
+});
+
+test('edit waits for an unawaited read result before preparing the snapshot', async (context) => {
+  const current = await setup(context);
+  current.handlers.get('session_switch')!();
+  const reading = current.handlers.get('tool_result')!(current.event, current.native);
+  const result = await current.execute({ op: 'update', content: 'after' });
+  assert.equal(result.isError, false);
+  await reading;
+  assert.equal(current.results.length, 1);
+});
+
+test('edit prefers the shared OMP store over the private snapshot store', async (context) => {
+  const current = await setup(context);
+  const shared = new runtime.EditStore();
+  shared.recordSnapshotFile(current.source);
+  current.api.pi = { getEditStore: () => shared as unknown as EditStore };
+  current.handlers.get('session_switch')!();
+  const result = await current.execute({ op: 'update', content: 'after' });
+  assert.equal(result.isError, false);
+  assert.equal(shared.headText(current.source), 'before');
+});
+
+test('invalid read paths and shared-store failures do not poison later edits', async (context) => {
+  const current = await setup(context);
+  await current.handlers.get('tool_result')!(
+    { ...current.event, input: { path: 'https://example.com/file' } },
+    current.native,
+  );
+  current.api.pi = {
+    getEditStore: () => {
+      throw new Error('shared store unavailable');
+    },
+  };
+  const result = await current.execute({ op: 'update', content: 'after' });
+  assert.equal(result.isError, false);
+  assert.equal(current.results.length, 1);
 });

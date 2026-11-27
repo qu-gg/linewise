@@ -3,8 +3,11 @@
 ## Unreleased
 
 - Fix native edit provenance: pin OMP's child process to hashline read/edit mode,
-  keep the read snapshot after recoverable validation errors, and treat a read
-  body without hashline numbers as no provenance instead of marking only line 0.
+  share OMP's session edit store when available, record the requested read range
+  when the body has no hashline lines, keep the read snapshot after recoverable
+  validation errors, serialize unawaited read results before edit, and refuse a
+  dirty open buffer before staging. Directory listing remains an OMP read-tool
+  capability above the file-only ACP text read.
 
 ## 0.1.3
 

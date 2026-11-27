@@ -109,3 +109,24 @@ export async function checkedReadPath(
     throw new Error('Only regular files and directories can be read.');
   return resolved;
 }
+
+export function readLineRanges(target: unknown): Array<[number, number]> | undefined {
+  const match =
+    typeof target === 'string' ? target.match(/:((?:raw|\d+(?:-\d+)?(?:,\d+(?:-\d+)?)*))$/) : null;
+  if (!match) return undefined;
+  if (match[1] === 'raw') return undefined;
+  return match[1]!.split(',').map((part) => {
+    const [start, end] = part.split('-').map(Number);
+    return [start!, end ?? start!];
+  });
+}
+
+export function lineNumbersForRead(target: unknown, count: number): number[] {
+  if (count <= 0) return [];
+  const ranges = readLineRanges(target);
+  if (!ranges) return Array.from({ length: count }, (_, index) => index + 1);
+  const lines = new Set<number>();
+  for (const [start, end] of ranges)
+    for (let line = Math.max(1, start); line <= Math.min(count, end); line++) lines.add(line);
+  return [...lines].sort((left, right) => left - right);
+}

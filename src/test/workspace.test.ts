@@ -215,3 +215,12 @@ test('workspace rename refuses dirty, colliding and stale images and saves edite
   assert.equal(await files().read(target), 'after');
   assert.equal(await files().read(destination), null);
 });
+
+test('workspace reports dirty open buffers by host URI', () => {
+  const document = new Document(Uri.file(target), 'dirty');
+  fixture.documents.push(document);
+  assert.equal(files().isDirty(target), true);
+  document.isDirty = false;
+  assert.equal(files().isDirty(target), false);
+  assert.equal(files().isDirty('/workspace/other.txt'), false);
+});

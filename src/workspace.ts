@@ -298,6 +298,13 @@ export class WorkspaceFiles implements TextFiles {
     return content.replace(/\r?\n/g, previous?.includes('\r\n') ? '\r\n' : '\n');
   }
 
+  isDirty(target: string): boolean {
+    const uri = this.uri(target);
+    return vscode.workspace.textDocuments.some(
+      (document) => document.uri.toString() === uri.toString() && document.isDirty,
+    );
+  }
+
   async read(target: string): Promise<string | null> {
     const uri = this.uri(target);
     const document = vscode.workspace.textDocuments.find(
