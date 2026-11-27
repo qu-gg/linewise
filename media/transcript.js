@@ -65,6 +65,26 @@ function activityOpen(expanded, current) {
   return expanded[current.id] ?? current.status === 'running';
 }
 
+function activityDiff(current, changes) {
+  let added = 0;
+  let removed = 0;
+  let files = 0;
+  for (const change of changes ?? []) {
+    const operations = change.operations ?? [];
+    if (operations.length !== 1 || operations[0].turnId !== current.id) continue;
+    if (!Number.isFinite(change.added) || !Number.isFinite(change.removed)) continue;
+    added += change.added;
+    removed += change.removed;
+    files += 1;
+  }
+  if (files === 0) return { suffix: '', html: '' };
+  const text = `+${added} -${removed}`;
+  return {
+    suffix: ` ${text}`,
+    html: ` <span class="activity-diff"><span class="added">+${added}</span> <span class="removed">-${removed}</span></span>`,
+  };
+}
+
 function turnActivity(current, details, ui) {
   if (!details.length && current.status !== 'running') return '';
   const status = turnStatus[current.status] ?? turnStatus.completed;
@@ -73,12 +93,13 @@ function turnActivity(current, details, ui) {
     Math.round(((current.endedAt ?? Date.now()) - current.startedAt) / 1000),
   );
   const timing = activityTiming(seconds);
+  const diff = activityDiff(current, ui.state.changes);
   const count = activityStepCount(details.length);
   const counts = activityCounts(details);
-  const label = `${status.label} ${count}${timing.suffix}${activityCountSuffix(counts)}`;
+  const label = `${status.label} ${count}${timing.suffix}${diff.suffix}${activityCountSuffix(counts)}`;
   const open = activityOpen(ui.expanded, current);
   const body = details.map((block) => activity(block, current, ui)).join('');
-  return `<details class="activity status-${current.status}" data-disclosure="${ui.escape(current.id)}" data-activity-status="${current.status}" ${open ? 'open' : ''}><summary aria-label="${label}"><span class="activity-label">${status.label}</span> <span class="activity-count">${count}</span>${timing.html}</summary><div class="activity-body">${body}</div></details>`;
+  return `<details class="activity status-${current.status}" data-disclosure="${ui.escape(current.id)}" data-activity-status="${current.status}" ${open ? 'open' : ''}><summary aria-label="${label}"><span class="activity-label">${status.label}</span> <span class="activity-count">${count}</span>${timing.html}${diff.html}</summary><div class="activity-body">${body}</div></details>`;
 }
 
 function answerActions(current, answer, ui) {
@@ -117,11 +138,11 @@ export function transcriptSignature(state, wide) {
   return JSON.stringify([wide, rest, plan?.entries]);
 }
 
-export function turnSignature(current, expanded) {
+export function turnSignature(current, expanded, state) {
   const opens = [current.id, ...current.blocks.map((block) => block.id)]
     .map((id) => (expanded[id] ? '1' : '0'))
     .join('');
-  return `${JSON.stringify(current)}|${opens}`;
+  return `${JSON.stringify(current)}|${opens}|${activityDiff(current, state.changes).suffix}`;
 }
 
 export function primeTurnCache(transcript, state, ui, cache) {
@@ -133,7 +154,8 @@ export function primeTurnCache(transcript, state, ui, cache) {
   );
   for (const current of state.turns) {
     const node = nodes.get(current.id);
-    if (node) cache.set(current.id, { signature: turnSignature(current, ui.expanded), node });
+    if (node)
+      cache.set(current.id, { signature: turnSignature(current, ui.expanded, state), node });
   }
 }
 
@@ -161,7 +183,7 @@ function createTurnNode(transcript, current, state, ui, previous) {
 }
 
 function reconcileTurn(transcript, current, state, ui, cache) {
-  const signature = turnSignature(current, ui.expanded);
+  const signature = turnSignature(current, ui.expanded, state);
   const previous = cache.get(current.id);
   const reusable = previous?.signature === signature ? previous.node : undefined;
   const node = reusable?.isConnected

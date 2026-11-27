@@ -120,6 +120,45 @@ test('activity and tool states are labelled and survive without color-only cues'
   assert.match(element('.activity > summary').textContent!, /1 step/);
 });
 
+test('activity shows only unambiguous per-turn change totals', () => {
+  const current = turn(tools());
+  update({ turns: [current] });
+  const before = element('[data-turn-id="turn"]');
+  update({
+    turns: [current],
+    changes: [
+      {
+        id: 'one',
+        name: 'one.ts',
+        state: 'pending',
+        added: 2,
+        removed: 1,
+        operations: [{ turnId: 'turn' }],
+      },
+      {
+        id: 'many',
+        name: 'many.ts',
+        state: 'pending',
+        added: 9,
+        removed: 9,
+        operations: [{ turnId: 'turn' }, { turnId: 'other' }],
+      },
+      {
+        id: 'other',
+        name: 'other.ts',
+        state: 'pending',
+        added: 4,
+        removed: 4,
+        operations: [{ turnId: 'other' }],
+      },
+    ],
+  });
+  assert.match(element('.activity > summary').textContent!, /\+2 -1/);
+  assert.doesNotMatch(element('.activity > summary').textContent!, /\+9/);
+  assert.match(element('.activity > summary').getAttribute('aria-label')!, /\+2 -1/);
+  assert.notEqual(element('[data-turn-id="turn"]'), before);
+});
+
 test('activity and thought disclosures stay collapsed across streamed updates', async () => {
   const thought = { id: 'disclosure-thought', kind: 'thought', text: 'Streaming thought' };
   update({ turns: [{ ...turn([thought]), status: 'running' }] });

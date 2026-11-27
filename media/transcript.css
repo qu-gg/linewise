@@ -62,6 +62,19 @@
   color: var(--vscode-descriptionForeground);
   font-size: 12px;
 }
+.activity-diff {
+  display: inline-flex;
+  gap: 4px;
+  color: var(--vscode-descriptionForeground);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.activity-diff .added {
+  color: var(--vscode-gitDecoration-addedResourceForeground, var(--vscode-testing-iconPassed));
+}
+.activity-diff .removed {
+  color: var(--vscode-gitDecoration-deletedResourceForeground, var(--vscode-errorForeground));
+}
 .activity.status-failed .activity-label {
   color: var(--vscode-errorForeground);
 }
