@@ -414,8 +414,8 @@ export class HostView {
   private async copyTool(id: string) {
     const block = this.active()
       ?.turns.flatMap((current) => current.blocks)
-      .find((candidate) => candidate.id === id && candidate.kind === 'tool');
-    if (!block) throw new Error('Tool output is no longer available.');
+      .find((candidate) => candidate.id === id && ['tool', 'text'].includes(candidate.kind));
+    if (!block) throw new Error('Output is no longer available.');
     await vscode.env.clipboard.writeText(
       block.command ? `${block.command}\n${block.text}` : block.text,
     );

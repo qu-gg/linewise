@@ -2,6 +2,7 @@
 @import './composer.css';
 @import '@vscode/codicons/dist/codicon.css';
 @import './conversation.css';
+@import './transcript.css';
 @import './dock.css';
 @import './permissions.css';
 @import './model-picker.css';

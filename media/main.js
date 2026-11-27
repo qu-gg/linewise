@@ -8,8 +8,8 @@ import {
   restoreFocus,
   settleAttentionFocus,
 } from './accessibility.js';
-import { approvalCard, bindApprovals, refreshApproval } from './approvals.js';
-import { questionCard, questionResults, bindQuestions } from './questions.js';
+import { bindApprovals, refreshApproval } from './approvals.js';
+import { bindQuestions } from './questions.js';
 import {
   bindSessions,
   isWide,
@@ -27,11 +27,16 @@ import {
   watchLayout,
 } from './layout.js';
 import { contextPanel as sessionInfo, usagePercentage } from './context-info.js';
-import { activity, modelOutput } from './activity.js';
+import {
+  primeTurnCache,
+  reconcileTurns,
+  transcriptMarkup as renderTranscript,
+  transcriptSignature,
+  transcriptUi as createTranscriptUi,
+} from './transcript.js';
 import { pasteImages } from './clipboard.js';
 import * as picker from './model-picker.js';
 import { bindPromptRecall, recallPrompts } from './prompt-history.js';
-import { promptRow } from './prompt-card.js';
 const vscode = acquireVsCodeApi();
 const remembered = vscode.getState() ?? {};
 const expanded = remembered.expanded ?? {};
@@ -41,6 +46,9 @@ const drafts = remembered.drafts ?? {};
 let draftSession = remembered.sessionId;
 let editing = remembered.editing ?? null;
 let pendingRender = false;
+const turnCache = new Map();
+let chromeSignature = '';
+let chromeWide = false;
 let activeThoughts = new Set();
 let contextOpen = false;
 let notice = '';
@@ -63,7 +71,6 @@ function button(action, name, label, extra = '') {
     (action === 'disconnect' && state.busy && state.cancellable === false);
   return `<button type="button" class="icon-button" data-action="${action}" aria-label="${escape(label)}" title="${escape(label)}" ${blocked ? 'disabled' : ''} ${extra}>${icon(name)}</button>`;
 }
-const activityUi = { escape, icon, itemButton, expanded };
 const send = (type, extra = {}) => vscode.postMessage({ v: 1, type, ...extra });
 const promptRecall = bindPromptRecall(app, {
   prompts: () => recallPrompts(state.turns, state.promptHistory),
@@ -85,42 +92,8 @@ bindSessions(
   () => state,
   remembered.sessions,
 );
-function turnActivity(current, details) {
-  if (!details.length && current.status !== 'running') return '';
-  const count = details.filter((block) => block.kind === 'tool').length;
-  const seconds = Math.max(
-    0,
-    Math.round(((current.endedAt ?? Date.now()) - current.startedAt) / 1000),
-  );
-  const label = {
-    running: 'Working',
-    completed: 'Completed',
-    cancelled: 'Cancelled',
-    failed: 'Failed',
-  }[current.status];
-  const open = expanded[current.id] ?? current.status === 'running';
-  return `<details class="activity" data-disclosure="${escape(current.id)}" ${open ? 'open' : ''}><summary><span>${label}${count ? ` ${count} step${count === 1 ? '' : 's'}` : ''} <span class="elapsed">${seconds}s</span></span></summary><div class="activity-body">${details.map((block) => activity(block, current, activityUi)).join('')}</div></details>`;
-}
-
-function afterAnswer(current) {
-  if (!state.canHistory || current.status !== 'completed' || !current.history?.afterEntryId)
-    return '';
-  const disabled = working() || editing?.pending;
-  return `<div class="answer-actions">${itemButton('forkAfter', 'repo-forked', 'Fork After This Answer', current.id, disabled)}</div>`;
-}
-
-function turn(current) {
-  const last = current.blocks.at(-1);
-  const answer = current.status !== 'running' && last?.kind === 'text' ? last : undefined;
-  const details = current.blocks.filter(
-    (block) =>
-      block !== answer &&
-      !(block.kind === 'plan' && block.entries && current === state.turns.at(-1)),
-  );
-  const failures = details.filter((block) => block.kind === 'tool' && block.status === 'failed');
-  return `<article class="turn">${promptRow(current, { state, editing, working, escape, icon, itemButton })}${turnActivity(current, details)}${questionResults(current, { escape, icon })}${failures.map((block) => `<div class="failure" role="status">${icon('warning')}${escape(block.title)} failed</div>`).join('')}${answer ? modelOutput(answer, 'answer', activityUi) : ''}${afterAnswer(current)}</article>`;
-}
-
+const transcriptUi = () =>
+  createTranscriptUi({ escape, icon, itemButton, expanded, editing, state, working });
 const percentage = () => usagePercentage(state.context);
 function contextPanel() {
   return sessionInfo(state, contextOpen, { escape, icon, button, working });
@@ -143,7 +116,7 @@ function render() {
   const sidebar = wide ? sessionSidebar(state, ui) : '';
   const header = toolbar(state, button, escape);
   const banner = statusBanner(state.error || notice, icon, escape);
-  const transcriptMarkup = `<section class="transcript" aria-label="Conversation">${state.turns.map(turn).join('')}${approvalCard(state, { escape, icon }, 'command')}${questionCard(state, { escape, icon })}${!state.workspace ? '<button class="text-button" data-action="openFolder">Open Folder</button>' : ''}</section>`;
+  const transcriptSection = renderTranscript(state, transcriptUi());
   const footer = composer(state, draft, {
     button,
     itemButton,
@@ -163,22 +136,47 @@ function render() {
     banner,
     manager,
     sidebar,
-    transcript: transcriptMarkup,
+    transcript: transcriptSection,
     footer,
   });
   const transcript = document.querySelector('.transcript');
   if (manager) {
+    chromeSignature = '';
     removeChatSurface();
     restoreFocus(app, focused);
     announce(state);
     return;
   }
+  primeTurnCache(transcript, state, transcriptUi(), turnCache);
+  chromeSignature = transcriptSignature(state, wide);
+  chromeWide = wide;
   restoreTranscript(transcript, follow, scroll, dockScroll);
   refreshApproval(app);
   picker.refreshModelPicker(app);
   restoreFocus(app, focused);
   promptRecall.restore();
   announce(state);
+}
+
+function patchTranscript(transcript) {
+  const focused = captureFocus(app);
+  const follow = followTranscript(transcript);
+  reconcileTurns(transcript, state, transcriptUi(), turnCache);
+  if (follow) transcript.scrollTop = transcript.scrollHeight;
+  restoreFocus(app, focused);
+  announce(state);
+}
+
+function renderUpdate() {
+  const wide = isWide();
+  const transcript = document.querySelector('.transcript');
+  const canPatch =
+    transcript &&
+    !managerState().open &&
+    wide === chromeWide &&
+    chromeSignature === transcriptSignature(state, wide);
+  if (canPatch) patchTranscript(transcript);
+  else render();
 }
 
 watchLayout(render, remember);
@@ -330,6 +328,7 @@ function buttonAction(target) {
     permissions: () => togglePermissions(render, () => state),
     forkBefore: () => send('forkTurn', { id: target.dataset.id, boundary: 'before' }),
     forkAfter: () => send('forkTurn', { id: target.dataset.id, boundary: 'after' }),
+    copyAnswer: () => send('copyTool', { id: target.dataset.id }),
     context: () => contextAction('context'),
     closeContext: () => contextAction('closeContext'),
     attachOffer: () => offerAction('attachOffer', target.dataset.id),
@@ -437,7 +436,7 @@ function receiveState(incoming) {
   pendingRender = true;
   requestAnimationFrame(() => {
     pendingRender = false;
-    render();
+    renderUpdate();
   });
 }
 
