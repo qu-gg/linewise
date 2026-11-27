@@ -44,6 +44,27 @@ function formatDuration(seconds) {
   return rest ? `${hours}h ${rest}m` : `${hours}h`;
 }
 
+function activityStepCount(steps) {
+  return `${steps} step${steps === 1 ? '' : 's'}`;
+}
+
+function activityTiming(seconds) {
+  if (seconds === 0) return { suffix: '', html: '' };
+  const text = `in ${formatDuration(seconds)}`;
+  return {
+    suffix: ` ${text}`,
+    html: ` <span class="elapsed" title="${seconds} seconds">${text}</span>`,
+  };
+}
+
+function activityCountSuffix(counts) {
+  return counts.length ? `; ${counts.join(', ')}` : '';
+}
+
+function activityOpen(expanded, current) {
+  return expanded[current.id] ?? current.status === 'running';
+}
+
 function turnActivity(current, details, ui) {
   if (!details.length && current.status !== 'running') return '';
   const status = turnStatus[current.status] ?? turnStatus.completed;
@@ -51,13 +72,13 @@ function turnActivity(current, details, ui) {
     0,
     Math.round(((current.endedAt ?? Date.now()) - current.startedAt) / 1000),
   );
-  const open = ui.expanded[current.id] ?? current.status === 'running';
-  const count = `${details.length} step${details.length === 1 ? '' : 's'}`;
-  const duration = formatDuration(seconds);
+  const timing = activityTiming(seconds);
+  const count = activityStepCount(details.length);
   const counts = activityCounts(details);
-  const label = `${status.label} ${count} in ${duration}${counts.length ? `; ${counts.join(', ')}` : ''}`;
+  const label = `${status.label} ${count}${timing.suffix}${activityCountSuffix(counts)}`;
+  const open = activityOpen(ui.expanded, current);
   const body = details.map((block) => activity(block, current, ui)).join('');
-  return `<details class="activity status-${current.status}" data-disclosure="${ui.escape(current.id)}" data-activity-status="${current.status}" ${open ? 'open' : ''}><summary aria-label="${label}"><span class="activity-label">${status.label}</span> <span class="activity-count">${count}</span> <span class="elapsed" title="${seconds} seconds">in ${duration}</span></summary><div class="activity-body">${body}</div></details>`;
+  return `<details class="activity status-${current.status}" data-disclosure="${ui.escape(current.id)}" data-activity-status="${current.status}" ${open ? 'open' : ''}><summary aria-label="${label}"><span class="activity-label">${status.label}</span> <span class="activity-count">${count}</span>${timing.html}</summary><div class="activity-body">${body}</div></details>`;
 }
 
 function answerActions(current, answer, ui) {
@@ -71,7 +92,7 @@ function answerActions(current, answer, ui) {
 
 function answerBlock(current, answer, ui) {
   const footer = `<div class="answer-footer">${answerActions(current, answer, ui)}${outputMeta(answer, { ...ui, className: 'output-metadata answer-metadata' })}</div>`;
-  return `<div class="assistant-answer" role="group" aria-label="Assistant answer"><span class="role-label assistant-role">Assistant</span>${modelOutput(answer, 'answer', { ...ui, showMetadata: false })}${footer}</div>`;
+  return `<div class="assistant-answer" role="group" aria-label="Assistant answer">${modelOutput(answer, 'answer', { ...ui, showMetadata: false })}${footer}</div>`;
 }
 
 export function turn(current, ui) {

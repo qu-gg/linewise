@@ -51,12 +51,13 @@ test('transcript names the user, assistant and persistent answer actions', () =>
     ],
   });
   assert.equal(element('.user-message').textContent!.trim(), 'Original prompt');
-  assert.equal(element('.user-role').textContent!.trim(), 'You');
-  assert.equal(element('.assistant-role').textContent!.trim(), 'Assistant');
+  assert.equal(element('.prompt-row').getAttribute('aria-label'), 'Your prompt');
+  assert.equal(dom.window.document.querySelector('.user-role'), null);
+  assert.equal(dom.window.document.querySelector('.assistant-role'), null);
   assert.equal(element('.assistant-answer').getAttribute('aria-label'), 'Assistant answer');
   assert.equal(element('.answer').getAttribute('aria-label'), 'Assistant answer');
   assert.match(element('.answer-footer .answer-metadata').textContent!, /reported\/model/);
-  assert.match(element('.answer-footer .answer-metadata').textContent!, /2026/);
+  assert.ok(element('.answer-footer time').getAttribute('datetime'));
   const copy = element('[data-action="copyAnswer"]');
   assert.equal(copy.getAttribute('aria-label'), 'Copy Answer');
   assert.equal(copy.textContent!.trim(), '');
@@ -107,6 +108,9 @@ test('activity and tool states are labelled and survive without color-only cues'
   assert.equal(element('.activity-label').textContent, 'Cancelled');
   update({ turns: [{ ...turn(tools()), startedAt: 0, endedAt: 261000 }] });
   assert.match(element('.activity > summary').textContent!, /Completed 5 steps in 4m 21s/);
+  update({ turns: [{ ...turn(tools()), startedAt: 1000, endedAt: 1000 }] });
+  assert.doesNotMatch(element('.activity > summary').textContent!, /in 0s/);
+  assert.doesNotMatch(element('.activity > summary').getAttribute('aria-label')!, /in 0s/);
   update({
     turns: [{ ...turn([{ id: 'think', kind: 'thought', text: 'Streaming' }]), status: 'running' }],
   });
@@ -143,6 +147,19 @@ test('copy answer requests the recorded output without inventing host metadata',
   assert.deepEqual(messages, [{ v: 1, type: 'copyTool', id: 'answer' }]);
   assert.match(element('.answer-footer .answer-metadata').textContent!, /Timestamp not recorded/);
   assert.match(element('.answer-footer .answer-metadata').textContent!, /Model not recorded/);
+});
+
+test('same-day answer metadata uses a compact time and keeps the exact timestamp', () => {
+  const receivedAt = Date.now();
+  update({
+    turns: [
+      turn([{ id: 'answer', kind: 'text', text: 'Final answer', receivedAt, model: 'fixture' }]),
+    ],
+  });
+  const time = element('.answer-footer time');
+  assert.equal(time.getAttribute('datetime'), new Date(receivedAt).toISOString());
+  assert.match(time.textContent!, /\d{1,2}:\d{2}/);
+  assert.doesNotMatch(time.textContent!, /2026/);
 });
 
 test('streamed chunks patch only the changed turn instead of rebuilding the transcript', () => {
