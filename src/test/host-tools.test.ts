@@ -132,18 +132,14 @@ test('host command rules auto-approve actual argv and block explicit denies with
   await assert.rejects(tools.create(request), /Invalid OMP command rules/);
 });
 
-test('permission picker confirms elevation, supports revocation and cannot run during a prompt', async (context) => {
+test('permission setter requires explicit elevation, supports revocation and cannot run during a prompt', async (context) => {
   const { tools, scope } = await setup(context);
-  await tools.pickPermissions();
   assert.equal(tools.permissions, 'rules');
-  fixture.quickPick = 'all';
-  await tools.pickPermissions();
-  assert.equal(tools.permissions, 'rules');
-  fixture.approval = 'Enable Allow All';
-  await tools.pickPermissions();
+  assert.throws(() => tools.setPermissions('all'), /explicit confirmation/);
+  tools.setPermissions('all', true);
   assert.equal(tools.permissions, 'all');
   tools.begin(scope);
-  await assert.rejects(tools.pickPermissions(), /cleanup/);
+  assert.throws(() => tools.setPermissions('ask'), /cleanup/);
   const request = { sessionId: scope.sessionId, command: '/bin/echo', args: ['automatic'] };
   const owned = { sessionId: scope.sessionId, ...(await tools.create(request)) };
   assert.equal((await tools.waitForExit(owned)).exitCode, 0);
@@ -152,15 +148,10 @@ test('permission picker confirms elevation, supports revocation and cannot run d
   await tools.finish();
   tools.resetPermissions();
   assert.equal(tools.permissions, 'rules');
-  fixture.quickPick = 'ask';
-  await tools.pickPermissions();
+  tools.setPermissions('ask');
   assert.equal(tools.permissions, 'ask');
-  fixture.quickPick = 'settings';
-  await tools.pickPermissions();
-  assert.ok(fixture.commandCalls.some((call) => call.id === 'workbench.action.openSettings'));
-  fixture.quickPick = 'rules';
   fixture.trusted = false;
-  await assert.rejects(tools.pickPermissions(), /cannot change/);
+  assert.throws(() => tools.setPermissions('rules'), /cannot change/);
 });
 
 test('an explicit deny added while approval is open prevents a late manual approval', async (context) => {
@@ -448,6 +439,10 @@ test('host brokers read/delete/move preimages and rejects executable side effect
       exchangeMutations(directory, [{ op: 'write', path: target, before: null, content: '#!' }]),
       /Executable-bit/,
     );
+    await exchangeMutations(directory, [
+      { op: 'write', path: target, before: null, content: 'const marker = "#!";\n' },
+    ]);
+    await exchangeMutations(directory, [{ ...move, content: 'moved "#!" marker' }]);
   });
   const missing = new HostTools(
     { normalize: async (_target, content) => content },

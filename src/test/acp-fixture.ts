@@ -1,6 +1,7 @@
 import type { ContentBlock, SessionConfigOption } from '@agentclientprotocol/sdk';
 import type { ClientHandlers, OmpClient as ActualClient } from '../acp.js';
 import type { HistoryOperation, HistorySnapshot } from '../history.js';
+import { OMP_TESTED_VERSION } from '../omp-version.js';
 import { promisify } from 'node:util';
 export { promptBlocks, safeError, selectOptions } from '../acp.js';
 
@@ -10,7 +11,7 @@ export const transport = {
   onPrompt: async (_blocks: ContentBlock[]) => {},
   onCancel: () => {},
   backend: 'local',
-  version: '18.21.0',
+  version: OMP_TESTED_VERSION,
   configError: undefined as Error | undefined,
   nextSessionId: undefined as string | undefined,
   configOptions: undefined as SessionConfigOption[] | undefined,

@@ -1,6 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { lineNumbersForRead, readLineRanges } from '../file-policy.js';
+import { hasShebang, lineNumbersForRead, readLineRanges } from '../file-policy.js';
+
+test('only a leading interpreter shebang is executable text', () => {
+  assert.equal(hasShebang('#!/bin/sh\n'), true);
+  assert.equal(hasShebang('const marker = "#!";\n'), false);
+  assert.equal(hasShebang('#![allow(dead_code)]\nfn main() {}\n'), false);
+});
 
 test('read selectors expand into the requested provenance lines', () => {
   assert.equal(readLineRanges('file.txt'), undefined);

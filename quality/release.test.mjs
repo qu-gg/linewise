@@ -18,8 +18,9 @@ import {
   inspectPackage,
   verifyDirectory,
 } from '../scripts/release.mjs';
-import { acceptanceArguments, validateRuntimeVersions } from '../scripts/release-accept.mjs';
+import { acceptanceArguments } from '../scripts/release-accept.mjs';
 import { validateDestination, validateMaintainer, validateRun } from '../scripts/release-run.mjs';
+import { OMP_TESTED_VERSION, VSCODE_TESTED_VERSION } from '../scripts/version-policy.mjs';
 import { parse } from 'yaml';
 import { copyPtyRuntime, ptyRuntimeFiles } from '../scripts/pty-runtime.mjs';
 import {
@@ -49,8 +50,8 @@ const acceptance = {
   profile,
   platform: 'linux',
   arch: 'x64',
-  omp: '18.21.0',
-  vscode: '1.147.0',
+  omp: OMP_TESTED_VERSION,
+  vscode: VSCODE_TESTED_VERSION,
   owner: 'qu-gg',
   native: true,
   packaged: true,
@@ -91,18 +92,6 @@ test('release versions require matching package and lock roots without changing 
   assert.throws(() => versionTag(manifest, { ...lock, version: '0.0.1' }));
   assert.throws(() => versionTag({ ...manifest, publisher: 'other' }, lock));
   assert.throws(() => versionTag({ ...manifest, version: '0.1.0-alpha' }, lock));
-});
-
-test('release runtime identity accepts the actual pinned OMP CLI and refuses other output', () => {
-  assert.deepEqual(validateRuntimeVersions('1.147.0', 'omp/18.21.0'), {
-    vscode: '1.147.0',
-    omp: '18.21.0',
-  });
-  for (const output of ['', '18.21.0', 'other/18.21.0', 'omp/18.21.1', 'omp/18.21.0 extra']) {
-    assert.throws(() => validateRuntimeVersions('1.147.0', output));
-  }
-  assert.throws(() => validateRuntimeVersions('', 'omp/18.21.0'));
-  assert.throws(() => validateRuntimeVersions('1.147.1', 'omp/18.21.0'));
 });
 
 test('private installed/extracted artifacts are not source lint targets; source rules stay enforced', async () => {

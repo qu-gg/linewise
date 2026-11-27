@@ -12,6 +12,13 @@ import { webviewMessage } from '../state.js';
 import { askQuestions } from '../host-questions.js';
 import { questionRequest } from '../question-policy.js';
 
+let permissionIdle = false;
+let fixturePermissions: 'ask' | 'rules' | 'all' | 'yolo' = 'rules';
+let applyPermission: (
+  mode: 'ask' | 'rules' | 'all' | 'yolo',
+  confirmed: boolean,
+) => void = () => {};
+
 function fileSignal(target: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const watcher = watch(path.dirname(target), (_event, fileName) => {
@@ -110,7 +117,8 @@ async function approvalView(context: vscode.ExtensionContext): Promise<ChatView>
     output,
     () => ({
       connected: true,
-      busy: true,
+      busy: !permissionIdle,
+      permissions: fixturePermissions,
       cancellable: true,
       host: 'Local',
       workspace: 'native-workspace',
@@ -122,7 +130,12 @@ async function approvalView(context: vscode.ExtensionContext): Promise<ChatView>
       ...chat.approvals.snapshot(),
     }),
     async (message) => {
-      await chat.localAction(webviewMessage.parse(message));
+      const request = webviewMessage.parse(message);
+      if (request.type === 'permissions') {
+        applyPermission(request.mode, request.confirmed ?? false);
+        return;
+      }
+      await chat.localAction(request);
     },
   );
   const ready = new Promise<void>((resolve) => {
@@ -166,13 +179,23 @@ async function policyCase(
     await session.client.stop();
   }
 }
+async function requestPermission(
+  tools: HostTools,
+  cwd: string,
+  mode: 'all' | 'yolo' | 'rules',
+): Promise<void> {
+  await writeFile(path.join(cwd, `native-permissions-${mode}`), 'go', { mode: 0o600 });
+  const deadline = Date.now() + 30_000;
+  while (Date.now() < deadline) {
+    if (tools.permissions === mode) return;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error(`The native permission menu did not select ${mode}.`);
+}
 
 async function yoloCases(tools: HostTools, cwd: string): Promise<void> {
   const config = vscode.workspace.getConfiguration('omp');
-  await tools.pickPermissions();
-  assert.equal(tools.permissions, 'all');
-  await tools.pickPermissions();
-  assert.equal(tools.permissions, 'yolo');
+  await requestPermission(tools, cwd, 'yolo');
   await policyCase(
     tools,
     cwd,
@@ -204,39 +227,44 @@ async function yoloCases(tools: HostTools, cwd: string): Promise<void> {
   );
 }
 
-async function permissionCases(tools: HostTools, cwd: string): Promise<void> {
-  const config = vscode.workspace.getConfiguration('omp');
-  await policyCase(tools, cwd, 'pwd');
-  await config.update(
-    'permissions.commandRules',
-    [{ command: ['printf', 'NATIVE_TERMINAL_OUTPUT'], action: 'allow', match: 'exact' }],
-    vscode.ConfigurationTarget.Global,
-  );
-  await policyCase(tools, cwd, 'printf NATIVE_TERMINAL_OUTPUT');
-  await config.update('permissions.commandRules', [], vscode.ConfigurationTarget.Global);
-  await tools.pickPermissions();
-  assert.equal(tools.permissions, 'all');
-  await policyCase(tools, cwd, 'printf NATIVE_TERMINAL_OUTPUT');
-  await config.update(
-    'permissions.commandRules',
-    [{ command: ['printf'], action: 'deny' }],
-    vscode.ConfigurationTarget.Global,
-  );
-  await policyCase(tools, cwd, 'printf NATIVE_TERMINAL_OUTPUT', true);
-  await config.update(
-    'permissions.commandRules',
-    [{ command: ['printf'], action: 'ask' }],
-    vscode.ConfigurationTarget.Global,
-  );
-  await policyCase(tools, cwd, 'printf NATIVE_TERMINAL_OUTPUT', true);
-  await config.update('permissions.commandRules', [], vscode.ConfigurationTarget.Global);
-  await yoloCases(tools, cwd);
-  await config.update('permissions.commandRules', [], vscode.ConfigurationTarget.Global);
-  await tools.pickPermissions();
-  assert.equal(tools.permissions, 'rules');
-  console.log(
-    'PASS: installed OMP command rules, Allow All exceptions and native permission revocation.',
-  );
+async function permissionCases(tools: HostTools, cwd: string, chat: ChatView): Promise<void> {
+  permissionIdle = true;
+  chat.publish();
+  try {
+    const config = vscode.workspace.getConfiguration('omp');
+    await policyCase(tools, cwd, 'pwd');
+    await config.update(
+      'permissions.commandRules',
+      [{ command: ['printf', 'NATIVE_TERMINAL_OUTPUT'], action: 'allow', match: 'exact' }],
+      vscode.ConfigurationTarget.Global,
+    );
+    await policyCase(tools, cwd, 'printf NATIVE_TERMINAL_OUTPUT');
+    await config.update('permissions.commandRules', [], vscode.ConfigurationTarget.Global);
+    await requestPermission(tools, cwd, 'all');
+    await policyCase(tools, cwd, 'printf NATIVE_TERMINAL_OUTPUT');
+    await config.update(
+      'permissions.commandRules',
+      [{ command: ['printf'], action: 'deny' }],
+      vscode.ConfigurationTarget.Global,
+    );
+    await policyCase(tools, cwd, 'printf NATIVE_TERMINAL_OUTPUT', true);
+    await config.update(
+      'permissions.commandRules',
+      [{ command: ['printf'], action: 'ask' }],
+      vscode.ConfigurationTarget.Global,
+    );
+    await policyCase(tools, cwd, 'printf NATIVE_TERMINAL_OUTPUT', true);
+    await config.update('permissions.commandRules', [], vscode.ConfigurationTarget.Global);
+    await yoloCases(tools, cwd);
+    await config.update('permissions.commandRules', [], vscode.ConfigurationTarget.Global);
+    await requestPermission(tools, cwd, 'rules');
+    console.log(
+      'PASS: installed OMP command rules, Allow All exceptions and native permission revocation.',
+    );
+  } finally {
+    permissionIdle = false;
+    chat.publish();
+  }
 }
 
 async function questionCases(cwd: string): Promise<void> {
@@ -298,6 +326,9 @@ async function runNativeDialogs(context: vscode.ExtensionContext): Promise<void>
   await vscode.workspace
     .getConfiguration('window')
     .update('dialogStyle', 'custom', vscode.ConfigurationTarget.Global);
+  await vscode.workspace
+    .getConfiguration('omp')
+    .update('notifications.enabled', false, vscode.ConfigurationTarget.Global);
   const files = new WorkspaceFiles(root);
   const journal = new ReviewJournal(
     files,
@@ -318,6 +349,11 @@ async function runNativeDialogs(context: vscode.ExtensionContext): Promise<void>
       return request;
     },
   );
+  applyPermission = (mode, confirmed) => {
+    tools.setPermissions(mode, confirmed);
+    fixturePermissions = tools.permissions;
+    chat.publish();
+  };
   const protectedFile = path.join(root.fsPath, 'native-protected.txt');
   await writeFile(protectedFile, 'user baseline\n');
   await journal.write('native-review', protectedFile, 'pending reviewed change\n');
@@ -337,7 +373,7 @@ async function runNativeDialogs(context: vscode.ExtensionContext): Promise<void>
     }
     await writeFile(path.join(root.fsPath, 'native-ui-ready'), 'ready');
     await questionCases(root.fsPath);
-    await permissionCases(tools, root.fsPath);
+    await permissionCases(tools, root.fsPath, chat);
     for (const scenario of [
       'reject',
       'escape',

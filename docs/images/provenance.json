@@ -44,13 +44,6 @@
       "evidence": "Actual Keep Header; accepted baseline verified and Footer remains pending"
     },
     {
-      "file": "linewise-permissions.png",
-      "width": 1000,
-      "height": 660,
-      "sha256": "2d9fd57f91cef3ed3f412ad5c5ab4d0dc1f71f46bbcff3c7e3f8d71df2c536d2",
-      "evidence": "Actual native command-permission picker after its opening animation; cancelled with Rules unchanged and no elevation enabled"
-    },
-    {
       "file": "linewise-questions.png",
       "width": 1000,
       "height": 800,

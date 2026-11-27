@@ -17,7 +17,11 @@ async function jobOutput(
     await manager.waitForExit(request);
     return JSON.stringify({ jobId: input.jobId, ...manager.output(request) });
   }
-  if (input.action === 'stop') await manager.kill(request);
+  if (input.action === 'stop') {
+    if (manager.isReleased(request))
+      return JSON.stringify({ jobId: input.jobId, output: '', truncated: false });
+    await manager.kill(request);
+  }
   const result = await manager.waitForOutput(request, 'waitMs' in input ? (input.waitMs ?? 0) : 0);
   if (input.action === 'stop') await manager.release(request);
   return JSON.stringify({ jobId: input.jobId, ...result });

@@ -6,6 +6,12 @@ export function followTranscript(transcript) {
   );
 }
 
+export function statusBanner(message, icon, escape) {
+  return message
+    ? `<div class="attention">${icon('warning')}<span>${escape(message)}</span></div>`
+    : '';
+}
+
 export function chatFrame({ wide, header, banner, manager, sidebar, transcript, footer }) {
   return wide
     ? `<div class="chat-shell"><div class="chat-pane">${header}${banner}${transcript}${footer}</div>${sidebar}</div>`

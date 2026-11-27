@@ -8,6 +8,7 @@ import path from 'node:path';
 import { setImmediate as tick } from 'node:timers/promises';
 import { fixture, reset, Uri, view } from './vscode-fixture.js';
 import { transport } from './acp-fixture.js';
+import { OMP_TESTED_VERSION } from '../omp-version.js';
 
 Object.assign(view, { show: () => {} });
 
@@ -19,7 +20,7 @@ export async function setup(context: TestContext, cleanupFailure = false) {
   reset();
   transport.client = undefined;
   transport.backend = 'local';
-  transport.version = '18.21.0';
+  transport.version = OMP_TESTED_VERSION;
   transport.configError = undefined;
   transport.nextSessionId = undefined;
   transport.configOptions = undefined;

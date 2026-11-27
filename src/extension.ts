@@ -136,11 +136,17 @@ class OmpView extends HostOperations implements vscode.WebviewViewProvider {
     editPrompt: (id, text) =>
       this.view.editPrompt(id, () => this.branchHistory(id, 'before', text)),
     forkTurn: (id, boundary) => this.branchHistory(id, boundary),
-    permissions: () =>
+    permissions: (mode, confirmed) =>
       this.idleOperation('config', async () => {
         if (!this.tools) throw new Error('Start a session before changing permissions.');
-        await this.tools.pickPermissions();
+        this.tools.setPermissions(mode, confirmed);
       }),
+    permissionSettings: async () => {
+      await vscode.commands.executeCommand(
+        'workbench.action.openSettings',
+        '@id:omp.permissions.commandRules',
+      );
+    },
     terminals: () => this.tools?.pickTerminal(this.view.chat.focusTerminals),
     config: (id, value) => this.configure(id, value),
     openInBrowser: () => this.openInBrowser(),

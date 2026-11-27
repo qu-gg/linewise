@@ -116,7 +116,7 @@ test('real ACP transport serializes operations and cancellation unblocks a pendi
 
 test('real ACP transport refuses incompatible runtime and non-independent fork identity', async (context) => {
   const bad = await fixture(context, ['--bad-version']);
-  await assert.rejects(bad.client.start(bad.options), /18.21.0/);
+  await assert.rejects(bad.client.start(bad.options), /OMP \d+\.\d+\.\d+ or newer/);
   assert.equal(bad.client.connected, false);
   const same = await fixture(context, ['--same-fork']);
   await same.client.start(same.options);

@@ -1,14 +1,3 @@
-export function permissions(state, working, icon) {
-  const [label, name] = {
-    ask: ['Ask', 'shield'],
-    rules: ['Rules', 'checklist'],
-    all: ['Allow All', 'unlock'],
-    yolo: ['YOLO', 'warning'],
-  }[state.permissions] ?? ['Rules', 'checklist'];
-  const title = `Command Permissions: ${state.permissions === 'all' ? 'Allow All Except Restrictions' : label}`;
-  return `<button type="button" class="icon-button context-toggle permission-control" data-action="permissions" aria-label="${title}" title="${title}" ${!state.connected || working ? 'disabled' : ''}>${icon(name)}<span>${label}</span>${icon('chevron-down')}</button>`;
-}
-
 function terminals(state, button) {
   return button(
     'terminals',

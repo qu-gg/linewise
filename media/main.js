@@ -1,4 +1,5 @@
-import { toolbar, permissions } from './toolbar.js';
+import { toolbar } from './toolbar.js';
+import { bindPermissions, permissionControl, togglePermissions } from './permissions.js';
 import { changesPanel as reviewPanel, reviewRequest } from './review.js';
 import { canSubmit, composer } from './composer.js';
 import {
@@ -22,6 +23,7 @@ import {
   followTranscript,
   removeChatSurface,
   restoreTranscript,
+  statusBanner,
   watchLayout,
 } from './layout.js';
 import { contextPanel as sessionInfo, usagePercentage } from './context-info.js';
@@ -63,6 +65,7 @@ const activityUi = { escape, icon, itemButton, expanded };
 const send = (type, extra = {}) => vscode.postMessage({ v: 1, type, ...extra });
 bindApprovals(send);
 bindQuestions(send, render);
+bindPermissions(send, render, () => state);
 bindSessions(
   send,
   () => {
@@ -133,13 +136,6 @@ function changesPanel() {
   return reviewPanel(state, expanded, { escape, icon, button, itemButton });
 }
 
-function statusBanner() {
-  const message = state.error || notice;
-  return message
-    ? `<div class="attention">${icon('warning')}<span>${escape(message)}</span></div>`
-    : '';
-}
-
 function render() {
   const oldTranscript = document.querySelector('.transcript');
   const follow = followTranscript(oldTranscript);
@@ -151,7 +147,7 @@ function render() {
   const manager = wide ? '' : sessionManager(state, ui);
   const sidebar = wide ? sessionSidebar(state, ui) : '';
   const header = toolbar(state, button, escape);
-  const banner = statusBanner();
+  const banner = statusBanner(state.error || notice, icon, escape);
   const transcriptMarkup = `<section class="transcript" aria-label="Conversation">${state.turns.map(turn).join('')}${approvalCard(state, { escape, icon }, 'command')}${questionCard(state, { escape, icon })}${!state.workspace ? '<button class="text-button" data-action="openFolder">Open Folder</button>' : ''}</section>`;
   const footer = composer(state, draft, {
     button,
@@ -160,7 +156,7 @@ function render() {
     icon,
     working,
     changesPanel,
-    permissions,
+    permissions: permissionControl,
     contextPanel,
     contextOpen,
     percentage,
@@ -333,6 +329,7 @@ function buttonAction(target) {
       picker.modelPickerOpen()
         ? picker.closeModelPicker(render)
         : picker.openModelPicker(send, render),
+    permissions: () => togglePermissions(render, () => state),
     forkBefore: () => send('forkTurn', { id: target.dataset.id, boundary: 'before' }),
     forkAfter: () => send('forkTurn', { id: target.dataset.id, boundary: 'after' }),
     context: () => contextAction('context'),

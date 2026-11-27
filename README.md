@@ -117,12 +117,7 @@ Answer bounded single-choice, multiple-choice, and free-text questions directly 
 
 ### Permissions You Can See
 
-Choose **Command Rules**, **Ask Every Time**, or separately confirmed **Allow All Except Restrictions** and **YOLO Commands**. Elevated modes are connection-scoped and reset on session or connection changes. Commands use your host permissions, not an OS sandbox; outside-workspace file access and web/browser consent remain independent.
-
-<p align="center">
-   <a href="docs/images/linewise-permissions.png"><img src="docs/images/linewise-permissions.png" alt="Native OMP Command Permissions picker showing Ask Every Time, Command Rules, Allow All Except Restrictions, YOLO Commands, and Edit User Command Rules" width="100%"></a><br>
-   <sub>The actual permission picker. This capture left Rules unchanged and did not enable an elevated mode.</sub>
-</p>
+Open the permission menu beside Memory to choose **Command Rules**, **Ask Every Time**, or separately confirmed **Allow All Except Restrictions** and **YOLO Commands** without leaving the chat. Elevated modes show their warning and explicit Enable step inside the same panel. They are connection-scoped and reset on session or connection changes. Commands use your host permissions, not an OS sandbox; outside-workspace file access and web/browser consent remain independent.
 
 ### Activity, Plans, And Follow-Ups
 
@@ -147,11 +142,11 @@ These are actual native controls exercised with synthetic file-tool changes. The
 
 ## Try It
 
-The v0.1.5 acceptance profile is **Linux x64, VS Code 1.147.0, OMP 18.21.0, and a trusted single-root local filesystem workspace**. Other platforms, Remote-SSH, multi-root lifecycle, and untrusted/virtual workspaces are not certified.
+The current source acceptance profile is **Linux x64, VS Code 1.147.0, OMP 19.2.1, and a trusted single-root local filesystem workspace**. The published v0.1.5 VSIX remains pinned to OMP 18.21.0; build from current source for 19.2.1. Other platforms, Remote-SSH, multi-root lifecycle, and untrusted/virtual workspaces are not certified.
 
 The VSIX's `linux-x64` target is not just a filename: it includes a matching native terminal dependency and currently Linux-only host behavior. Other compatible Linux distributions may work, but macOS, Windows, and ARM64 are not automatically supported. Help test or port a named target through the [platform compatibility workstream](TODO.md#platform-compatibility).
 
-1. Install [Oh My Pi](https://github.com/can1357/oh-my-pi) separately. Check `omp --version` reports `omp/18.21.0`. Run `omp` and use its `/login` flow if your selected provider needs authentication; Linewise does not copy VS Code's Copilot credentials.
+1. Install [Oh My Pi](https://github.com/can1357/oh-my-pi) separately. For current source, `omp --version` must report `omp/19.2.1` or a newer 19.x release; the published v0.1.5 VSIX still requires `omp/18.21.0`. Run `omp` and use its `/login` flow if your selected provider needs authentication; Linewise does not copy VS Code's Copilot credentials.
 2. Go to [GitHub Releases](https://github.com/qu-gg/linewise/releases), download the Linux x64 VSIX from [v0.1.5](https://github.com/qu-gg/linewise/releases/tag/v0.1.5), and verify it against the accompanying `SHA256SUMS`. Alternatively, build a development VSIX with **Node 24.11+**:
 
    ```sh

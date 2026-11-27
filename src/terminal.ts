@@ -226,9 +226,12 @@ export class RunningTerminal {
   }
 }
 
+const RELEASED_HISTORY = 64;
+
 export class TerminalManager {
   private readonly options: TerminalOptions;
   private readonly terminals = new Map<string, ManagedTerminal>();
+  private readonly released = new Set<string>();
   private readonly stopped = new AbortController();
   private readonly timeoutMs: number | null;
   private readonly onAbort: () => void;
@@ -365,6 +368,11 @@ export class TerminalManager {
     return terminal;
   }
 
+  isReleased(request: TerminalOutputRequest): boolean {
+    this.check(request.sessionId);
+    return this.released.has(request.terminalId);
+  }
+
   output(request: TerminalOutputRequest): TerminalOutputResponse {
     return this.owned(request).snapshot();
   }
@@ -430,6 +438,9 @@ export class TerminalManager {
     terminal.terminate('release');
     await terminal.done;
     terminal.assertCleanup();
+    this.released.add(request.terminalId);
+    if (this.released.size > RELEASED_HISTORY)
+      this.released.delete(this.released.values().next().value!);
     return {};
   }
 

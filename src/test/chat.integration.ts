@@ -363,8 +363,8 @@ async function nativeHandoffTransition(
     const before = await providerContext();
     assert.equal(before.fixtureReply[0].arguments.action, 'takeover');
     await terminalControlsHandshake(root, owned, action);
-    for (const type of ['new', 'permissions'])
-      await assert.rejects(request({ type }), /current operation/);
+    for (const message of [{ type: 'new' }, { type: 'permissions', mode: 'rules' }])
+      await assert.rejects(request(message), /current operation/);
     await heldSessionControls(api);
     await request({ type: 'queuePrompt', text: 'MUST_NOT_RUN_AFTER_ROOT_TRANSITION' });
     if (action === 'roots') await changeAdditionalRoot(fixture.extra);

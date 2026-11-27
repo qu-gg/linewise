@@ -4,12 +4,13 @@ import { watch } from 'node:fs';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { ompVersionRequirement } from '../omp-version.js';
 
 type Api = Awaited<ReturnType<typeof import('../extension.js').activate>>;
 
 const startupCases = [
   ['missing', '', 'ENOENT'],
-  ['incompatible', '--bad-version', '18.21.0 with ACP v1'],
+  ['incompatible', '--bad-version', `${ompVersionRequirement()} with ACP v1`],
   ['auth', '--unauthenticated', '/login github-copilot'],
 ] as const;
 
@@ -69,7 +70,11 @@ export async function nativeOnboarding(api: Api, root: vscode.Uri): Promise<void
       assert.equal(await readFile(target, 'utf8'), 'UNCHANGED_ONBOARDING_BASELINE\n');
       await checkpoint(root.fsPath, kind!, hint!);
     }
-    await config.update('executablePath', undefined, vscode.ConfigurationTarget.Global);
+    await config.update(
+      'executablePath',
+      process.env.OMP_EXECUTABLE,
+      vscode.ConfigurationTarget.Global,
+    );
     await vscode.commands.executeCommand('omp.newSession');
     assert.equal(api.status()!.connected, true, api.status()!.error);
     assert.equal(api.status()!.error, '');
@@ -80,7 +85,11 @@ export async function nativeOnboarding(api: Api, root: vscode.Uri): Promise<void
       'PASS: native fresh-profile missing runtime, incompatible ACP version, actionable auth refusal and explicit installed-OMP retry preserve state/files without generation.',
     );
   } finally {
-    await config.update('executablePath', undefined, vscode.ConfigurationTarget.Global);
+    await config.update(
+      'executablePath',
+      process.env.OMP_EXECUTABLE,
+      vscode.ConfigurationTarget.Global,
+    );
     await rm(directory, { recursive: true, force: true });
   }
 }
@@ -135,7 +144,11 @@ export async function nativeInstalledOnboarding(root: vscode.Uri): Promise<void>
       assert.deepEqual(await readFile(control), bytes[1]);
       await checkpoint(root.fsPath, kind, hint);
     }
-    await config.update('executablePath', undefined, vscode.ConfigurationTarget.Global);
+    await config.update(
+      'executablePath',
+      process.env.OMP_EXECUTABLE,
+      vscode.ConfigurationTarget.Global,
+    );
     await vscode.commands.executeCommand('omp.newSession');
     await checkpoint(root.fsPath, 'connected', 'Model');
     assert.deepEqual(await readFile(target), bytes[0]);
@@ -144,7 +157,11 @@ export async function nativeInstalledOnboarding(root: vscode.Uri): Promise<void>
       'PASS: registry-installed production package public storage/onboarding/retry, visible model controls, preserved fixture bytes and zero prompt generation; no harness-only API used.',
     );
   } finally {
-    await config.update('executablePath', undefined, vscode.ConfigurationTarget.Global);
+    await config.update(
+      'executablePath',
+      process.env.OMP_EXECUTABLE,
+      vscode.ConfigurationTarget.Global,
+    );
     await rm(directory, { recursive: true, force: true });
   }
 }

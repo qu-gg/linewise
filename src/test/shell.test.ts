@@ -220,6 +220,9 @@ test(
       const stopped = await current.execute({ action: 'stop', jobId: server.jobId });
       assert.equal(stopped.isError, false);
       assert.ok(stopped.exitStatus.signal);
+      const repeated = await current.execute({ action: 'stop', jobId: server.jobId });
+      assert.equal(repeated.isError, false);
+      assert.equal(repeated.jobId, server.jobId);
       await assert.rejects(current.execute({ action: 'output', jobId: server.jobId }), /released/);
     });
   },

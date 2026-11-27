@@ -4,7 +4,7 @@ import { exchangeMutations, stagePermit } from './mutations.js';
 import { PathGuard } from './path-guard.js';
 import installHistory from './history.js';
 import type { HistoryApi } from './history.js';
-import { checkedPath, checkedReadPath, pathReason, readTarget } from './file-policy.js';
+import { checkedPath, checkedReadPath, hasShebang, pathReason, readTarget } from './file-policy.js';
 import { installNativeEdit } from './native-edit.js';
 import type { NativeEditApi } from './native-edit.js';
 import { installNativeShell } from './native-shell.js';
@@ -114,7 +114,7 @@ export function guardReason(event: GuardEvent): string | undefined {
   if (event.toolName !== 'write') return;
   const reason = pathReason(event.input.path);
   if (reason) return reason;
-  if (typeof event.input.content !== 'string' || event.input.content.includes('#!')) {
+  if (typeof event.input.content !== 'string' || hasShebang(event.input.content)) {
     return 'Non-text writes and executable-bit side effects are disabled in this feasibility build.';
   }
 }

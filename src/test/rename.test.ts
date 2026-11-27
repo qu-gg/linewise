@@ -146,7 +146,7 @@ test('rename refuses absent, excessive, uncaptured and unsafe provider edits bef
     current.result([[uri, [current.edit(6, 10), current.edit(7, 9)]]]),
     current.result([[uri, [current.edit(6, 10), current.edit(6, 6)]]]),
     current.result([[uri, [current.edit(6, 10, '\0')]]]),
-    current.result([[uri, [current.edit(6, 10, '#!')]]]),
+    current.result([[uri, [current.edit(0, 0, '#!/usr/bin/env node\n')]]]),
     current.result([[uri, [current.edit(6, 10, 'rate')]]]),
     current.result([[uri, [current.edit(-1)]]]),
     current.result([[uri, [current.edit(6.5)]]]),

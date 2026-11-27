@@ -32,7 +32,8 @@ function nativeAttempt(directory, config, file, guarded) {
   const args = [
     '--print',
     '--no-session',
-    '--no-tools',
+    '--tools',
+    '',
     '--no-extensions',
     '--no-skills',
     '--no-rules',

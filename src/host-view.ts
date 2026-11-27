@@ -7,6 +7,12 @@ import { webviewMessage, type Attachment, type SavedSession, type StateStore } f
 import { ReviewEditor, WorkspaceFiles } from './workspace.js';
 import { reviewSummary } from './review-presentation.js';
 import {
+  OMP_TESTED_VERSION,
+  ompVersionRequirement,
+  parseOmpVersion,
+  supportsOmpVersion,
+} from './omp-version.js';
+import {
   editSession,
   inspectSession,
   isSessionRequest,
@@ -219,13 +225,15 @@ export class HostView {
       timeout: 15_000,
       maxBuffer: 65536,
     });
-    if (!result.stdout.includes('18.21.0'))
-      throw new Error(`OMP 18.21.0 is required; found ${result.stdout.trim()}.`);
+    if (!supportsOmpVersion(result.stdout))
+      throw new Error(`${ompVersionRequirement()} is required; found ${result.stdout.trim()}.`);
+    const version = parseOmpVersion(result.stdout) ?? result.stdout.trim();
     this.output.appendLine(
-      `Runtime: ${result.stdout.trim()}; host: ${vscode.env.remoteName ?? 'local'}; root: ${root.uri.fsPath}`,
+      `Runtime: ${version}; host: ${vscode.env.remoteName ?? 'local'}; root: ${root.uri.fsPath}`,
     );
+    const tested = version === OMP_TESTED_VERSION ? '' : ` (tested with ${OMP_TESTED_VERSION})`;
     await vscode.window.showInformationMessage(
-      `OMP 18.21.0 is available on ${vscode.env.remoteName ?? 'the local workspace host'}.`,
+      `OMP ${version} is available on ${vscode.env.remoteName ?? 'the local workspace host'}${tested}.`,
     );
   }
 

@@ -141,10 +141,11 @@ test('host mediates streamed prompts, attachments and review without losing dirt
 test('host cancellation and operation ownership reject overlapping review/config changes', async (context) => {
   const host = await setup(context);
   await host.request({ type: 'connect' });
-  fixture.quickPick = 'all';
-  fixture.approval = 'Enable Allow All';
-  await host.request({ type: 'permissions' });
+  await assert.rejects(host.request({ type: 'permissions', mode: 'all' }), /explicit confirmation/);
+  await host.request({ type: 'permissions', mode: 'all', confirmed: true });
   assert.equal(host.status()!.permissions, 'all');
+  await host.request({ type: 'permissionSettings' });
+  assert.ok(fixture.commandCalls.some((call) => call.id === 'workbench.action.openSettings'));
   await host.request({ type: 'new' });
   assert.equal(host.status()!.permissions, 'rules');
   let release!: () => void;
@@ -163,7 +164,10 @@ test('host cancellation and operation ownership reject overlapping review/config
   };
   const pending = host.request({ type: 'prompt', text: 'Wait' });
   await started;
-  await assert.rejects(host.request({ type: 'permissions' }), /current operation/);
+  await assert.rejects(
+    host.request({ type: 'permissions', mode: 'all', confirmed: true }),
+    /current operation/,
+  );
   await assert.rejects(host.request({ type: 'keepAll' }), /current operation/);
   await assert.rejects(
     host.request({ type: 'config', id: 'model', value: 'github-copilot/gpt-4.1' }),

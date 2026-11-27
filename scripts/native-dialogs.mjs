@@ -97,20 +97,43 @@ async function chooseCommand(page, workspace, scenario) {
   console.log(`PASS: native inline approval ${scenario} driven through the real workbench.`);
 }
 
-async function chooseYolo(page, picker, frame) {
+async function clearNotifications(page) {
+  if (!(await page.locator('.notifications-toasts.visible').count())) return;
+  await page.keyboard.press('F1');
+  const picker = page.locator('.quick-input-widget');
+  await picker.waitFor({ state: 'visible' });
+  await picker.locator('input').fill('>Notifications: Clear All Notifications');
+  const clear = picker.getByRole('option').filter({ hasText: 'Clear All Notifications' });
+  if (await clear.count()) await clear.first().click();
+  else await page.keyboard.press('Escape');
+  await picker.waitFor({ state: 'hidden' });
+}
+
+async function openPermissions(page, frame) {
+  await clearNotifications(page);
+  await frame.locator('[data-action="permissions"]').click();
+  const menu = frame.locator('.permission-popover');
+  await menu.waitFor({ state: 'visible' });
+  return menu;
+}
+
+async function chooseYolo(page, frame, workspace) {
+  await signalFile(path.join(workspace, 'native-permissions-yolo'));
   for (const enabled of [false, true]) {
-    await picker.getByText('YOLO Commands', { exact: true }).click();
-    const dialog = page
-      .getByRole('dialog')
-      .filter({ hasText: 'Enable YOLO command execution for this connection?' });
-    assert.match(await dialog.innerText(), /without an OS sandbox/);
-    assert.match(await dialog.innerText(), /cannot reliably detect/);
+    const menu = await openPermissions(page, frame);
+    await menu.locator('[data-mode="yolo"]').click();
+    const warning = menu.locator('.permission-warning');
+    await warning.waitFor({ state: 'visible' });
+    assert.match(await warning.innerText(), /without an OS sandbox/);
+    assert.match(await warning.innerText(), /cannot be detected reliably/);
     if (enabled)
       await page.screenshot({ path: path.join('reports', 'native-dialogs', 'yolo-warning.png') });
-    await dialog
+    await warning
       .getByRole('button', { name: enabled ? 'Enable YOLO' : 'Cancel', exact: true })
       .click();
+    if (!enabled) await menu.locator('#permission-close').click();
   }
+  console.log('Permission menu: YOLO enabled through the inline warning.');
   const asking = frame.locator('.approval-card');
   await asking.waitFor({ state: 'visible' });
   assert.match(await asking.innerText(), /printf NATIVE_TERMINAL_OUTPUT/);
@@ -118,31 +141,45 @@ async function chooseYolo(page, picker, frame) {
     path: path.join('reports', 'native-dialogs', 'policy-ask-under-yolo.png'),
   });
   await asking.locator('[data-approval="skip"]').click();
+  await asking.waitFor({ state: 'hidden' });
 }
 
-async function choosePermissions(page) {
-  const picker = page.locator('.quick-input-widget');
+async function choosePermissions(page, workspace) {
+  const frame = await approvalFrame(page, '[data-action="permissions"]');
+  await signalFile(path.join(workspace, 'native-permissions-all'));
+  const menu = await openPermissions(page, frame);
+  await page.screenshot({ path: path.join('reports', 'native-dialogs', 'permissions-menu.png') });
   try {
-    await picker.getByText('Allow All Except Restrictions', { exact: true }).click();
+    await menu.locator('[data-mode="all"]').click();
   } catch (error) {
-    console.error('Native policy dialog state:', await page.getByRole('dialog').allTextContents());
+    console.error(
+      'Native policy menu state:',
+      await frame.locator('.permission-popover').innerText(),
+    );
     throw error;
   }
-  const confirmation = page
-    .getByRole('dialog')
-    .filter({ hasText: 'Allow commands without confirmation for this connection?' });
-  await confirmation.getByRole('button', { name: 'Enable Allow All', exact: true }).click();
-  const frame = await approvalFrame(page);
+  const warning = menu.locator('.permission-warning');
+  await warning.waitFor({ state: 'visible' });
+  assert.match(await warning.innerText(), /without an OS sandbox/);
+  await page.screenshot({
+    path: path.join('reports', 'native-dialogs', 'permissions-warning.png'),
+  });
+  await warning.getByRole('button', { name: 'Enable Allow All', exact: true }).click();
+  console.log('Permission menu: Allow All enabled through the inline warning.');
   const asking = frame.locator('.approval-card');
   assert.match(await asking.innerText(), /printf NATIVE_TERMINAL_OUTPUT/);
   await page.screenshot({
     path: path.join('reports', 'native-dialogs', 'policy-ask-under-all.png'),
   });
   await asking.locator('[data-approval="skip"]').click();
-  await chooseYolo(page, picker, frame);
-  await picker.getByText('Command Rules', { exact: true }).click();
+  await asking.waitFor({ state: 'hidden' });
+  await chooseYolo(page, frame, workspace);
+  await signalFile(path.join(workspace, 'native-permissions-rules'));
+  const rules = await openPermissions(page, frame);
+  await rules.locator('[data-mode="rules"]').click();
+  console.log('Permission menu: Command Rules restored.');
   console.log(
-    'PASS: real permission picker confirms Allow All/YOLO elevation, preserves ask exceptions and revokes elevated permissions.',
+    'PASS: inline permission menu confirms Allow All/YOLO elevation, preserves ask exceptions and revokes elevated permissions.',
   );
 }
 
@@ -350,7 +387,7 @@ async function driveNativeDialogs(userData, workspace) {
     console.log('PASS: Playwright reaches only the disposable VS Code workbench.');
     await mkdir(path.join('reports', 'native-dialogs'), { recursive: true });
     await chooseQuestions(page, workspace);
-    await choosePermissions(page);
+    await choosePermissions(page, workspace);
     for (const scenario of [
       'reject',
       'escape',

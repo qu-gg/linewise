@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.1.6
+
+Feature release for the inline command-permission menu.
+
+- Replace the native Quick Pick and modal warning flow with a menu that expands
+  inside the chat above the status bar. It keeps the current mode visible,
+  lists Ask, Rules, Allow All and YOLO with descriptions, and opens user command
+  rules from the same panel.
+- Keep elevated permission safety explicit: Allow All and YOLO require their
+  warning and an Enable step inside the menu, and the host still refuses an
+  unconfirmed elevation and rechecks trust and command-cleanup state.
+- Upgrade the tested OMP profile to 19.2.1. Runtime preflight accepts newer
+  19.x releases; release acceptance remains pinned to the tested version.
+- Treat only a leading interpreter shebang as an executable-bit mutation. A
+  `#!` literal elsewhere in a file no longer blocks native edit, write, move or
+  rename review.
+- Make a repeated `bash` stop on an already released managed job a no-op instead
+  of reporting an unknown terminal.
+- Keep the local Linux x64, VS Code 1.147.0 and OMP 19.2.1 acceptance profile.
+  Remote-SSH, multi-root lifecycle and other platforms remain outside that
+  profile. No Marketplace distribution is included.
+
 ## 0.1.5
 
 Feature release for the responsive session picker and browser hardening.

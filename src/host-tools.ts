@@ -14,7 +14,7 @@ import type { TerminalManager } from './terminal.js';
 import type { TerminalCommand } from './terminal.js';
 import { MutationBroker, permissionInput, isReviewedService } from './mutations.js';
 import type { Mutation } from './mutations.js';
-import { checkedPath, checkedReadPath } from './file-policy.js';
+import { checkedPath, checkedReadPath, hasShebang } from './file-policy.js';
 import { commandDecision } from './terminal-policy.js';
 import { CommandPermissions, permissionSetting } from './host-permissions.js';
 import { executeShell } from './shell.js';
@@ -100,8 +100,8 @@ export class HostTools {
     this.commandPermissions.reset();
   }
 
-  pickPermissions(): Promise<void> {
-    return this.commandPermissions.pick();
+  setPermissions(mode: PermissionMode, confirmed = false): void {
+    this.commandPermissions.set(mode, confirmed);
   }
 
   private assertPermissionIdle(): void {
@@ -251,7 +251,7 @@ export class HostTools {
   ): Promise<string> {
     const content = await this.files.normalize(target, mutation.content);
     this.assertCurrent(scope);
-    if (content.includes('#!')) throw new Error('Executable-bit side effects are disabled.');
+    if (hasShebang(content)) throw new Error('Executable-bit side effects are disabled.');
     if (this.files.isDirty?.(target))
       throw new Error('Save or close the dirty buffer before applying a native edit.');
     await this.journal.write(
@@ -375,7 +375,7 @@ export class HostTools {
       if (destination !== mutation.destination)
         throw new Error('Native mutation path changed after capture.');
       this.assertCurrent(scope);
-      if (mutation.content.includes('#!'))
+      if (hasShebang(mutation.content))
         throw new Error('Executable-bit side effects are disabled.');
       await this.journal.move(
         scope.owner,

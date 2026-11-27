@@ -114,6 +114,7 @@ await writeFile(
   JSON.stringify({
     ...(originalSettings ? JSON.parse(originalSettings.toString('utf8')) : {}),
     'task.saveBeforeRun': 'never',
+    ...(process.env.OMP_EXECUTABLE ? { 'omp.executablePath': process.env.OMP_EXECUTABLE } : {}),
     ...(installed
       ? { 'omp.permissions.defaultMode': 'rules', 'omp.permissions.useDefaultRules': true }
       : {}),
@@ -160,6 +161,7 @@ try {
         live ? 'scripts/live-guard.mjs' : 'scripts/history-fixture.mjs',
       ),
       VS_OMP_FIXTURE_NATIVE: '1',
+      ...(process.env.OMP_EXECUTABLE ? { OMP_EXECUTABLE: process.env.OMP_EXECUTABLE } : {}),
       VS_OMP_EXPECTED_EXTENSION_PATH: installedExtension,
       VS_OMP_UX_REOPEN: undefined,
       VS_OMP_FIXTURE_CONTEXT: path.join(directory, 'provider-context.json'),

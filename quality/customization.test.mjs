@@ -124,7 +124,7 @@ async function printProbe(owned, options, extra, reportFile) {
     [
       '--print',
       '--no-session',
-      ...(options.tools ? ['--tools', options.tools] : ['--no-tools']),
+      ...(options.tools ? ['--tools', options.tools] : ['--tools', '']),
       '--no-extensions',
       '--no-title',
       '--no-lsp',
@@ -217,7 +217,7 @@ async function acpProbe(owned, extra, reportFile, options) {
       artifacts: owned.directory,
       sessionFile: options.sessionFile,
       args: [
-        ...(options.tools ? ['--tools', options.tools] : ['--no-tools']),
+        ...(options.tools ? ['--tools', options.tools] : ['--tools', '']),
         '--no-extensions',
         '--no-title',
         '--no-lsp',

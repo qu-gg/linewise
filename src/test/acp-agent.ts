@@ -10,6 +10,7 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import installHistory, { historyCommand } from '../history.js';
 import type { HistoryApi } from '../history.js';
+import { OMP_TESTED_VERSION } from '../omp-version.js';
 
 let history!: Parameters<HistoryApi['registerCommand']>[1]['handler'];
 installHistory({
@@ -41,7 +42,7 @@ const app = new AgentApp()
       protocolVersion: PROTOCOL_VERSION,
       agentInfo: {
         name: 'unit-fixture',
-        version: process.argv.includes('--bad-version') ? 'wrong' : '18.21.0',
+        version: process.argv.includes('--bad-version') ? 'wrong' : OMP_TESTED_VERSION,
       },
       agentCapabilities: { sessionCapabilities: { fork: {} } },
       authMethods: [],
