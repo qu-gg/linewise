@@ -17,6 +17,36 @@ export function toolStatus(block) {
   );
 }
 
+function toolTarget(block) {
+  if (block.command) return block.command;
+  if (!block.input) return '';
+  try {
+    const input = JSON.parse(block.input);
+    for (const field of ['path', 'file_path', 'filePath', 'pattern', 'query', 'url', 'command']) {
+      if (input[field] != null) return input[field];
+    }
+    return '';
+  } catch {
+    return block.input;
+  }
+}
+
+function toolVisual(block) {
+  const name = block.toolName ?? block.title ?? 'Tool';
+  const kind = block.toolKind === 'execute' ? 'execute' : name.toLowerCase();
+  if (kind === 'execute' || /bash|terminal|shell/.test(kind))
+    return { icon: 'terminal', action: 'Ran', target: block.command };
+  if (/read|open|view/.test(kind))
+    return { icon: 'file', action: 'Read', target: toolTarget(block) };
+  if (/search|grep|glob|find/.test(kind))
+    return { icon: 'search', action: 'Searched', target: toolTarget(block) };
+  if (/edit|write|rename|notebook|code_action/.test(kind))
+    return { icon: 'edit', action: 'Edited', target: toolTarget(block) };
+  if (/fetch|browser|web/.test(kind))
+    return { icon: 'globe', action: 'Fetched', target: toolTarget(block) };
+  return { icon: 'tools', action: name, target: toolTarget(block) };
+}
+
 function timestamp(block, escape) {
   const date = new Date(block.receivedAt ?? NaN);
   return Number.isNaN(date.getTime())
@@ -24,9 +54,13 @@ function timestamp(block, escape) {
     : `<time datetime="${date.toISOString()}">${escape(new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'medium' }).format(date))}</time>`;
 }
 
-export function modelOutput(block, className, { escape }) {
+export function outputMeta(block, { escape, className = 'output-metadata' }) {
+  return `<div class="${className}">${timestamp(block, escape)}<span>${escape(block.model ?? 'Model not recorded')}</span></div>`;
+}
+
+export function modelOutput(block, className, { escape, showMetadata = true }) {
   const label = className.split(' ').includes('answer') ? 'Assistant answer' : 'Model output';
-  return `<div class="model-output ${className}" data-focus="${escape(block.id)}" tabindex="0" role="group" aria-label="${label}"><div class="markdown">${markdown(block.text)}</div><div class="output-metadata">${timestamp(block, escape)}<span>${escape(block.model ?? 'Model not recorded')}</span></div></div>`;
+  return `<div class="model-output ${className}" data-focus="${escape(block.id)}" tabindex="0" role="group" aria-label="${label}"><div class="markdown">${markdown(block.text)}</div>${showMetadata ? outputMeta(block, { escape }) : ''}</div>`;
 }
 
 function thoughtActivity(block, current, { escape, icon, expanded }) {
@@ -53,22 +87,32 @@ function terminalText(block, live, running) {
   return block.text || (running ? 'Running...' : 'No output.');
 }
 
+function toolSummary(visual, status, { escape, icon }) {
+  const target = visual.target
+    ? `<code class="tool-target" title="${escape(visual.target)}">${escape(visual.target)}</code>`
+    : '';
+  const state = `<span class="tool-status ${status.key}"${status.key === 'passed' ? ' hidden' : ''}>${status.label}</span>`;
+  const label = `${visual.action}${visual.target ? ` ${visual.target}` : ''}: ${status.label}`;
+  return `<summary aria-label="${escape(label)}">${icon(visual.icon)}<span class="tool-action">${escape(visual.action)}</span>${target}${state}</summary>`;
+}
+
 function terminalActivity(block, { escape, icon, itemButton, expanded }) {
   const status = toolStatus(block);
+  const visual = toolVisual(block);
   const running = status.key === 'running';
   const live = running ? liveFor(block.id) : undefined;
-  const command = escape(block.command ?? block.title);
+  const command = escape(block.command ?? block.title ?? '');
   const open = expanded[block.id] ?? running;
   const output = escape(terminalText(block, live, running));
-  return `<details class="tool terminal-tool status-${status.key}" data-terminal-block="${escape(block.id)}" data-disclosure="${escape(block.id)}" data-tool-status="${status.key}" ${open ? 'open' : ''}><summary aria-label="Terminal ${status.label.toLowerCase()}: ${command}">${icon('terminal')}<span class="terminal-label"><span class="tool-name">Terminal</span><code title="${command}">${command}</code></span><span class="tool-status ${status.key}">${status.label}</span><span class="show-output">${open ? 'Hide' : 'Show'}</span></summary><div class="terminal-pane" data-terminal-tool="${escape(block.id)}"><div class="terminal-heading">${icon('terminal')}<code>${command}</code>${terminalBadges(live, running, icon)}${itemButton('copyTool', 'copy', 'Copy Command Output', block.id)}</div>${failureLine(block, escape, icon)}<pre class="tool-output">${output}</pre></div></details>`; // keep terminal-pane/tool-output stable for live output
+  return `<details class="tool terminal-tool status-${status.key}" data-terminal-block="${escape(block.id)}" data-tool-icon="${visual.icon}" data-disclosure="${escape(block.id)}" data-tool-status="${status.key}" ${open ? 'open' : ''}>${toolSummary(visual, status, { escape, icon })}<div class="terminal-pane" data-terminal-tool="${escape(block.id)}"><div class="terminal-heading">${icon('terminal')}<code>${command}</code>${terminalBadges(live, running, icon)}${itemButton('copyTool', 'copy', 'Copy Command Output', block.id)}</div>${failureLine(block, escape, icon)}<pre class="tool-output">${output}</pre></div></details>`; // keep terminal-pane/tool-output stable for live output
 }
 
 function toolActivity(block, { escape, icon, expanded }) {
   const status = toolStatus(block);
-  const name = escape(block.toolName ?? block.title ?? 'Tool');
+  const visual = toolVisual(block);
   const command = block.command ?? block.input;
   const open = expanded[block.id] ?? status.key === 'running';
-  return `<details class="tool status-${status.key}" data-disclosure="${escape(block.id)}" data-tool-status="${status.key}" ${open ? 'open' : ''}><summary aria-label="${name}: ${status.label}">${icon(status.icon)}<span class="tool-name">${name}</span><span class="tool-status ${status.key}">${status.label}</span><span class="show-output">${open ? 'Hide' : 'Show'}</span></summary>${failureLine(block, escape, icon)}${command ? `<pre class="command">${escape(command)}</pre>` : ''}${block.text ? `<pre class="tool-output">${escape(block.text)}</pre>` : ''}</details>`;
+  return `<details class="tool status-${status.key}" data-tool-icon="${visual.icon}" data-disclosure="${escape(block.id)}" data-tool-status="${status.key}" ${open ? 'open' : ''}>${toolSummary(visual, status, { escape, icon })}${failureLine(block, escape, icon)}${command ? `<pre class="command">${escape(command)}</pre>` : ''}${block.text ? `<pre class="tool-output">${escape(block.text)}</pre>` : ''}</details>`;
 }
 
 export function activity(block, current, ui) {

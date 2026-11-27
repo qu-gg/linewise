@@ -6,7 +6,14 @@ import { dom, messages, remembered, update, element, click, turn } from './webvi
 function tools() {
   return [
     { id: 'think', kind: 'thought', text: 'Considering the request' },
-    { id: 'read', kind: 'tool', toolName: 'Read', status: 'completed', text: 'contents' },
+    {
+      id: 'read',
+      kind: 'tool',
+      toolName: 'Read',
+      status: 'completed',
+      input: '{"path":"README.md"}',
+      text: 'contents',
+    },
     { id: 'old', kind: 'tool', toolName: 'Old Task', status: 'cancelled', text: '' },
     {
       id: 'bash',
@@ -17,7 +24,14 @@ function tools() {
       status: 'failed',
       text: 'boom',
     },
-    { id: 'write', kind: 'tool', toolName: 'Write', status: 'in_progress', text: '' },
+    {
+      id: 'write',
+      kind: 'tool',
+      toolName: 'Write',
+      status: 'in_progress',
+      input: '{"path":"src/file.ts"}',
+      text: '',
+    },
     { id: 'answer', kind: 'text', text: 'Final answer' },
   ];
 }
@@ -41,11 +55,11 @@ test('transcript names the user, assistant and persistent answer actions', () =>
   assert.equal(element('.assistant-role').textContent!.trim(), 'Assistant');
   assert.equal(element('.assistant-answer').getAttribute('aria-label'), 'Assistant answer');
   assert.equal(element('.answer').getAttribute('aria-label'), 'Assistant answer');
-  assert.match(element('.answer .output-metadata').textContent!, /reported\/model/);
-  assert.match(element('.answer .output-metadata').textContent!, /2026/);
+  assert.match(element('.answer-footer .answer-metadata').textContent!, /reported\/model/);
+  assert.match(element('.answer-footer .answer-metadata').textContent!, /2026/);
   const copy = element('[data-action="copyAnswer"]');
   assert.equal(copy.getAttribute('aria-label'), 'Copy Answer');
-  assert.equal(copy.textContent!.trim(), 'Copy');
+  assert.equal(copy.textContent!.trim(), '');
   assert.equal(dom.window.document.querySelector('[data-action="regenerate"]'), null);
 });
 
@@ -53,39 +67,46 @@ test('activity and tool states are labelled and survive without color-only cues'
   update({ turns: [turn(tools())] });
   assert.equal(element('.activity').dataset.activityStatus, 'completed');
   assert.equal(element('.activity-label').textContent, 'Completed');
-  assert.match(element('.activity-stats').textContent!, /1 passed/);
-  assert.match(element('.activity-stats').textContent!, /1 failed/);
-  assert.match(element('.activity-stats').textContent!, /1 cancelled/);
-  assert.match(element('.activity-stats').textContent!, /1 running/);
+  assert.equal(element('.activity > summary .activity-count').textContent, '5 steps');
+  assert.match(element('.activity > summary .elapsed').textContent!, /in 1s/);
+  assert.match(
+    element('.activity > summary').getAttribute('aria-label')!,
+    /Completed 5 steps in 1s; 1 passed, 1 failed, 1 cancelled, 1 running/,
+  );
   assert.equal(element('.tool[data-tool-status="passed"] .tool-status').textContent, 'Passed');
+  assert.equal(element<HTMLElement>('.tool[data-tool-status="passed"] .tool-status').hidden, true);
+  assert.equal(element('.tool[data-tool-status="passed"]').dataset.toolIcon, 'file');
+  assert.match(element('.tool[data-tool-status="passed"] > summary').textContent!, /Read/);
+  assert.match(element('.tool[data-tool-status="passed"] > summary').textContent!, /README\.md/);
   assert.equal(
     element('.tool[data-tool-status="cancelled"] .tool-status').textContent,
     'Cancelled',
   );
   assert.equal(element('.tool[data-tool-status="failed"] .tool-status').textContent, 'Failed');
   assert.equal(element('.tool[data-tool-status="running"] .tool-status').textContent, 'Running');
+  assert.equal(element('.tool[data-tool-status="running"]').dataset.toolIcon, 'edit');
   assert.match(element('.tool.status-failed .failure').textContent!, /Terminal failed/);
   assert.match(
     element('.terminal-tool > summary').getAttribute('aria-label')!,
-    /Terminal failed: echo hi/,
+    /Ran echo hi: Failed/,
   );
   assert.equal(
     element('.tool[data-tool-status="passed"] > summary').getAttribute('aria-label'),
-    'Read: Passed',
+    'Read README.md: Passed',
   );
   assert.equal(element('.terminal-tool').dataset.toolStatus, 'failed');
+  assert.equal(element('.terminal-tool').dataset.toolIcon, 'terminal');
   assert.equal(element('.terminal-pane').dataset.terminalTool, 'bash');
   assert.equal(element('.terminal-pane .tool-output').textContent, 'boom');
   assert.ok(element('.terminal-heading [data-action="copyTool"]'));
   for (const status of dom.window.document.querySelectorAll('.tool-status')) {
     assert.ok(status.textContent!.trim(), 'tool status must have a text label');
   }
-  for (const stat of dom.window.document.querySelectorAll('.activity-stat')) {
-    assert.match(stat.textContent!, /\d+ (passed|failed|cancelled|running)/);
-  }
   update({ turns: [{ ...turn(tools()), status: 'cancelled' }] });
   assert.equal(element('.activity').dataset.activityStatus, 'cancelled');
   assert.equal(element('.activity-label').textContent, 'Cancelled');
+  update({ turns: [{ ...turn(tools()), startedAt: 0, endedAt: 261000 }] });
+  assert.match(element('.activity > summary').textContent!, /Completed 5 steps in 4m 21s/);
   update({
     turns: [{ ...turn([{ id: 'think', kind: 'thought', text: 'Streaming' }]), status: 'running' }],
   });
@@ -120,8 +141,8 @@ test('copy answer requests the recorded output without inventing host metadata',
   update({ turns: [turn()] });
   click('copyAnswer');
   assert.deepEqual(messages, [{ v: 1, type: 'copyTool', id: 'answer' }]);
-  assert.match(element('.answer .output-metadata').textContent!, /Timestamp not recorded/);
-  assert.match(element('.answer .output-metadata').textContent!, /Model not recorded/);
+  assert.match(element('.answer-footer .answer-metadata').textContent!, /Timestamp not recorded/);
+  assert.match(element('.answer-footer .answer-metadata').textContent!, /Model not recorded/);
 });
 
 test('streamed chunks patch only the changed turn instead of rebuilding the transcript', () => {

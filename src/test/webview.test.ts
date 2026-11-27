@@ -427,7 +427,7 @@ test('thinking auto-closes when activity advances and terminal failures remain v
   assert.match(element('.failure').textContent!, /failed/);
   assert.equal(element('.tool-output').textContent, '<failure>');
   assert.equal(element('.plan').textContent, '<safe plan>');
-  assert.match(element('.answer').textContent!, /Timestamp not recorded/);
+  assert.match(element('.answer-footer .answer-metadata').textContent!, /Timestamp not recorded/);
   click('copyTool');
   assert.deepEqual(messages.at(-1), { v: 1, type: 'copyTool', id: 'tool' });
 });
