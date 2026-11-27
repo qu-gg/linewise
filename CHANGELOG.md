@@ -11,6 +11,10 @@ Feature release for the inline command-permission menu.
 - Keep elevated permission safety explicit: Allow All and YOLO require their
   warning and an Enable step inside the menu, and the host still refuses an
   unconfirmed elevation and rechecks trust and command-cleanup state.
+- Keep the selected permission mode across new chats and reconnects, including
+  the first prompt after connecting. Elevated modes reset on extension reload,
+  workspace trust change, or history rollback; a prompt blocked by an in-flight
+  permission change now reports that boundary directly.
 - Upgrade the tested OMP profile to 19.2.1. Runtime preflight accepts newer
   19.x releases; release acceptance remains pinned to the tested version.
 - Treat only a leading interpreter shebang as an executable-bit mutation. A

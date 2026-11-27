@@ -148,6 +148,7 @@ async function recoveryFixture(context: TestContext, stage: Stage) {
 
 test('successful fork returns the selected prompt as a draft without generation or file/review changes', async (context) => {
   const { host, sent, document, target } = await recoveryFixture(context, 'archive');
+  await host.request({ type: 'permissions', mode: 'yolo', confirmed: true });
   const before = host.storedState!();
   const original = before.sessions.find((session) => session.id === before.activeSessionId)!;
   const disk = structuredClone(fixture.disk.get(target));
@@ -165,6 +166,7 @@ test('successful fork returns the selected prompt as a draft without generation 
     host.status()!.turns.map((turn) => turn.prompt),
     ['past'],
   );
+  assert.equal(host.status()!.permissions, 'rules');
   assert.deepEqual(sent, ['past', 'future']);
   assert.deepEqual(saved.changes, before.changes);
   assert.deepEqual(fixture.disk.get(target), disk);
@@ -177,6 +179,17 @@ test('successful fork returns the selected prompt as a draft without generation 
         JSON.stringify({ v: 1, type: 'draft', text: 'future' }),
     ),
   );
+});
+
+test('editing a prompt resets elevated permissions before the replacement runs', async (context) => {
+  const { host, sent } = await recoveryFixture(context, 'archive');
+  await host.request({ type: 'permissions', mode: 'yolo', confirmed: true });
+  assert.equal(host.status()!.permissions, 'yolo');
+  const selected = host.status()!.turns[1]!;
+  await host.request({ type: 'editPrompt', id: selected.id, text: 'replacement' });
+  assert.equal(host.status()!.permissions, 'rules');
+  assert.equal(sent.at(-1), 'replacement');
+  assert.equal(host.status()!.turns.at(-1)!.prompt, 'replacement');
 });
 
 for (const stage of stages) {

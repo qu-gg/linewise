@@ -25,6 +25,8 @@ import { ModelRoutes, type AppliedRoute, type LaunchRoute } from './model-route.
 import { OpenRouterRoutes } from './model-routes.js';
 import { routeRequest, type RequestHandlers } from './request-router.js';
 import { openIntegratedBrowser } from './integrated-browser.js';
+import { defaultPermissionMode } from './host-permissions.js';
+import type { PermissionMode } from './terminal-policy.js';
 
 const execute = promisify(execFile);
 let application: OmpView | undefined;
@@ -61,6 +63,7 @@ class OmpView extends HostOperations implements vscode.WebviewViewProvider {
   private compacting = false;
   private commands: string[] = [];
   private error = '';
+  private permissionMode: PermissionMode | undefined;
   private activeRoute: AppliedRoute | undefined;
   private readonly providerCatalog = new OpenRouterRoutes();
   private readonly modelRoutes = new ModelRoutes(
@@ -140,6 +143,7 @@ class OmpView extends HostOperations implements vscode.WebviewViewProvider {
       this.idleOperation('config', async () => {
         if (!this.tools) throw new Error('Start a session before changing permissions.');
         this.tools.setPermissions(mode, confirmed);
+        this.permissionMode = this.tools.permissions;
       }),
     permissionSettings: async () => {
       await vscode.commands.executeCommand(
@@ -176,6 +180,7 @@ class OmpView extends HostOperations implements vscode.WebviewViewProvider {
     this.modelRoutes.clearPendingFor(fresh, selected, launch);
     this.activeRoute = undefined;
     assertSessionResumable(saved);
+    const permissions = this.connectionPermissionMode();
     const operation = this.beginOperation('connect');
     this.commands = [];
     try {
@@ -192,6 +197,7 @@ class OmpView extends HostOperations implements vscode.WebviewViewProvider {
             ? process.env.VS_OMP_TEST_FIXTURE
             : undefined,
         configuredModel: vscode.workspace.getConfiguration('omp').get<string>('model', ''),
+        permissions,
         saved,
         launch,
         update: (notification) => this.update(notification),
@@ -207,6 +213,7 @@ class OmpView extends HostOperations implements vscode.WebviewViewProvider {
         clearPending: () => this.modelRoutes.clearPending(),
         refreshRoutes: () => void this.modelRoutes.refresh(),
       });
+      this.permissionMode = permissions;
       if (launch) this.activeRoute = { provider: launch.provider, label: launch.label };
     } catch (error) {
       await this.client?.stop();
@@ -251,7 +258,7 @@ class OmpView extends HostOperations implements vscode.WebviewViewProvider {
         target,
         boundary,
         replacement !== undefined,
-        () => this.tools!.resetPermissions(),
+        () => this.resetPermissionMode(),
       );
       if (cloned) this.view.attachments.restore(cloned.id, selected, boundary === 'before');
     } finally {
@@ -267,7 +274,12 @@ class OmpView extends HostOperations implements vscode.WebviewViewProvider {
     attach = true,
     originalAttachment?: Attachment | Attachment[],
   ): Promise<void> {
-    if (this.operation) throw new Error('Wait for the current operation before sending a prompt.');
+    if (this.operation)
+      throw new Error(
+        this.operation.kind === 'config'
+          ? 'Finish the current permission or model change before sending a prompt.'
+          : 'Wait for the current operation before sending a prompt.',
+      );
     assertPromptAllowed(text);
     const attachmentOwner = this.view.owner();
     const attached = this.view.attachments.capture(attachmentOwner, originalAttachment, attach);
@@ -408,6 +420,17 @@ class OmpView extends HostOperations implements vscode.WebviewViewProvider {
     }
   }
 
+  private connectionPermissionMode(): PermissionMode {
+    if (!vscode.workspace.isTrusted) this.permissionMode = undefined;
+    return this.permissionMode ?? defaultPermissionMode();
+  }
+
+  private resetPermissionMode(): void {
+    this.permissionMode = 'rules';
+    this.tools?.resetPermissions();
+    this.permissionMode = this.tools?.permissions ?? 'rules';
+  }
+
   private async finishTools(tools = this.tools): Promise<void> {
     try {
       await tools?.finish();
@@ -433,7 +456,7 @@ class OmpView extends HostOperations implements vscode.WebviewViewProvider {
   snapshot() {
     return {
       ...connectionPresentation(this.client, this.view.active()),
-      permissions: this.tools ? this.tools.permissions : 'rules',
+      permissions: this.permissionMode ?? 'rules',
       busy: Boolean(this.operation && !this.connecting),
       connecting: this.connecting,
       compacting: this.compacting,

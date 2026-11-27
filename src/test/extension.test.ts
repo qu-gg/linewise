@@ -147,7 +147,7 @@ test('host cancellation and operation ownership reject overlapping review/config
   await host.request({ type: 'permissionSettings' });
   assert.ok(fixture.commandCalls.some((call) => call.id === 'workbench.action.openSettings'));
   await host.request({ type: 'new' });
-  assert.equal(host.status()!.permissions, 'rules');
+  assert.equal(host.status()!.permissions, 'all');
   let release!: () => void;
   let entered!: () => void;
   const started = new Promise<void>((resolve) => {

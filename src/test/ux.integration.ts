@@ -280,9 +280,7 @@ async function nativeQuestionRetirement(api: Api, root: vscode.Uri) {
 
 async function nativeAttention(api: Api, root: vscode.Uri) {
   const config = vscode.workspace.getConfiguration('omp');
-  const mode = config.inspect('permissions.defaultMode')?.globalValue;
   const focus = config.inspect('notifications.focus')?.workspaceValue;
-  await config.update('permissions.defaultMode', 'ask', vscode.ConfigurationTarget.Global);
   await config.update('notifications.focus', 'always', vscode.ConfigurationTarget.Workspace);
   const command = 'notifications.toggleDoNotDisturbMode';
   assert.ok((await vscode.commands.getCommands(true)).includes(command));
@@ -290,8 +288,10 @@ async function nativeAttention(api: Api, root: vscode.Uri) {
   await vscode.commands.executeCommand(command);
   const restore = await uxAppearance('Default High Contrast', 1);
   try {
+    await api.request!({ v: 1, type: 'permissions', mode: 'ask' });
     await api.request!({ v: 1, type: 'disconnect' });
     await api.request!({ v: 1, type: 'connect' });
+    assert.equal(api.status()!.permissions, 'ask');
     await api.request!({ v: 1, type: 'config', id: 'model', value: 'vs-omp-fixture/history' });
     const prefix = vscode.Uri.joinPath(root, 'native-ux-attention').fsPath;
     await writeFile(`${prefix}-ready`, 'ready', { mode: 0o600 });
@@ -319,6 +319,7 @@ async function nativeAttention(api: Api, root: vscode.Uri) {
       await unchangedProvider(completed);
       await vscode.commands.executeCommand('notifications.hideList');
       await vscode.commands.executeCommand('notifications.hideToasts');
+      await api.request!({ v: 1, type: 'permissions', mode: 'rules' });
     } finally {
       await api.request!({ v: 1, type: 'cancel' });
       await Promise.allSettled([running]);
@@ -326,7 +327,6 @@ async function nativeAttention(api: Api, root: vscode.Uri) {
   } finally {
     await restore();
     if (doNotDisturb) await vscode.commands.executeCommand(command);
-    await config.update('permissions.defaultMode', mode, vscode.ConfigurationTarget.Global);
     await config.update('notifications.focus', focus, vscode.ConfigurationTarget.Workspace);
   }
 }

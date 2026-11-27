@@ -36,10 +36,10 @@ While idle, open the permission menu beside Memory. It expands inside the chat a
 
 - **Command Rules:** supported literal read-only commands can qualify automatically; others prompt unless an explicit user rule allows them.
 - **Ask Every Time:** commands prompt except explicit denies, which block.
-- **Allow All Except Restrictions:** separately confirmed connection-scoped elevation; explicit deny/ask and conservative sensitive/syntax prompts remain.
-- **YOLO Commands:** separately confirmed elevation allowing general syntax and project operations. Recognizable user restrictions and a small static dangerous-command denylist remain, but obfuscation/scripts can evade matching. It is not a sandbox or a complete destruction detector.
+- **Allow All Except Restrictions:** separately confirmed window-scoped elevation; explicit deny/ask and conservative sensitive/syntax prompts remain.
+- **YOLO Commands:** separately confirmed window-scoped elevation allowing general syntax and project operations. Recognizable user restrictions and a small static dangerous-command denylist remain, but obfuscation/scripts can evade matching. It is not a sandbox or a complete destruction detector.
 
-Only Rules/Ask can be saved as defaults. Elevated modes reset on session/history/connection/window lifecycle and can be revoked. User execution-host settings own literal argv rules; workspace/folder settings and Copilot approvals cannot grant authority. Deny wins over ask, ask over allow. Prefer exact matches for programs that can execute other programs.
+Only Rules/Ask can be saved as defaults. The selected mode is inherited by new chats in this workbench window. Elevated modes reset on extension reload, workspace trust change, or explicit history rollback; reconnect preserves the current mode. A prompt sent while a permission change is still applying fails with an actionable message and does not run under a stale or default mode. User execution-host settings own literal argv rules; workspace/folder settings and Copilot approvals cannot grant authority. Deny wins over ask, ask over allow. Prefer exact matches for programs that can execute other programs.
 
 Command approval shows the actual executable/arguments/cwd/environment; Allow Once never saves a grant. Outside-workspace file approval, URL/redirect consent, and browser consent are independent. Stop cancels owned work, but does not undo effects. Approval/execution waits have no default timeout; explicit positive execution timeouts start after consent.
 

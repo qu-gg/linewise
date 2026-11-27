@@ -7,12 +7,12 @@ export function permissionSetting<Value>(key: string, fallback: Value): Value {
   return inspected?.globalValue === undefined ? fallback : inspected.globalValue;
 }
 
-function defaultMode(): PermissionMode {
+export function defaultPermissionMode(): PermissionMode {
   return permissionMode.exclude(['all', 'yolo']).parse(permissionSetting('defaultMode', 'rules'));
 }
 
 export class CommandPermissions {
-  private mode = defaultMode();
+  private mode = defaultPermissionMode();
 
   constructor(private readonly assertIdle: () => void) {}
 
@@ -22,7 +22,7 @@ export class CommandPermissions {
 
   reset(): void {
     this.assertIdle();
-    this.mode = defaultMode();
+    this.mode = defaultPermissionMode();
   }
 
   set(mode: PermissionMode, confirmed = false): void {

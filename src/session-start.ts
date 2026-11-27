@@ -15,12 +15,14 @@ import type { HostView } from './host-view.js';
 import { dropEmptySession } from './sessions.js';
 import { routeBaseModel } from './model-routes.js';
 import type { LaunchRoute } from './model-route.js';
+import type { PermissionMode } from './terminal-policy.js';
 
 export function createConnection(
   files: ConstructorParameters<typeof HostTools>[0],
   journal: ConstructorParameters<typeof HostTools>[1],
   artifacts: string,
   approval: ConstructorParameters<typeof HostTools>[3],
+  permissions: PermissionMode,
   handlers: {
     update: (notification: SessionNotification) => void;
     closed: (client: OmpClient, tools: HostTools) => void;
@@ -35,6 +37,7 @@ export function createConnection(
     approval,
     handlers.questions,
   );
+  tools.setPermissions(permissions, true);
   const client = new OmpClient(
     {
       update: async (notification) => handlers.update(notification),
@@ -197,6 +200,7 @@ export interface ConnectionHost {
   run: Run;
   guard: string;
   fixture?: string;
+  permissions: PermissionMode;
   configuredModel: string;
   saved?: SavedSession;
   launch?: LaunchRoute;
@@ -227,7 +231,7 @@ export async function applyStartupModel(
 }
 
 export async function establishConnection(host: ConnectionHost): Promise<void> {
-  const { view, store, executable, saved, launch } = host;
+  const { view, store, executable, saved, permissions, launch } = host;
   const root = view.root(saved);
   const directory = store.directory;
   const artifacts = await artifactsDirectory(directory);
@@ -244,6 +248,7 @@ export async function establishConnection(host: ConnectionHost): Promise<void> {
     view.journal,
     artifacts,
     view.chat.requestApproval,
+    permissions,
     {
       update: host.update,
       closed: host.closed,
