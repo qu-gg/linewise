@@ -175,8 +175,18 @@ class OmpView extends HostOperations implements vscode.WebviewViewProvider {
     return this.view.preflight(this.executable(), execute);
   }
 
+  private prepareConnect(fresh: boolean, selected?: SavedSession) {
+    const active = this.view.active();
+    if (fresh)
+      this.output.appendLine(`New chat: replacing ${active ? active.id : 'no active chat'}.`);
+    return {
+      saved: selected ?? (fresh ? undefined : active),
+      replace: fresh ? active : undefined,
+    };
+  }
+
   async connect(fresh = false, selected?: SavedSession, launch?: LaunchRoute): Promise<void> {
-    const saved = selected ?? (fresh ? undefined : this.view.active());
+    const { saved, replace } = this.prepareConnect(fresh, selected);
     this.modelRoutes.clearPendingFor(fresh, selected, launch);
     this.activeRoute = undefined;
     assertSessionResumable(saved);
@@ -199,6 +209,7 @@ class OmpView extends HostOperations implements vscode.WebviewViewProvider {
         configuredModel: vscode.workspace.getConfiguration('omp').get<string>('model', ''),
         permissions,
         saved,
+        replace,
         launch,
         update: (notification) => this.update(notification),
         closed: (closed, owned) => this.clientClosed(closed, owned),
@@ -216,7 +227,12 @@ class OmpView extends HostOperations implements vscode.WebviewViewProvider {
       this.permissionMode = permissions;
       if (launch) this.activeRoute = { provider: launch.provider, label: launch.label };
     } catch (error) {
-      await this.client?.stop();
+      try {
+        await this.client?.stop();
+      } finally {
+        this.client = undefined;
+        if (!this.tools?.cleanupFailed) this.tools = undefined;
+      }
       throw error;
     } finally {
       this.endOperation(operation);
@@ -426,9 +442,10 @@ class OmpView extends HostOperations implements vscode.WebviewViewProvider {
   }
 
   private resetPermissionMode(): void {
-    this.permissionMode = 'rules';
+    if (this.permissionMode !== 'all' && this.permissionMode !== 'yolo') return;
+    const fallback = defaultPermissionMode();
     this.tools?.resetPermissions();
-    this.permissionMode = this.tools?.permissions ?? 'rules';
+    this.permissionMode = this.tools?.permissions ?? fallback;
   }
 
   private async finishTools(tools = this.tools): Promise<void> {

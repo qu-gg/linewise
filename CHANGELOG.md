@@ -18,6 +18,13 @@ Feature release for the inline command-permission menu.
 - Preserve host-side read, write, permission and terminal failure reasons in ACP
   responses. A denied write or pending-review conflict no longer reaches the
   model as only `Internal error`.
+- Prevent duplicate session records: a fresh connect reuses an existing native
+  identity, replaces an idle empty chat only when it has no turns, pending
+  review, or attached context, rolls back a failed post-bind connection without
+  losing staged context, and clears a stale active id on load. New Session does
+  not carry the replaced chat's unsent composer text; attached context is
+  protected. The picker labels an active empty chat as New Session and keeps
+  inactive empty records that hold an unsent draft or attached context reachable.
 - Upgrade the tested OMP profile to 19.2.1. Runtime preflight accepts newer
   19.x releases; release acceptance remains pinned to the tested version.
 - Treat only a leading interpreter shebang as an executable-bit mutation. A

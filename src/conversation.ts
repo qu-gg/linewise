@@ -101,8 +101,8 @@ export async function branchConversation(
     const snapshot = await client.history({ action: 'inspect' }, forkId);
     const context = { store, target, forkId, before, snapshot };
     if (editing) {
-      await editConversation(context);
       resetPermissions();
+      await editConversation(context);
     } else return await forkConversation(context, boundary, resetPermissions);
   } catch (error) {
     if (forkId && !store.data.sessions.some((session) => session.id === forkId))

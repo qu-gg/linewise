@@ -57,18 +57,35 @@ function rename(session, ui) {
   return `<div class="session-rename"><input id="session-title" aria-label="Session Title" maxlength="200" value="${ui.escape(display.editing.text)}" ${display.editing.pending ? 'disabled' : ''}>${control('save', 'check', 'Save Session Title', session.id, ui, display.editing.pending)}${control('cancelRename', 'close', 'Cancel Rename', session.id, ui)}</div>`;
 }
 
-function sessionMeta(session, ui) {
-  const diff =
-    session.added || session.removed
-      ? `<span class="session-diff"><span class="added">+${session.added ?? 0}</span><span class="removed">-${session.removed ?? 0}</span></span>`
-      : '';
-  const time = session.lastActivityAt
-    ? `<span class="session-time" title="${ui.escape(new Date(session.lastActivityAt).toLocaleString())}">${ui.escape(relativeTime(session.lastActivityAt))}</span>`
-    : '';
-  const pending = session.pendingReview
+function sessionDiff(session) {
+  if (!session.added && !session.removed) return '';
+  return `<span class="session-diff"><span class="added">+${session.added ?? 0}</span><span class="removed">-${session.removed ?? 0}</span></span>`;
+}
+
+function sessionTime(session, ui) {
+  if (!session.lastActivityAt) return '';
+  return `<span class="session-time" title="${ui.escape(new Date(session.lastActivityAt).toLocaleString())}">${ui.escape(relativeTime(session.lastActivityAt))}</span>`;
+}
+
+function sessionPending(session, ui) {
+  return session.pendingReview
     ? `<span class="session-pending" title="Pending file review" aria-label="Pending file review">${ui.icon('files')}</span>`
     : '';
-  return diff || time || pending ? `<small>${diff}${time}${pending}</small>` : '';
+}
+
+function sessionTurns(session) {
+  if (!(session.turns > 0)) return '';
+  return `<span class="session-turns">${session.turns} ${session.turns === 1 ? 'prompt' : 'prompts'}</span>`;
+}
+
+function sessionContext(session) {
+  if (!(session.attachments > 0)) return '';
+  return `<span class="session-turns session-context" title="Attached context">${session.attachments} ${session.attachments === 1 ? 'context' : 'contexts'}</span>`;
+}
+
+function sessionMeta(session, ui) {
+  const parts = `${sessionDiff(session)}${sessionTime(session, ui)}${sessionPending(session, ui)}${sessionTurns(session)}${sessionContext(session)}`;
+  return parts ? `<small>${parts}</small>` : '';
 }
 
 function sessionActions(session, ui, disabled) {
@@ -114,12 +131,29 @@ function timeGroups(sessions) {
   return groups.filter((group) => group.sessions.length);
 }
 
+function emptySessionVisible(session, ui) {
+  if (
+    session.active ||
+    session.archived ||
+    session.titled ||
+    session.pendingReview ||
+    session.recovering
+  )
+    return true;
+  if (session.attachments > 0) return true;
+  return Boolean(ui.hasDraft?.(session.id));
+}
+
+function visibleSession(session, query, ui) {
+  if (query && !`${session.title} ${session.root}`.toLocaleLowerCase().includes(query))
+    return false;
+  return !session.empty || emptySessionVisible(session, ui);
+}
+
 function listing(state, ui) {
   if (!state.sessions) return '<p class="session-empty" role="status">Loading sessions...</p>';
   const query = display.filter.toLocaleLowerCase();
-  const sessions = state.sessions.filter(
-    (session) => !query || `${session.title} ${session.root}`.toLocaleLowerCase().includes(query),
-  );
+  const sessions = state.sessions.filter((session) => visibleSession(session, query, ui));
   const groups = timeGroups(sessions.filter((session) => !session.archived)).map((group) =>
     section(group.id, group.label, group.sessions, state, ui),
   );

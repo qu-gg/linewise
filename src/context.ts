@@ -107,6 +107,10 @@ export class ContextAttachments {
     return structuredClone(this.drafts.get(owner) ?? []);
   }
 
+  count(owner: string): number {
+    return this.drafts.get(owner)?.length ?? 0;
+  }
+
   presentation(owner: string) {
     const pending = this.list(owner);
     return {

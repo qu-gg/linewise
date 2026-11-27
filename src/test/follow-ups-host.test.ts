@@ -76,6 +76,8 @@ test('host pauses after failed follow-up, resumes explicitly and never carries q
   await host.request({ type: 'resumeQueue' });
   assert.equal(host.status()!.turns.at(-1)!.prompt, 'remaining');
   await host.request({ type: 'clearQueue' });
+  transport.nextSessionId = 'follow-up-next';
   await host.request({ type: 'new' });
+  assert.equal(host.status()!.sessionId, 'follow-up-next');
   assert.deepEqual(host.status()!.queued, []);
 });

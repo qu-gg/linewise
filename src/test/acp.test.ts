@@ -9,6 +9,7 @@ import { randomUUID } from 'node:crypto';
 import { createClientApp } from '../acp.js';
 import installHistory, { exchangeHistory } from '../history.js';
 import type { HistoryApi } from '../history.js';
+import { TerminalManager } from '../terminal.js';
 
 register(new URL('./vscode-loader.js', import.meta.url), import.meta.url);
 const { default: installGuard, guardReason } = await import('../omp-guard.js');
@@ -128,6 +129,39 @@ async function terminalDenials(): Promise<void> {
 }
 
 test('all terminal protocol methods fail closed when no approved backend exists', terminalDenials);
+
+test('host terminal validation failures remain invalid-params', async () => {
+  const terminals = new TerminalManager({
+    sessionId: 'session',
+    cwd: process.cwd(),
+    signal: new AbortController().signal,
+    approve: async () => false,
+  });
+  const agent = new AgentApp().onRequest('session/new', async ({ client }) => {
+    await assert.rejects(
+      client.request('terminal/create', {
+        sessionId: 'session',
+        command: 'true',
+        args: Array.from({ length: 257 }, (_, index) => `arg-${index}`),
+      }),
+      { code: -32602 },
+    );
+    return { sessionId: 'session' };
+  });
+  const connection = createClientApp({
+    update: async () => {},
+    read: async () => '',
+    write: async () => {},
+    permission: async () => ({ outcome: { outcome: 'cancelled' } }),
+    terminals,
+  }).connect(agent);
+  try {
+    await connection.agent.request('session/new', { cwd: '/test', mcpServers: [] });
+  } finally {
+    connection.close();
+    await terminals.dispose();
+  }
+});
 
 test('pre-execution policy rejects unreviewable mutation routes and allows plain text writes', () => {
   for (const target of [

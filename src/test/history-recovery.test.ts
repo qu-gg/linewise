@@ -181,6 +181,24 @@ test('successful fork returns the selected prompt as a draft without generation 
   );
 });
 
+test('editing a prompt preserves a selected Ask permission mode', async (context) => {
+  const { host } = await recoveryFixture(context, 'archive');
+  await host.request({ type: 'permissions', mode: 'ask' });
+  assert.equal(host.status()!.permissions, 'ask');
+  const selected = host.status()!.turns[1]!;
+  await host.request({ type: 'editPrompt', id: selected.id, text: 'replacement' });
+  assert.equal(host.status()!.permissions, 'ask');
+});
+
+test('forking a prompt preserves a selected Ask permission mode', async (context) => {
+  const { host } = await recoveryFixture(context, 'archive');
+  await host.request({ type: 'permissions', mode: 'ask' });
+  assert.equal(host.status()!.permissions, 'ask');
+  const selected = host.status()!.turns[1]!;
+  await host.request({ type: 'forkTurn', id: selected.id, boundary: 'before' });
+  assert.equal(host.status()!.permissions, 'ask');
+});
+
 test('editing a prompt resets elevated permissions before the replacement runs', async (context) => {
   const { host, sent } = await recoveryFixture(context, 'archive');
   await host.request({ type: 'permissions', mode: 'yolo', confirmed: true });

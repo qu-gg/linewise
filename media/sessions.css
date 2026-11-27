@@ -174,7 +174,8 @@
   font-size: 11px;
   color: var(--vscode-descriptionForeground);
 }
-.session-time {
+.session-time,
+.session-turns {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;

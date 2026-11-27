@@ -142,7 +142,8 @@ function render() {
   const scroll = oldTranscript?.scrollTop ?? 0;
   const dockScroll = document.querySelector('.dock-sections')?.scrollTop ?? 0;
   const focused = captureFocus(app);
-  const ui = { escape, icon, button };
+  const hasDraft = (id) => Boolean((draftSession === id ? draft : drafts[id])?.trim());
+  const ui = { escape, icon, button, hasDraft };
   const wide = isWide();
   const manager = wide ? '' : sessionManager(state, ui);
   const sidebar = wide ? sessionSidebar(state, ui) : '';

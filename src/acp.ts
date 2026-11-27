@@ -75,7 +75,7 @@ async function requestReply<Result>(action: () => Promise<Result> | Result): Pro
   try {
     return await action();
   } catch (error) {
-    if (error instanceof RequestError) throw error;
+    if (error instanceof RequestError || error instanceof z.ZodError) throw error;
     throw RequestError.internalError(undefined, safeError(error));
   }
 }

@@ -287,7 +287,10 @@ export class HostView {
   }
 
   sessionPresentation() {
-    return { sessionIds: this.sessionIds(), sessions: sessionList(this.store.data) };
+    return {
+      sessionIds: this.sessionIds(),
+      sessions: sessionList(this.store.data, (id) => this.attachments.count(id)),
+    };
   }
 
   private async manageSession(request: SessionRequest) {

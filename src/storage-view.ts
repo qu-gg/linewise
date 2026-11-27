@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { randomUUID } from 'node:crypto';
 import { StateStore } from './state.js';
+import { reconcileActiveSession } from './sessions.js';
 import { planSessionRemoval } from './storage.js';
 import { StorageMaintenance, retentionCandidates } from './retention.js';
 import { retentionPolicy } from './storage-policy.js';
@@ -104,6 +105,7 @@ export async function initializeStorage(
 ): Promise<StateStore> {
   const store = new StateStore((context.storageUri ?? context.globalStorageUri).fsPath);
   await store.load();
+  reconcileActiveSession(store.data);
   const service = new StorageMaintenance(store);
   const run = (action: () => Promise<void>) => {
     if (!runner || vscode.env.remoteName || process.platform !== 'linux')
