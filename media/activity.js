@@ -1,34 +1,80 @@
 import { markdown } from './markdown.js';
+import { liveFor } from './terminal-stream.js';
 
-export function modelOutput(block, className, { escape }) {
+const toolStates = {
+  completed: { key: 'passed', label: 'Passed', icon: 'pass' },
+  failed: { key: 'failed', label: 'Failed', icon: 'error' },
+  cancelled: { key: 'cancelled', label: 'Cancelled', icon: 'close' },
+};
+
+export function toolStatus(block) {
+  return (
+    toolStates[block.status] ?? {
+      key: 'running',
+      label: 'Running',
+      icon: 'loading codicon-modifier-spin',
+    }
+  );
+}
+
+function timestamp(block, escape) {
   const date = new Date(block.receivedAt ?? NaN);
-  const timestamp = Number.isNaN(date.getTime())
+  return Number.isNaN(date.getTime())
     ? '<span>Timestamp not recorded</span>'
     : `<time datetime="${date.toISOString()}">${escape(new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'medium' }).format(date))}</time>`;
-  return `<div class="model-output ${className}" data-focus="${escape(block.id)}" tabindex="0" role="group" aria-label="Model output"><div class="markdown">${markdown(block.text)}</div><div class="output-metadata">${timestamp}<span>${escape(block.model ?? 'Model not recorded')}</span></div></div>`;
+}
+
+export function modelOutput(block, className, { escape }) {
+  const label = className.split(' ').includes('answer') ? 'Assistant answer' : 'Model output';
+  return `<div class="model-output ${className}" data-focus="${escape(block.id)}" tabindex="0" role="group" aria-label="${label}"><div class="markdown">${markdown(block.text)}</div><div class="output-metadata">${timestamp(block, escape)}<span>${escape(block.model ?? 'Model not recorded')}</span></div></div>`;
 }
 
 function thoughtActivity(block, current, { escape, icon, expanded }) {
   const thinking = current.status === 'running' && current.blocks.at(-1) === block;
-  return `<details class="thought" data-disclosure="${escape(block.id)}" ${(expanded[block.id] ?? thinking) ? 'open' : ''}><summary>${icon(thinking ? 'loading codicon-modifier-spin' : 'lightbulb')}${thinking ? 'Thinking' : 'Thought'}</summary>${modelOutput(block, '', { escape })}</details>`;
+  const label = thinking ? 'Thinking' : 'Thought';
+  return `<details class="thought status-${thinking ? 'running' : 'passed'}" data-disclosure="${escape(block.id)}" ${(expanded[block.id] ?? thinking) ? 'open' : ''}><summary>${icon(thinking ? 'loading codicon-modifier-spin' : 'lightbulb')}<span class="thought-label">${label}</span>${thinking ? '<span class="tool-status running">In progress</span>' : ''}</summary>${modelOutput(block, '', { escape })}</details>`;
+}
+
+function failureLine(block, escape, icon) {
+  if (block.status !== 'failed') return '';
+  return `<div class="failure tool-failure" role="status">${icon('warning')}<span>${escape(block.toolName ?? block.title ?? 'Tool')} failed</span></div>`;
+}
+
+function terminalBadges(live, running, icon) {
+  const streaming = `<span class="terminal-live" ${live?.running ? '' : 'hidden'}>Live</span><span class="terminal-truncated" ${live?.truncated ? '' : 'hidden'}>Truncated</span>`;
+  const controls = running
+    ? `<button type="button" class="icon-button terminal-controls" data-action="terminals" aria-label="Stop or Reveal Owned Terminal" title="Owned Terminals">${icon('terminal')}</button>`
+    : '';
+  return `${streaming}${controls}`;
+}
+
+function terminalText(block, live, running) {
+  if (live) return live.output || (live.running ? 'Running...' : 'No output.');
+  return block.text || (running ? 'Running...' : 'No output.');
 }
 
 function terminalActivity(block, { escape, icon, itemButton, expanded }) {
-  const running = !['completed', 'failed', 'cancelled'].includes(block.status);
+  const status = toolStatus(block);
+  const running = status.key === 'running';
+  const live = running ? liveFor(block.id) : undefined;
   const command = escape(block.command ?? block.title);
-  const label = running ? 'Running' : block.status === 'failed' ? 'Failed' : 'Ran';
-  return `<details class="tool terminal-tool" data-disclosure="${escape(block.id)}" ${(expanded[block.id] ?? running) ? 'open' : ''}><summary>${icon('terminal')}<span class="terminal-label">${label} <code title="${command}">${command}</code></span><span class="show-output">Show</span></summary><div class="terminal-pane"><div class="terminal-heading">${icon('terminal')}<code>${command}</code>${itemButton('copyTool', 'copy', 'Copy Command Output', block.id)}</div><pre class="tool-output">${escape(block.text || (running ? 'Running...' : 'No output.'))}</pre></div></details>`;
+  const open = expanded[block.id] ?? running;
+  const output = escape(terminalText(block, live, running));
+  return `<details class="tool terminal-tool status-${status.key}" data-terminal-block="${escape(block.id)}" data-disclosure="${escape(block.id)}" data-tool-status="${status.key}" ${open ? 'open' : ''}><summary aria-label="Terminal ${status.label.toLowerCase()}: ${command}">${icon('terminal')}<span class="terminal-label"><span class="tool-name">Terminal</span><code title="${command}">${command}</code></span><span class="tool-status ${status.key}">${status.label}</span><span class="show-output">${open ? 'Hide' : 'Show'}</span></summary><div class="terminal-pane" data-terminal-tool="${escape(block.id)}"><div class="terminal-heading">${icon('terminal')}<code>${command}</code>${terminalBadges(live, running, icon)}${itemButton('copyTool', 'copy', 'Copy Command Output', block.id)}</div>${failureLine(block, escape, icon)}<pre class="tool-output">${output}</pre></div></details>`; // keep terminal-pane/tool-output stable for live output
 }
 
 function toolActivity(block, { escape, icon, expanded }) {
-  const status =
-    block.status === 'failed' ? 'error' : block.status === 'completed' ? 'pass' : 'loading';
-  return `<details class="tool" data-disclosure="${escape(block.id)}" ${expanded[block.id] ? 'open' : ''}><summary>${icon(status === 'loading' ? 'loading codicon-modifier-spin' : status)}<span>${escape(block.title ?? 'Tool')}</span></summary>${block.input ? `<pre class="command">${escape(block.input)}</pre>` : ''}${block.text ? `<pre class="tool-output">${escape(block.text)}</pre>` : ''}</details>`;
+  const status = toolStatus(block);
+  const name = escape(block.toolName ?? block.title ?? 'Tool');
+  const command = block.command ?? block.input;
+  const open = expanded[block.id] ?? status.key === 'running';
+  return `<details class="tool status-${status.key}" data-disclosure="${escape(block.id)}" data-tool-status="${status.key}" ${open ? 'open' : ''}><summary aria-label="${name}: ${status.label}">${icon(status.icon)}<span class="tool-name">${name}</span><span class="tool-status ${status.key}">${status.label}</span><span class="show-output">${open ? 'Hide' : 'Show'}</span></summary>${failureLine(block, escape, icon)}${command ? `<pre class="command">${escape(command)}</pre>` : ''}${block.text ? `<pre class="tool-output">${escape(block.text)}</pre>` : ''}</details>`;
 }
 
 export function activity(block, current, ui) {
   if (block.kind === 'text') return modelOutput(block, 'progress', ui);
   if (block.kind === 'thought') return thoughtActivity(block, current, ui);
-  if (block.kind === 'plan') return `<pre class="plan">${ui.escape(block.text)}</pre>`;
+  if (block.kind === 'plan')
+    return `<div class="plan-block" role="group" aria-label="Plan"><pre class="plan">${ui.escape(block.text)}</pre></div>`;
   return block.toolKind === 'execute' ? terminalActivity(block, ui) : toolActivity(block, ui);
 }

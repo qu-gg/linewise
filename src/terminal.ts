@@ -49,6 +49,13 @@ export interface TerminalOptions {
     timeoutMs: number | null,
     execution: TerminalExecution,
   ): ManagedTerminal | undefined;
+  onTerminal?(terminal: TerminalObservation): void;
+}
+
+export interface TerminalObservation {
+  terminalId: string;
+  command: TerminalCommand;
+  toolCallId?: string;
 }
 
 const executionSchema = z
@@ -145,6 +152,7 @@ export class RunningTerminal {
         clearTimeout(this.escalation);
         this.status = { exitCode, signal };
         if (this.termination) this.status._meta = { 'vs-omp/termination': this.termination };
+        this.notify();
         resolve(this.status);
       });
     });
@@ -157,12 +165,29 @@ export class RunningTerminal {
     this.truncated ||= start > 0;
     while (start < bytes.length && (bytes[start]! & 0xc0) === 0x80) start++;
     this.output = bytes.toString('utf8', start);
-    for (const observer of this.outputObservers) observer(this.snapshot());
+    this.notify();
+  }
+
+  private notify(): void {
+    if (!this.outputObservers.size) return;
+    let snapshot: TerminalOutputResponse;
+    try {
+      snapshot = this.snapshot();
+    } catch {
+      return;
+    }
+    for (const observer of this.outputObservers) {
+      try {
+        observer(snapshot);
+      } catch {
+        // Stream observers are presentation-only; they cannot change execution.
+      }
+    }
   }
 
   observeOutput(listener: (snapshot: TerminalOutputResponse) => void): () => void {
     this.outputObservers.add(listener);
-    listener(this.snapshot());
+    this.notify();
     return () => {
       this.outputObservers.delete(listener);
     };
@@ -291,6 +316,7 @@ export class TerminalManager {
     executionTimeoutMs: number | null = this.timeoutMs,
     signal: AbortSignal = this.stopped.signal,
     execution: TerminalExecution = { pty: false, visibility: 'hidden' },
+    toolCallId?: string,
   ): Promise<CreateTerminalResponse> {
     execution = executionSchema.parse(execution);
     if (executionTimeoutMs !== null)
@@ -310,7 +336,7 @@ export class TerminalManager {
       if ((await abortable(realpath(request.cwd ?? this.options.cwd), signal)) !== command.cwd)
         throw new Error('Terminal cwd changed during approval.');
       this.check(request.sessionId);
-      return await this.launch(command, executionTimeoutMs, signal, execution);
+      return await this.launch(command, executionTimeoutMs, signal, execution, toolCallId);
     } finally {
       this.creating--;
     }
@@ -342,6 +368,7 @@ export class TerminalManager {
     timeoutMs: number | null,
     signal: AbortSignal,
     execution: TerminalExecution,
+    toolCallId?: string,
   ): Promise<CreateTerminalResponse> {
     const launched = this.options.launch?.(command, timeoutMs, execution);
     if (!launched && (execution.pty || execution.visibility !== 'hidden'))
@@ -349,6 +376,11 @@ export class TerminalManager {
     const terminal = launched ?? new RunningTerminal(command, timeoutMs);
     const terminalId = randomUUID();
     this.terminals.set(terminalId, terminal);
+    try {
+      this.options.onTerminal?.({ terminalId, command, toolCallId });
+    } catch {
+      // Streaming is presentation-only; observation failures cannot cancel execution.
+    }
     try {
       await abortable(terminal.ready, signal);
       signal.throwIfAborted();

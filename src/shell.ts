@@ -51,6 +51,7 @@ export async function executeShell(
   cwd: string,
   input: ShellRequest,
   signal: AbortSignal,
+  toolCallId?: string,
 ): Promise<string> {
   if (!('command' in input)) return jobOutput(manager, sessionId, input);
   const handle = await manager.create(
@@ -58,6 +59,7 @@ export async function executeShell(
     input.action === 'start' || !input.timeout ? null : input.timeout * 1000,
     signal,
     { pty: input.pty ?? false, visibility: input.visibility ?? 'hidden' },
+    toolCallId,
   );
   const request = { sessionId, ...handle };
   if (input.action === 'start')

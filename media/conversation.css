@@ -196,22 +196,6 @@ select:hover:not(:disabled) {
 .prompt-row .user-message {
   margin-bottom: 0;
 }
-.prompt-actions,
-.answer-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  min-height: 24px;
-  opacity: 0;
-  pointer-events: none;
-}
-.prompt-row:hover .prompt-actions,
-.prompt-row:focus-within .prompt-actions,
-.turn:hover .answer-actions,
-.turn:focus-within .answer-actions {
-  opacity: 1;
-  pointer-events: auto;
-}
 .user-message.editing {
   width: 90%;
   white-space: normal;
@@ -255,6 +239,7 @@ summary::-webkit-details-marker {
   font-size: 12px;
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 5px;
   padding: 2px 0;
 }
@@ -340,10 +325,6 @@ summary::-webkit-details-marker {
 .output-metadata > * {
   min-width: 0;
   overflow-wrap: anywhere;
-}
-.model-output:hover > .output-metadata,
-.model-output:focus-within > .output-metadata {
-  opacity: 0.85;
 }
 pre,
 code {
@@ -444,12 +425,33 @@ pre code {
   height: 22px;
   color: var(--vscode-descriptionForeground);
 }
+.terminal-live,
+.terminal-truncated {
+  flex: none;
+  padding: 1px 5px;
+  border-radius: 8px;
+  font-size: 10px;
+  line-height: 1.4;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--vscode-badge-foreground);
+  background: var(--vscode-badge-background);
+}
+.terminal-truncated {
+  color: var(--vscode-editorWarning-foreground);
+  background: none;
+  border: 1px solid var(--vscode-editorWarning-foreground);
+}
+.terminal-live[hidden],
+.terminal-truncated[hidden] {
+  display: none;
+}
 a,
 .file-link {
   color: var(--vscode-textLink-foreground);
 }
 .failure {
-  color: var(--vscode-editorWarning-foreground);
+  color: var(--vscode-errorForeground, var(--vscode-editorWarning-foreground));
   display: flex;
   gap: 5px;
   align-items: flex-start;

@@ -6,6 +6,7 @@ import { PathGuard, ReviewJournal } from './review.js';
 import { webviewMessage, type Attachment, type SavedSession, type StateStore } from './state.js';
 import { ReviewEditor, WorkspaceFiles } from './workspace.js';
 import { reviewSummary } from './review-presentation.js';
+import { promptRecents } from './session-presentation.js';
 import {
   OMP_TESTED_VERSION,
   ompVersionRequirement,
@@ -290,6 +291,7 @@ export class HostView {
     return {
       sessionIds: this.sessionIds(),
       sessions: sessionList(this.store.data, (id) => this.attachments.count(id)),
+      promptHistory: promptRecents(this.store.data.sessions, this.active()),
     };
   }
 
@@ -412,8 +414,8 @@ export class HostView {
   private async copyTool(id: string) {
     const block = this.active()
       ?.turns.flatMap((current) => current.blocks)
-      .find((candidate) => candidate.id === id && candidate.kind === 'tool');
-    if (!block) throw new Error('Tool output is no longer available.');
+      .find((candidate) => candidate.id === id && ['tool', 'text'].includes(candidate.kind));
+    if (!block) throw new Error('Output is no longer available.');
     await vscode.env.clipboard.writeText(
       block.command ? `${block.command}\n${block.text}` : block.text,
     );

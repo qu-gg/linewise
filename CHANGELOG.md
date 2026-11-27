@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.1.7
+
+Feature release for transcript/streaming UX and prompt reuse.
+
+- Show observed output throughput and first-text delay in Session Info. The
+  estimate uses measured agent-text timing and output characters, pauses during
+  thought/tool phases, stays unknown without data, and does not issue an extra
+  model request or invent provider token claims.
+- Recall previous prompts with Up/Down in the composer. The active session
+  traverses newest-first, then recent same-root sessions add a bounded,
+  deduplicated list; the in-progress and per-session drafts survive, and the
+  prompt-edit field and IME/selection cases are guarded.
+- Modernize the transcript toward the Local workbench reference: role identity,
+  persistent answer actions, scannable activity/tool status, restrained
+  theme-token styling, and patch-based render batching that preserves scroll,
+  focus, selection, and disclosure state.
+- Stream live owned shell/tool output into the chat tool card with explicit
+  Live/Truncated badges and bottom-only auto-scroll. Output is correlated to an
+  exact block, bounded and UTF-8-safe, retired on Stop/session change/takeover,
+  and never persisted as the authoritative ACP result.
+- Keep the local Linux x64, VS Code 1.147.0 and OMP 19.2.1 acceptance profile.
+  Remote-SSH, multi-root lifecycle and other platforms remain outside that
+  profile. No Marketplace distribution is included.
+
 ## 0.1.6
 
 Feature release for the inline command-permission menu.
