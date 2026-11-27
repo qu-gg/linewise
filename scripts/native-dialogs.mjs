@@ -428,7 +428,7 @@ export async function runNativeDialogs(directory) {
   };
   child.stdout.on('data', capture);
   child.stderr.on('data', capture);
-  const deadline = setTimeout(() => killGroup(child, 'SIGKILL'), 45_000);
+  const deadline = setTimeout(() => killGroup(child, 'SIGKILL'), 180_000);
   try {
     await Promise.race([
       Promise.all([
