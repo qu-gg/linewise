@@ -3,8 +3,9 @@ import test from 'node:test';
 import { mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { StateStore, cloneSession } from '../state.js';
+import { StateStore, cloneSession, type SavedSession, type Turn } from '../state.js';
 import { editSession, inspectSession, reconcileActiveSession, sessionList } from '../sessions.js';
+import { PROMPT_HISTORY_LIMIT, promptRecents } from '../session-presentation.js';
 import { planSessionRemoval, inspectStorage } from '../storage.js';
 import { setup } from './extension-setup.js';
 import { OmpClient, transport } from './acp-fixture.js';
@@ -399,4 +400,53 @@ test('session list reports last activity and pending-review line totals', () => 
   assert.equal(listed.pendingReview, true);
   assert.equal(listed.added, 2);
   assert.equal(listed.removed, 1);
+});
+
+function recalled(
+  id: string,
+  root: string,
+  prompts: readonly { text: string; at: number }[],
+): SavedSession {
+  return {
+    id,
+    root,
+    label: id,
+    turns: prompts.map(({ text, at }, index): Turn => ({
+      id: `${id}-${index}`,
+      prompt: text,
+      status: 'completed',
+      startedAt: at,
+      endedAt: at,
+      blocks: [],
+    })),
+  };
+}
+
+test('prompt recall keeps same-root recents newest-first, deduplicated, and bounded', () => {
+  const active = recalled('active', 'file:///workspace', [{ text: 'active prompt', at: 100 }]);
+  const older = recalled('older', 'file:///workspace', [
+    { text: 'oldest', at: 10 },
+    { text: 'shared', at: 60 },
+  ]);
+  const newer = recalled('newer', 'file:///workspace', [
+    { text: 'newest cross', at: 90 },
+    { text: 'shared', at: 80 },
+  ]);
+  const elsewhere = recalled('elsewhere', 'file:///other', [{ text: 'leaked', at: 95 }]);
+  assert.deepEqual(promptRecents([active, older, newer, elsewhere], active), [
+    'newest cross',
+    'shared',
+    'oldest',
+  ]);
+  const many = recalled(
+    'many',
+    'file:///workspace',
+    Array.from({ length: 60 }, (_, index) => ({ text: `prompt ${index}`, at: index + 1 })),
+  );
+  const bounded = promptRecents([active, many, elsewhere], active);
+  assert.equal(bounded.length, PROMPT_HISTORY_LIMIT);
+  assert.equal(bounded[0], 'prompt 59');
+  assert.equal(bounded.at(-1), 'prompt 10');
+  assert.deepEqual(promptRecents([active], active), []);
+  assert.deepEqual(promptRecents([], undefined), []);
 });
