@@ -287,15 +287,15 @@ async function driveManager(page, workspace, output) {
     true,
   );
   await renameAndArchive(frame, workspace, id);
-  await frame.getByRole('tab', { name: 'Recent', exact: true }).press('End');
+  await frame.locator('[data-session="filters"]').click();
+  await frame.locator('#session-show-archived').check();
   await frame.locator('#session-search').fill('Native UX named session');
   await reloadWebviews(page);
   frame = await approvalFrame(page, '.session-manager');
   assert.equal(await frame.locator('#session-search').inputValue(), 'Native UX named session');
-  assert.equal(
-    await frame.getByRole('tab', { name: 'Archived', exact: true }).getAttribute('aria-selected'),
-    'true',
-  );
+  await frame.locator('[data-session="filters"]').click();
+  assert.equal(await frame.locator('#session-show-archived').isChecked(), true);
+  await frame.locator('[data-session="filters"]').click();
   const row = frame.locator(`.session-row:has([data-id="${id}"])`);
   await row.waitFor({ state: 'visible' });
   await managerCheckpoint(workspace, 'recreated');
@@ -309,9 +309,8 @@ async function driveManager(page, workspace, output) {
   assert.equal(await frame.locator('#prompt').inputValue(), draft);
   await frame.locator('[data-action="sessions"]').click();
   await row.getByRole('button', { name: 'Restore Session', exact: true }).click();
-  await row.waitFor({ state: 'hidden' });
+  await frame.locator('[data-group="archived"] .session-row').waitFor({ state: 'hidden' });
   await managerCheckpoint(workspace, 'restored');
-  await frame.getByRole('tab', { name: 'Archived', exact: true }).press('Home');
   await row.waitFor({ state: 'visible' });
   await capture(page, output, 'manager-restored');
   await row.getByRole('button', { name: 'Resume Session', exact: true }).click();
