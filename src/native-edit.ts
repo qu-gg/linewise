@@ -184,15 +184,9 @@ function recordRequested(result: Result, store: EditStore, target: string, tag: 
   if (lines.length) store.recordSeenLines(target, tag, lines);
 }
 
-async function recordRead(
-  result: Result,
-  context: Context,
-  store: EditStore,
-  preserveExisting: boolean,
-): Promise<void> {
+async function recordRead(result: Result, context: Context, store: EditStore): Promise<void> {
   const target = await readableTarget(result, context);
   if (!target) return;
-  if (preserveExisting && store.headText(target) !== null) return;
   const tag = store.recordSnapshotFile(target);
   if (!tag) return;
   recordDisplayed(result, store, target, tag);
@@ -279,7 +273,7 @@ function registerToolResult(
       }
       const shared = sharedStore(api, stores, context);
       const store = shared ?? privateStore(native, stores, context);
-      await recordRead(result, context, store, Boolean(shared));
+      await recordRead(result, context, store);
     })().finally(() => {
       if (pendingReads.get(id) === task) pendingReads.delete(id);
     });
