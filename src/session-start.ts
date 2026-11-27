@@ -49,24 +49,80 @@ export function createConnection(
   return { tools, client };
 }
 
+export interface BoundSession {
+  recovered: boolean;
+  createdId?: string;
+  previousOwner?: string;
+}
+
+async function applyConnectionBinding(
+  store: StateStore,
+  client: OmpClient,
+  existing: SavedSession,
+  previousOwner: string | undefined,
+  resumed: boolean,
+  attachments?: ContextAttachments,
+): Promise<boolean> {
+  const active = store.data.sessions.find((session) => session.id === store.data.activeSessionId);
+  if (!active) throw new Error('The active session record is unavailable.');
+  if (client.historyAvailable) active.sessionFile = (await client.history()).fileName;
+  attachments?.bindSession(active.id, previousOwner, resumed);
+  if (!existing.historyTransition) return false;
+  reconcileHistory(existing, await client.history());
+  return true;
+}
+
+interface SessionIdentity {
+  existing: SavedSession;
+  created: boolean;
+}
+
+function sessionIdentity(
+  store: StateStore,
+  saved: SavedSession | undefined,
+  id: string,
+  root: { uri: string; name: string },
+): SessionIdentity {
+  const existing = saved ?? store.data.sessions.find((session) => session.id === id);
+  if (existing) return { existing, created: false };
+  const created: SavedSession = { id, root: root.uri, label: root.name, turns: [] };
+  store.data.sessions.push(created);
+  return { existing: created, created: true };
+}
+
 export async function bindConnectedSession(
   store: StateStore,
   client: OmpClient,
   root: { uri: string; name: string },
   saved?: SavedSession,
   attachments?: ContextAttachments,
-) {
-  if (!client.sessionId) throw new Error('OMP did not return a session identifier.');
+): Promise<BoundSession> {
+  const id = client.sessionId;
+  if (!id) throw new Error('OMP did not return a session identifier.');
   const previousOwner = store.data.activeSessionId;
-  if (!saved)
-    store.data.sessions.push({ id: client.sessionId, root: root.uri, label: root.name, turns: [] });
-  store.data.activeSessionId = saved?.id ?? client.sessionId;
-  const active = store.data.sessions.find((session) => session.id === store.data.activeSessionId)!;
-  if (client.historyAvailable) active.sessionFile = (await client.history()).fileName;
-  attachments?.bindSession(active.id, previousOwner, Boolean(saved));
-  if (!saved?.historyTransition) return false;
-  reconcileHistory(saved, await client.history());
-  return true;
+  const identity = sessionIdentity(store, saved, id, root);
+  if (identity.existing.archivedAt !== undefined)
+    throw new Error('OMP returned an archived session identity. Restore that session first.');
+  const createdId = identity.created ? identity.existing.id : undefined;
+  store.data.activeSessionId = identity.existing.id;
+  try {
+    const recovered = await applyConnectionBinding(
+      store,
+      client,
+      identity.existing,
+      previousOwner,
+      !identity.created,
+      attachments,
+    );
+    return { recovered, createdId, previousOwner };
+  } catch (error) {
+    if (createdId) {
+      store.data.sessions = store.data.sessions.filter((session) => session.id !== createdId);
+      attachments?.clear(createdId);
+    }
+    store.data.activeSessionId = previousOwner;
+    throw error;
+  }
 }
 
 export async function artifactsDirectory(directory: string): Promise<string> {
@@ -199,6 +255,7 @@ export interface ConnectionHost {
   fixture?: string;
   configuredModel: string;
   saved?: SavedSession;
+  replace?: SavedSession;
   launch?: LaunchRoute;
   update(notification: SessionNotification): void;
   closed(client: OmpClient, tools: HostTools): void;
@@ -226,8 +283,46 @@ export async function applyStartupModel(
   store.data.lastModel = model;
 }
 
+async function persistConnectedSession(
+  view: HostView,
+  store: StateStore,
+  host: ConnectionHost,
+  binding: BoundSession,
+  previous: SavedSession | undefined,
+  launch: LaunchRoute | undefined,
+): Promise<void> {
+  if (binding.recovered)
+    host.setError(
+      'Recovered an interrupted conversation edit. Its full original is in Switch Session. Files were not changed.',
+    );
+  if (launch) host.clearPending();
+  const dropped = previous
+    ? dropEmptySession(
+        store,
+        previous,
+        view.active()?.id,
+        (id) => view.journal.list(id).length,
+        (id) => view.attachments.clear(id),
+      )
+    : undefined;
+  try {
+    await view.journal.refresh();
+    await store.save();
+  } catch (error) {
+    if (binding.createdId) {
+      store.data.sessions = store.data.sessions.filter(
+        (session) => session.id !== binding.createdId,
+      );
+      view.attachments.clear(binding.createdId);
+    }
+    if (dropped) store.data.sessions.push(dropped);
+    store.data.activeSessionId = binding.previousOwner;
+    throw error;
+  }
+}
+
 export async function establishConnection(host: ConnectionHost): Promise<void> {
-  const { view, store, executable, saved, launch } = host;
+  const { view, store, executable, saved, replace, launch } = host;
   const root = view.root(saved);
   const directory = store.directory;
   const artifacts = await artifactsDirectory(directory);
@@ -269,31 +364,14 @@ export async function establishConnection(host: ConnectionHost): Promise<void> {
   );
   await applyStartupModel(client, store, saved, host.configuredModel, launch);
   view.assertRoot(root);
-  if (
-    await bindConnectedSession(
-      store,
-      client,
-      { uri: root.uri.toString(), name: root.name },
-      saved,
-      view.attachments,
-    )
-  )
-    host.setError(
-      'Recovered an interrupted conversation edit. Its full original is in Switch Session. Files were not changed.',
-    );
-  if (launch) {
-    const active = view.active();
-    host.clearPending();
-    dropEmptySession(
-      store,
-      launch.replace,
-      active?.id,
-      (id) => view.journal.list(id).length,
-      (id) => view.attachments.clear(id),
-    );
-  }
-  await view.journal.refresh();
-  await store.save();
+  const binding = await bindConnectedSession(
+    store,
+    client,
+    { uri: root.uri.toString(), name: root.name },
+    saved,
+    view.attachments,
+  );
+  await persistConnectedSession(view, store, host, binding, replace ?? launch?.replace, launch);
   view.assertRoot(root);
   host.refreshRoutes();
 }

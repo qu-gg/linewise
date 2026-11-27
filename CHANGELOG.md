@@ -11,6 +11,10 @@ Feature release for the inline command-permission menu.
 - Keep elevated permission safety explicit: Allow All and YOLO require their
   warning and an Enable step inside the menu, and the host still refuses an
   unconfirmed elevation and rechecks trust and command-cleanup state.
+- Prevent duplicate session records: a fresh connect reuses an existing native
+  identity, replaces an idle empty chat, rolls back a failed post-bind
+  connection, and clears a stale active id on load. The picker labels an active
+  empty chat as New Session and hides inactive empty records.
 - Upgrade the tested OMP profile to 19.2.1. Runtime preflight accepts newer
   19.x releases; release acceptance remains pinned to the tested version.
 - Treat only a leading interpreter shebang as an executable-bit mutation. A

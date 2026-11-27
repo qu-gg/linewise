@@ -4,10 +4,10 @@ import { mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/
 import os from 'node:os';
 import path from 'node:path';
 import { StateStore, cloneSession } from '../state.js';
-import { editSession, inspectSession, sessionList } from '../sessions.js';
+import { editSession, inspectSession, reconcileActiveSession, sessionList } from '../sessions.js';
 import { planSessionRemoval, inspectStorage } from '../storage.js';
 import { setup } from './extension-setup.js';
-import { transport } from './acp-fixture.js';
+import { OmpClient, transport } from './acp-fixture.js';
 import {
   instructionArguments,
   workspaceInstructions,
@@ -153,6 +153,115 @@ test('session manager archives idle owners, inspects without generation and requ
   assert.equal(host.status()!.connected, true);
   assert.equal(generations, 0);
   await assert.rejects(host.request({ type: 'openSession', id: 'foreign' }), /no longer exists/);
+});
+
+test('fresh connects reuse an existing identity, replace an idle empty chat, and keep one record per chat', async (context) => {
+  const host = await setup(context);
+  await host.request({ type: 'connect' });
+  const first = host.status()!.sessionId!;
+  assert.equal(host.storedState!().sessions.length, 1);
+  assert.equal(host.status()!.session, 'New Session');
+
+  await host.request({ type: 'new' });
+  assert.equal(host.storedState!().sessions.length, 1);
+  assert.equal(host.status()!.sessionId, first);
+
+  const second = 'second-native';
+  transport.nextSessionId = second;
+  await host.request({ type: 'new' });
+  assert.equal(host.storedState!().sessions.length, 1);
+  assert.equal(host.status()!.sessionId, second);
+
+  await host.request({ type: 'prompt', text: 'First prompt' });
+  assert.equal(host.status()!.turns.length, 1);
+  transport.nextSessionId = 'third-native';
+  await host.request({ type: 'new' });
+  assert.equal(host.storedState!().sessions.length, 2);
+  assert.equal(host.status()!.sessionId, 'third-native');
+  assert.equal(
+    host.storedState!().sessions.find((session) => session.id === 'second-native')!.turns.length,
+    1,
+  );
+});
+
+test('a failed connection removes only the empty session it created', async (context) => {
+  const host = await setup(context);
+  await host.request({ type: 'connect' });
+  const original = host.storedState!().sessions.map((session) => session.id);
+  transport.nextSessionId = 'failing-native';
+  const start = OmpClient.prototype.start;
+  const history = OmpClient.prototype.history;
+  context.after(() => {
+    OmpClient.prototype.start = start;
+    OmpClient.prototype.history = history;
+  });
+  OmpClient.prototype.start = async function (options) {
+    await start.call(this, options);
+    this.historyAvailable = true;
+  };
+  OmpClient.prototype.history = async () => {
+    throw new Error('history fixture failure');
+  };
+  await assert.rejects(host.request({ type: 'new' }), /history fixture failure/);
+  assert.deepEqual(
+    host.storedState!().sessions.map((session) => session.id),
+    original,
+  );
+  assert.equal(host.status()!.sessionId, original[0]);
+  assert.equal(host.status()!.connected, false);
+});
+
+test('active-session reconciliation clears a stale id without dropping records', async (context) => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'omp-stale-session-'));
+  context.after(() => rm(directory, { recursive: true, force: true }));
+  const sessions = [
+    { id: 'kept', root: 'file:///workspace', label: 'Kept', turns: [] },
+    { id: 'also-kept', root: 'file:///workspace', label: 'Also kept', turns: [] },
+  ];
+  await writeFile(
+    path.join(directory, 'state.json'),
+    JSON.stringify({ version: 1, sessions, changes: [], activeSessionId: 'missing' }),
+  );
+  const store = new StateStore(directory);
+  await store.load();
+  reconcileActiveSession(store.data);
+  assert.equal(store.data.activeSessionId, undefined);
+  assert.deepEqual(store.data.sessions, sessions);
+});
+
+test('session list labels empty chats honestly and marks them for picker filtering', () => {
+  const data: StateStore['data'] = {
+    version: 1,
+    activeSessionId: 'active',
+    sessions: [
+      { id: 'active', root: 'file:///workspace', label: 'workspace', turns: [] },
+      { id: 'abandoned', root: 'file:///workspace', label: 'workspace', turns: [] },
+      {
+        id: 'named',
+        root: 'file:///workspace',
+        label: 'workspace',
+        title: 'Prepared chat',
+        turns: [],
+      },
+      {
+        id: 'used',
+        root: 'file:///workspace',
+        label: 'Used chat',
+        turns: [{ id: 'turn', prompt: 'Prompt', status: 'completed', startedAt: 10, blocks: [] }],
+      },
+    ],
+    changes: [],
+  };
+  const listed = sessionList(data);
+  assert.deepEqual(listed.map((session) => session.id).sort(), [
+    'abandoned',
+    'active',
+    'named',
+    'used',
+  ]);
+  assert.equal(listed.find((session) => session.id === 'active')!.title, 'New Session');
+  assert.equal(listed.find((session) => session.id === 'abandoned')!.empty, true);
+  assert.equal(listed.find((session) => session.id === 'used')!.title, 'Used chat');
 });
 
 test('session metadata writes validate titles and owner IDs and roll back on persistence failure', async (context) => {

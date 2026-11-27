@@ -171,8 +171,18 @@ class OmpView extends HostOperations implements vscode.WebviewViewProvider {
     return this.view.preflight(this.executable(), execute);
   }
 
+  private prepareConnect(fresh: boolean, selected?: SavedSession) {
+    const active = this.view.active();
+    if (fresh)
+      this.output.appendLine(`New chat: replacing ${active ? active.id : 'no active chat'}.`);
+    return {
+      saved: selected ?? (fresh ? undefined : active),
+      replace: fresh ? active : undefined,
+    };
+  }
+
   async connect(fresh = false, selected?: SavedSession, launch?: LaunchRoute): Promise<void> {
-    const saved = selected ?? (fresh ? undefined : this.view.active());
+    const { saved, replace } = this.prepareConnect(fresh, selected);
     this.modelRoutes.clearPendingFor(fresh, selected, launch);
     this.activeRoute = undefined;
     assertSessionResumable(saved);
@@ -193,6 +203,7 @@ class OmpView extends HostOperations implements vscode.WebviewViewProvider {
             : undefined,
         configuredModel: vscode.workspace.getConfiguration('omp').get<string>('model', ''),
         saved,
+        replace,
         launch,
         update: (notification) => this.update(notification),
         closed: (closed, owned) => this.clientClosed(closed, owned),

@@ -1,6 +1,14 @@
 import { changeLineStats } from './review-presentation.js';
 import { sessionTitle, type SavedSession, type StateStore } from './state.js';
 
+export function reconcileActiveSession(data: StateStore['data']): void {
+  if (
+    data.activeSessionId !== undefined &&
+    !data.sessions.some((saved) => saved.id === data.activeSessionId)
+  )
+    data.activeSessionId = undefined;
+}
+
 export function assertSessionResumable(saved: SavedSession | undefined) {
   if (saved?.archivedAt !== undefined)
     throw new Error('Restore this archived session before resuming it.');
@@ -12,10 +20,18 @@ export function dropEmptySession(
   activeId: string | undefined,
   changes: (sessionId: string) => number,
   clearAttachments: (sessionId: string) => void,
-): void {
-  if (replace.id === activeId || replace.turns.length > 0 || changes(replace.id)) return;
+): SavedSession | undefined {
+  if (
+    replace.id === activeId ||
+    replace.archivedAt !== undefined ||
+    replace.historyTransition ||
+    replace.turns.length > 0 ||
+    changes(replace.id)
+  )
+    return undefined;
   store.data.sessions = store.data.sessions.filter((session) => session.id !== replace.id);
   clearAttachments(replace.id);
+  return replace;
 }
 
 export type SessionAction = 'renameSession' | 'archiveSession' | 'restoreSession';
@@ -34,9 +50,37 @@ export function isSessionRequest(request: { type: string }): request is SessionR
   ].includes(request.type);
 }
 
+type ChangeTotals = Map<string, { added: number; removed: number }>;
+
+function listedSession(
+  saved: SavedSession,
+  data: StateStore['data'],
+  reviewed: Set<string>,
+  totals: ChangeTotals,
+) {
+  const empty = saved.turns.length === 0;
+  const turn = saved.turns.at(-1);
+  const total = totals.get(saved.id) ?? { added: 0, removed: 0 };
+  return {
+    id: saved.id,
+    title: (saved.title ?? (empty ? 'New Session' : saved.label)).slice(0, 200),
+    root: saved.root,
+    archived: saved.archivedAt !== undefined,
+    active: data.activeSessionId === saved.id,
+    empty,
+    titled: saved.title !== undefined,
+    turns: saved.turns.length,
+    pendingReview: reviewed.has(saved.id),
+    recovering: saved.historyTransition !== undefined,
+    lastActivityAt: turn?.endedAt ?? turn?.startedAt ?? 0,
+    added: total.added,
+    removed: total.removed,
+  };
+}
+
 export function sessionList(data: StateStore['data']) {
   const reviewed = new Set<string>();
-  const totals = new Map<string, { added: number; removed: number }>();
+  const totals: ChangeTotals = new Map();
   for (const change of data.changes) {
     reviewed.add(change.sessionId);
     const stats = changeLineStats(change);
@@ -47,19 +91,7 @@ export function sessionList(data: StateStore['data']) {
   }
   return [...data.sessions]
     .reverse()
-    .map((saved) => ({
-      id: saved.id,
-      title: (saved.title ?? saved.label).slice(0, 200),
-      root: saved.root,
-      archived: saved.archivedAt !== undefined,
-      active: data.activeSessionId === saved.id,
-      turns: saved.turns.length,
-      pendingReview: reviewed.has(saved.id),
-      recovering: saved.historyTransition !== undefined,
-      lastActivityAt: saved.turns.at(-1)?.endedAt ?? saved.turns.at(-1)?.startedAt ?? 0,
-      added: totals.get(saved.id)?.added ?? 0,
-      removed: totals.get(saved.id)?.removed ?? 0,
-    }))
+    .map((saved) => listedSession(saved, data, reviewed, totals))
     .sort((first, second) => second.lastActivityAt - first.lastActivityAt);
 }
 

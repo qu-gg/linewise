@@ -69,7 +69,7 @@ export function connectionPresentation(
 export function sessionPresentation(session: SavedSession | undefined) {
   return {
     sessionId: session?.id,
-    session: session?.title ?? session?.label ?? 'New Session',
+    session: session?.title ?? (session?.turns.length ? session.label : 'New Session'),
     turns: session?.turns ?? [],
     context: session?.usage,
   };
