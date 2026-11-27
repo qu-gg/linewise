@@ -109,6 +109,127 @@ test('session picker searches, filters archived sessions, and switches without g
   assert.equal(dom.window.document.activeElement, element('#prompt'));
 });
 
+test('inactive empty sessions stay out of the picker while the active empty chat remains named', () => {
+  const now = Date.now();
+  update({
+    sessionId: 'active',
+    sessions: [
+      {
+        id: 'active',
+        title: 'New Session',
+        root: 'file:///workspace',
+        active: true,
+        archived: false,
+        empty: true,
+        lastActivityAt: now,
+      },
+      {
+        id: 'abandoned',
+        title: 'New Session',
+        root: 'file:///workspace',
+        active: false,
+        archived: false,
+        empty: true,
+        lastActivityAt: now,
+      },
+      {
+        id: 'named',
+        title: 'Prepared chat',
+        root: 'file:///workspace',
+        active: false,
+        archived: false,
+        empty: true,
+        titled: true,
+        lastActivityAt: now,
+      },
+      {
+        id: 'used',
+        title: 'Used chat',
+        root: 'file:///workspace',
+        active: false,
+        archived: false,
+        empty: false,
+        turns: 3,
+        lastActivityAt: now,
+      },
+    ],
+  });
+  message({ type: 'showSessions' });
+  assert.ok(dom.window.document.querySelector('.session-open[data-id="active"]'));
+  assert.ok(dom.window.document.querySelector('.session-open[data-id="named"]'));
+  assert.ok(dom.window.document.querySelector('.session-open[data-id="used"]'));
+  assert.equal(dom.window.document.querySelector('.session-open[data-id="abandoned"]'), null);
+  assert.equal(element('.session-open[data-id="active"] strong').textContent, 'New Session');
+  assert.equal(element('.session-open[data-id="used"] .session-turns').textContent, '3 prompts');
+  action('close');
+});
+
+test('an inactive empty session with attached context remains reachable in the picker', () => {
+  const now = Date.now();
+  update({
+    sessionId: 'active',
+    sessions: [
+      {
+        id: 'active',
+        title: 'New Session',
+        root: 'file:///workspace',
+        active: true,
+        archived: false,
+        empty: true,
+        lastActivityAt: now,
+      },
+      {
+        id: 'context',
+        title: 'New Session',
+        root: 'file:///workspace',
+        active: false,
+        archived: false,
+        empty: true,
+        attachments: 1,
+        lastActivityAt: now,
+      },
+    ],
+  });
+  message({ type: 'showSessions' });
+  assert.ok(element('.session-open[data-id="context"]'));
+  assert.equal(
+    element('.session-open[data-id="context"] .session-context').textContent,
+    '1 context',
+  );
+  action('close');
+});
+
+test('an empty session with an unsent draft remains reachable in the picker', () => {
+  const now = Date.now();
+  const sessions = [
+    {
+      id: 'active',
+      title: 'New Session',
+      root: 'file:///workspace',
+      active: true,
+      archived: false,
+      empty: true,
+      lastActivityAt: now,
+    },
+    {
+      id: 'abandoned',
+      title: 'New Session',
+      root: 'file:///workspace',
+      active: false,
+      archived: false,
+      empty: true,
+      lastActivityAt: now,
+    },
+  ];
+  update({ sessionId: 'abandoned', sessions });
+  input('#prompt', 'Keep this draft');
+  update({ sessionId: 'active', sessions });
+  message({ type: 'showSessions' });
+  assert.ok(element('.session-open[data-id="abandoned"]'));
+  action('close');
+  assert.equal(element<HTMLTextAreaElement>('#prompt').value, '');
+});
+
 test('escape dismisses the session filter menu without closing the picker', () => {
   update({ sessions });
   message({ type: 'showSessions' });

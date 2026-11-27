@@ -26,7 +26,9 @@ Text context is bounded to eight snapshots, 64 KiB per snapshot and 128 KiB tota
 
 Todos is the agent's latest structured plan; Queued Prompts contains your future follow-ups. The queue runs serially only after cleanup, pauses on failure, and clears on Stop or ownership/history changes. It is transient, not restored after reload, and does not steer an already running model request.
 
-Search and filter sessions grouped by recency (`Today`, `Yesterday`, `Last 7 days`, `Older`), with relative activity, pending-review line totals, and an optional Archived group. Wide panels (about 620 px or more) show the picker beside the conversation as a collapsible sidebar; narrower panels open it full-surface. Archive/Restore is reversible metadata, not deletion. Open does not implicitly resume an agent. Edit and Continue and before/after forks retain recoverable conversation originals, but leave files, pending review ownership, buffers, memory, and external effects unchanged.
+Search and filter sessions grouped by recency (`Today`, `Yesterday`, `Last 7 days`, `Older`), with relative activity, prompt count, pending-review line totals, and an optional Archived group. Wide panels (about 620 px or more) show the picker beside the conversation as a collapsible sidebar; narrower panels open it full-surface. Archive/Restore is reversible metadata, not deletion. Open does not implicitly resume an agent. Edit and Continue and before/after forks retain recoverable conversation originals, but leave files, pending review ownership, buffers, memory, and external effects unchanged.
+
+Starting a new chat reuses an existing native session identity. **New Session** replaces the previous idle empty chat, discarding its unsent composer text; the chat is retained instead when it has turns, pending review, or attached context. A connection that fails after binding is rolled back without losing staged context. The picker labels the active empty chat as `New Session` and keeps inactive empty records reachable when they hold an unsent draft (a chat you switched away from) or attached context; one conversation maps to one local record.
 
 Context usage/cost comes from provider updates, not estimates. Compaction can consume model requests and does not create a machine-state checkpoint. Old/unreported/stale values remain qualified. Memory is host-local by default and may retain facts from abandoned branches.
 
@@ -36,10 +38,10 @@ While idle, open the permission menu beside Memory. It expands inside the chat a
 
 - **Command Rules:** supported literal read-only commands can qualify automatically; others prompt unless an explicit user rule allows them.
 - **Ask Every Time:** commands prompt except explicit denies, which block.
-- **Allow All Except Restrictions:** separately confirmed connection-scoped elevation; explicit deny/ask and conservative sensitive/syntax prompts remain.
-- **YOLO Commands:** separately confirmed elevation allowing general syntax and project operations. Recognizable user restrictions and a small static dangerous-command denylist remain, but obfuscation/scripts can evade matching. It is not a sandbox or a complete destruction detector.
+- **Allow All Except Restrictions:** separately confirmed window-scoped elevation; explicit deny/ask and conservative sensitive/syntax prompts remain.
+- **YOLO Commands:** separately confirmed window-scoped elevation allowing general syntax and project operations. Recognizable user restrictions and a small static dangerous-command denylist remain, but obfuscation/scripts can evade matching. It is not a sandbox or a complete destruction detector.
 
-Only Rules/Ask can be saved as defaults. Elevated modes reset on session/history/connection/window lifecycle and can be revoked. User execution-host settings own literal argv rules; workspace/folder settings and Copilot approvals cannot grant authority. Deny wins over ask, ask over allow. Prefer exact matches for programs that can execute other programs.
+Only Rules/Ask can be saved as defaults. The selected mode is inherited by new chats in this workbench window. Elevated modes reset on extension reload, workspace trust change, or explicit history rollback; reconnect preserves the current mode. A prompt sent while a permission change is still applying fails with an actionable message and does not run under a stale or default mode. User execution-host settings own literal argv rules; workspace/folder settings and Copilot approvals cannot grant authority. Deny wins over ask, ask over allow. Prefer exact matches for programs that can execute other programs.
 
 Command approval shows the actual executable/arguments/cwd/environment; Allow Once never saves a grant. Outside-workspace file approval, URL/redirect consent, and browser consent are independent. Stop cancels owned work, but does not undo effects. Approval/execution waits have no default timeout; explicit positive execution timeouts start after consent.
 

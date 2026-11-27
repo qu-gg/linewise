@@ -57,7 +57,7 @@ async function editConversation({ store, target, forkId, before, snapshot }: Bra
 async function forkConversation(
   context: BranchContext,
   boundary: 'before' | 'after',
-  reset: () => void,
+  resetPermissions: () => void,
 ) {
   const { store, target, forkId, snapshot } = context;
   const { client, session, index, entryId } = target;
@@ -76,7 +76,7 @@ async function forkConversation(
   store.data.sessions.push(cloned);
   store.data.activeSessionId = cloned.id;
   await store.save();
-  await client.selectSession(cloned.id).then(reset);
+  await client.selectSession(cloned.id).then(resetPermissions);
   await client.closeSession(sourceHandle);
   return cloned;
 }
@@ -86,7 +86,7 @@ export async function branchConversation(
   target: ReturnType<typeof historyBoundary>,
   boundary: 'before' | 'after',
   editing: boolean,
-  reset: () => void,
+  resetPermissions: () => void,
 ) {
   const { client, history, entryId } = target;
   let forkId: string | undefined;
@@ -100,8 +100,10 @@ export async function branchConversation(
     forkId = (await client.fork()).sessionId;
     const snapshot = await client.history({ action: 'inspect' }, forkId);
     const context = { store, target, forkId, before, snapshot };
-    if (editing) await editConversation(context);
-    else return await forkConversation(context, boundary, reset);
+    if (editing) {
+      resetPermissions();
+      await editConversation(context);
+    } else return await forkConversation(context, boundary, resetPermissions);
   } catch (error) {
     if (forkId && !store.data.sessions.some((session) => session.id === forkId))
       await client.closeSession(forkId).catch(() => {});

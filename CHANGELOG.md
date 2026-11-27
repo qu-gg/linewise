@@ -11,6 +11,20 @@ Feature release for the inline command-permission menu.
 - Keep elevated permission safety explicit: Allow All and YOLO require their
   warning and an Enable step inside the menu, and the host still refuses an
   unconfirmed elevation and rechecks trust and command-cleanup state.
+- Keep the selected permission mode across new chats and reconnects, including
+  the first prompt after connecting. Elevated modes reset on extension reload,
+  workspace trust change, or history rollback; a prompt blocked by an in-flight
+  permission change now reports that boundary directly.
+- Preserve host-side read, write, permission and terminal failure reasons in ACP
+  responses. A denied write or pending-review conflict no longer reaches the
+  model as only `Internal error`.
+- Prevent duplicate session records: a fresh connect reuses an existing native
+  identity, replaces an idle empty chat only when it has no turns, pending
+  review, or attached context, rolls back a failed post-bind connection without
+  losing staged context, and clears a stale active id on load. New Session does
+  not carry the replaced chat's unsent composer text; attached context is
+  protected. The picker labels an active empty chat as New Session and keeps
+  inactive empty records that hold an unsent draft or attached context reachable.
 - Upgrade the tested OMP profile to 19.2.1. Runtime preflight accepts newer
   19.x releases; release acceptance remains pinned to the tested version.
 - Treat only a leading interpreter shebang as an executable-bit mutation. A

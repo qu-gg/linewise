@@ -117,7 +117,7 @@ Answer bounded single-choice, multiple-choice, and free-text questions directly 
 
 ### Permissions You Can See
 
-Open the permission menu beside Memory to choose **Command Rules**, **Ask Every Time**, or separately confirmed **Allow All Except Restrictions** and **YOLO Commands** without leaving the chat. Elevated modes show their warning and explicit Enable step inside the same panel. They are connection-scoped and reset on session or connection changes. Commands use your host permissions, not an OS sandbox; outside-workspace file access and web/browser consent remain independent.
+Open the permission menu beside Memory to choose **Command Rules**, **Ask Every Time**, or separately confirmed **Allow All Except Restrictions** and **YOLO Commands** without leaving the chat. Elevated modes show their warning and explicit Enable step inside the same panel. The selected mode lasts for the workbench window and is inherited by new chats; elevated modes reset on extension reload, workspace trust change, or history rollback, while reconnect preserves the current mode. Commands use your host permissions, not an OS sandbox; outside-workspace file access and web/browser consent remain independent.
 
 ### Activity, Plans, And Follow-Ups
 
@@ -168,7 +168,7 @@ The extension ID remains `vs-omp-local.vs-omp`, and settings/command IDs retain 
 
 Review is independent of Git. Pending edits accumulate across prompts; conflicts refuse to overwrite newer user or external changes. Keep/Undo covers journaled file-tool changes, **not shell side effects or conversation history**.
 
-Commands run with your host permissions, **not in an OS sandbox**. Command Rules is the default; Ask, session-only Allow All, and explicitly confirmed YOLO are available. YOLO's static denylist is best effort, not a destruction detector. File-tool outside-workspace approval and URL/browser consent remain separate.
+Commands run with your host permissions, **not in an OS sandbox**. Command Rules is the default; Ask, window-scoped Allow All, and explicitly confirmed YOLO are available. YOLO's static denylist is best effort, not a destruction detector. File-tool outside-workspace approval and URL/browser consent remain separate.
 
 Prompts, attached context, approved reads, and tool results can reach your selected model provider. Local transcripts, snapshots, and memory can contain sensitive code; private filesystem modes are not encryption. There is no extension telemetry. Read the [security and privacy policy](SECURITY.md) before using sensitive projects.
 

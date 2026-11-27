@@ -31,12 +31,12 @@ const warnings = {
   all: {
     title: 'Enable Allow All?',
     action: 'Enable Allow All',
-    body: 'Commands run with your host permissions, without an OS sandbox. They can delete files or send data. Explicit deny rules still block; ask rules and uncertain syntax still prompt. File approvals, tool restrictions and Stop stay unchanged. This choice resets on reconnect or session switch.',
+    body: 'Commands run with your host permissions, without an OS sandbox. They can delete files or send data. Explicit deny rules still block; ask rules and uncertain syntax still prompt. File approvals, tool restrictions and Stop stay unchanged. This choice lasts for this workbench window and resets on extension reload, workspace trust change, or history rollback.',
   },
   yolo: {
     title: 'Enable YOLO?',
     action: 'Enable YOLO',
-    body: 'Commands run with your host permissions, without an OS sandbox, and can delete files or send data. Shell expansions, redirects and destructive project operations are auto-approved. A small dangerous-command denylist and explicit deny/ask rules remain, but hidden actions in scripts, variables or interpreters cannot be detected reliably. File review, outside-file approvals, web/browser consent, tool restrictions and Stop stay unchanged. This choice resets on reconnect or session switch.',
+    body: 'Commands run with your host permissions, without an OS sandbox, and can delete files or send data. Shell expansions, redirects and destructive project operations are auto-approved. A small dangerous-command denylist and explicit deny/ask rules remain, but hidden actions in scripts, variables or interpreters cannot be detected reliably. File review, outside-file approvals, web/browser consent, tool restrictions and Stop stay unchanged. This choice lasts for this workbench window and resets on extension reload, workspace trust change, or history rollback.',
   },
 };
 
@@ -64,7 +64,7 @@ function focus(selector) {
 
 function modeButton(entry, current, icon) {
   const checked = entry.mode === current;
-  return `<button type="button" role="radio" id="permission-mode-${entry.mode}" class="permission-mode" data-permission="mode" data-mode="${entry.mode}" aria-checked="${checked}">${icon(entry.icon)}<span class="permission-mode-text"><span class="permission-mode-label">${entry.label}${entry.elevated ? '<span class="permission-tag">Session only</span>' : ''}</span><span class="permission-mode-detail">${entry.detail}</span></span>${checked ? icon('check') : ''}</button>`;
+  return `<button type="button" role="radio" id="permission-mode-${entry.mode}" class="permission-mode" data-permission="mode" data-mode="${entry.mode}" aria-checked="${checked}">${icon(entry.icon)}<span class="permission-mode-text"><span class="permission-mode-label">${entry.label}${entry.elevated ? '<span class="permission-tag">Window only</span>' : ''}</span><span class="permission-mode-detail">${entry.detail}</span></span>${checked ? icon('check') : ''}</button>`;
 }
 
 function warningPanel(mode) {

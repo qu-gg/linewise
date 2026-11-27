@@ -1,4 +1,4 @@
-import { ClientApp, PROTOCOL_VERSION, ndJsonStream } from '@agentclientprotocol/sdk';
+import { ClientApp, PROTOCOL_VERSION, RequestError, ndJsonStream } from '@agentclientprotocol/sdk';
 import type {
   ClientConnection,
   ContentBlock,
@@ -71,27 +71,50 @@ function terminals(handlers: ClientHandlers) {
   return handlers.terminals;
 }
 
+async function requestReply<Result>(action: () => Promise<Result> | Result): Promise<Result> {
+  try {
+    return await action();
+  } catch (error) {
+    if (error instanceof RequestError || error instanceof z.ZodError) throw error;
+    throw RequestError.internalError(undefined, safeError(error));
+  }
+}
+
 export function createClientApp(handlers: ClientHandlers): ClientApp {
   return new ClientApp({ name: 'vs-omp' })
     .onNotification('session/update', async ({ params }) => {
       await handlers.update(params);
     })
     .onNotification('*', async () => {})
-    .onRequest('fs/read_text_file', async ({ params }) => ({
-      content: await handlers.read(params),
-    }))
-    .onRequest('fs/write_text_file', async ({ params }) => {
-      await handlers.write(params);
-      return {};
-    })
-    .onRequest('session/request_permission', async ({ params }) => handlers.permission(params))
-    .onRequest('terminal/create', ({ params }) => terminals(handlers).create(params))
-    .onRequest('terminal/output', ({ params }) => terminals(handlers).output(params))
-    .onRequest('terminal/wait_for_exit', ({ params }) => terminals(handlers).waitForExit(params))
-    .onRequest('terminal/kill', ({ params }) => terminals(handlers).kill(params))
-    .onRequest('terminal/release', ({ params }) => terminals(handlers).release(params))
+    .onRequest('fs/read_text_file', ({ params }) =>
+      requestReply(async () => ({ content: await handlers.read(params) })),
+    )
+    .onRequest('fs/write_text_file', ({ params }) =>
+      requestReply(async () => {
+        await handlers.write(params);
+        return {};
+      }),
+    )
+    .onRequest('session/request_permission', ({ params }) =>
+      requestReply(() => handlers.permission(params)),
+    )
+    .onRequest('terminal/create', ({ params }) =>
+      requestReply(() => terminals(handlers).create(params)),
+    )
+    .onRequest('terminal/output', ({ params }) =>
+      requestReply(() => terminals(handlers).output(params)),
+    )
+    .onRequest('terminal/wait_for_exit', ({ params }) =>
+      requestReply(() => terminals(handlers).waitForExit(params)),
+    )
+    .onRequest('terminal/kill', ({ params }) =>
+      requestReply(() => terminals(handlers).kill(params)),
+    )
+    .onRequest('terminal/release', ({ params }) =>
+      requestReply(() => terminals(handlers).release(params)),
+    )
     .onRequest('*', async () => {
-      throw new Error('Unsupported client operation; access denied.');
+      throw RequestError.methodNotFound('Unsupported client operation; access denied.');
     });
 }
 

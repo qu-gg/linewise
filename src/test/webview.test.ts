@@ -73,6 +73,8 @@ test('permission control opens an inline menu, confirms elevation and disables u
   click('permissions');
   assert.equal(element('#permission-mode-rules').getAttribute('aria-checked'), 'true');
   assert.match(element('.permission-popover').textContent!, /Edit User Command Rules/);
+  assert.match(element('#permission-mode-all').textContent!, /Window only/);
+  assert.match(element('#permission-mode-yolo').textContent!, /Window only/);
   element('#permission-mode-rules').click();
   assert.equal(dom.window.document.querySelector('.permission-popover'), null);
   assert.equal(messages.length, 0);
@@ -87,6 +89,7 @@ test('permission control opens an inline menu, confirms elevation and disables u
   element('[data-permission="mode"][data-mode="all"]').click();
   assert.equal(messages.length, 0);
   assert.match(element('.permission-warning').textContent!, /without an OS sandbox/);
+  assert.match(element('.permission-warning').textContent!, /workbench window/);
   element('#permission-confirm').click();
   assert.deepEqual(messages.at(-1), {
     v: 1,
