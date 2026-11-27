@@ -49,9 +49,19 @@ function toolVisual(block) {
 
 function timestamp(block, escape) {
   const date = new Date(block.receivedAt ?? NaN);
-  return Number.isNaN(date.getTime())
-    ? '<span>Timestamp not recorded</span>'
-    : `<time datetime="${date.toISOString()}">${escape(new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'medium' }).format(date))}</time>`;
+  if (Number.isNaN(date.getTime())) return '<span>Timestamp not recorded</span>';
+  const day = 86_400_000;
+  const delta = Date.now() - date.getTime();
+  let label;
+  if (Math.abs(delta) < day)
+    label = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(date);
+  else if (Math.abs(delta) < 7 * day)
+    label = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' }).format(
+      -Math.round(delta / day),
+      'day',
+    );
+  else label = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(date);
+  return `<time datetime="${date.toISOString()}">${escape(label)}</time>`;
 }
 
 export function outputMeta(block, { escape, className = 'output-metadata' }) {

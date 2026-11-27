@@ -17,5 +17,5 @@ export function promptRow(current, { state, editing, working, escape, icon, item
     ? editorPrompt(editing, disabled, { state, escape, icon })
     : escape(current.prompt);
   const actions = promptActions(current, { state, editor, disabled, itemButton });
-  return `<div class="prompt-row"><span class="role-label user-role">You</span><div class="user-message${editor ? ' editing' : ''}">${prompt}</div>${actions}</div>`;
+  return `<div class="prompt-row" aria-label="Your prompt"><div class="user-message${editor ? ' editing' : ''}">${prompt}</div>${actions}</div>`;
 }
