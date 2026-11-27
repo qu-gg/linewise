@@ -238,7 +238,6 @@ class OmpView extends HostOperations implements vscode.WebviewViewProvider {
       this.endOperation(operation);
     }
   }
-
   switchSession = () => this.view.switchSession();
   private async sessionCommand(command: 'compact' | 'context'): Promise<void> {
     if (!this.client?.connected || !this.commands.includes(command))
@@ -332,6 +331,7 @@ class OmpView extends HostOperations implements vscode.WebviewViewProvider {
         },
         finishTools: () => this.finishTools(tools),
         log: (message) => this.output.appendLine(message),
+        sendLive: (message) => this.view.chat.post(message),
       });
     } finally {
       this.endOperation(operation, current.status);

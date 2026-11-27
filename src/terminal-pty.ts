@@ -9,6 +9,7 @@ import type { ManagedTerminal, TerminalCommand } from './terminal.js';
 export class PtyTerminal implements ManagedTerminal {
   private readonly child: IPty;
   private readonly changes = new EventEmitter();
+  private readonly outputObservers = new Set<(snapshot: TerminalOutputResponse) => void>();
   private output = '';
   private truncated = false;
   private suppressed = false;
@@ -36,6 +37,7 @@ export class PtyTerminal implements ManagedTerminal {
     this.child.onData((text) => {
       this.append(text);
       write(text);
+      this.notify();
       this.changes.emit('change');
     });
     this.deadline =
@@ -54,6 +56,7 @@ export class PtyTerminal implements ManagedTerminal {
             : null,
         };
         if (this.termination) this.status._meta = { 'vs-omp/termination': this.termination };
+        this.notify();
         this.changes.emit('change');
         resolve(structuredClone(this.status));
       });
@@ -67,6 +70,31 @@ export class PtyTerminal implements ManagedTerminal {
     this.truncated ||= start > 0;
     while (start < bytes.length && (bytes[start]! & 0xc0) === 0x80) start++;
     this.output = bytes.toString('utf8', start);
+  }
+
+  private notify(): void {
+    if (!this.outputObservers.size) return;
+    let snapshot: TerminalOutputResponse;
+    try {
+      snapshot = this.snapshot();
+    } catch {
+      return;
+    }
+    for (const observer of this.outputObservers) {
+      try {
+        observer(snapshot);
+      } catch {
+        // Stream observers are presentation-only; they cannot change execution.
+      }
+    }
+  }
+
+  observeOutput(listener: (snapshot: TerminalOutputResponse) => void): () => void {
+    this.outputObservers.add(listener);
+    this.notify();
+    return () => {
+      this.outputObservers.delete(listener);
+    };
   }
 
   private signalGroup(signal: NodeJS.Signals): void {
@@ -93,6 +121,7 @@ export class PtyTerminal implements ManagedTerminal {
     this.suppressed = true;
     this.output = '';
     this.human = true;
+    this.outputObservers.clear();
   }
 
   endTakeover(): void {
