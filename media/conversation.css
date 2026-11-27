@@ -358,30 +358,6 @@ pre code {
   gap: 6px;
   flex-wrap: nowrap;
 }
-.terminal-label {
-  display: flex;
-  align-items: baseline;
-  gap: 5px;
-  min-width: 0;
-  flex: 1;
-  white-space: nowrap;
-}
-.terminal-label code {
-  padding: 0;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  background: none;
-  font-size: 11px;
-}
-.show-output {
-  color: var(--vscode-textLink-foreground);
-  font-size: 11px;
-}
-.terminal-tool > summary::after {
-  margin-left: 0;
-  font-size: 12px;
-}
 .terminal-pane {
   background: var(--vscode-terminal-background, var(--vscode-editor-background));
   border: 1px solid var(--vscode-widget-border);

@@ -1,13 +1,13 @@
-import { activity, modelOutput, toolStatus } from './activity.js';
+import { activity, modelOutput, outputMeta, toolStatus } from './activity.js';
 import { approvalCard } from './approvals.js';
 import { promptRow } from './prompt-card.js';
 import { questionCard, questionResults } from './questions.js';
 
 const turnStatus = {
-  running: { label: 'Running', icon: 'loading codicon-modifier-spin' },
-  completed: { label: 'Completed', icon: 'pass' },
-  cancelled: { label: 'Cancelled', icon: 'close' },
-  failed: { label: 'Failed', icon: 'error' },
+  running: { label: 'Running' },
+  completed: { label: 'Completed' },
+  cancelled: { label: 'Cancelled' },
+  failed: { label: 'Failed' },
 };
 
 export function transcriptUi({ escape, icon, itemButton, expanded, editing, state, working }) {
@@ -24,15 +24,24 @@ export function transcriptUi({ escape, icon, itemButton, expanded, editing, stat
   };
 }
 
-function activityStats(details) {
+function activityCounts(details) {
   const counts = { passed: 0, failed: 0, cancelled: 0, running: 0 };
   for (const block of details) {
     if (block.kind === 'tool') counts[toolStatus(block).key] += 1;
   }
   return Object.entries(counts)
     .filter(([, count]) => count)
-    .map(([key, count]) => `<span class="activity-stat ${key}">${count} ${key}</span>`)
-    .join('');
+    .map(([key, count]) => `${count} ${key}`);
+}
+
+function formatDuration(seconds) {
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  const remainder = seconds % 60;
+  if (minutes < 60) return remainder ? `${minutes}m ${remainder}s` : `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest ? `${hours}h ${rest}m` : `${hours}h`;
 }
 
 function turnActivity(current, details, ui) {
@@ -43,15 +52,16 @@ function turnActivity(current, details, ui) {
     Math.round(((current.endedAt ?? Date.now()) - current.startedAt) / 1000),
   );
   const open = ui.expanded[current.id] ?? current.status === 'running';
-  const steps = details.length
-    ? `<span class="activity-count">${details.length} step${details.length === 1 ? '' : 's'}</span>`
-    : '';
+  const count = `${details.length} step${details.length === 1 ? '' : 's'}`;
+  const duration = formatDuration(seconds);
+  const counts = activityCounts(details);
+  const label = `${status.label} ${count} in ${duration}${counts.length ? `; ${counts.join(', ')}` : ''}`;
   const body = details.map((block) => activity(block, current, ui)).join('');
-  return `<details class="activity status-${current.status}" data-disclosure="${ui.escape(current.id)}" data-activity-status="${current.status}" ${open ? 'open' : ''}><summary>${ui.icon(status.icon)}<span class="activity-label">${status.label}</span>${steps}<span class="activity-stats">${activityStats(details)}</span><span class="elapsed" title="Elapsed time">${seconds}s</span></summary><div class="activity-body">${body}</div></details>`;
+  return `<details class="activity status-${current.status}" data-disclosure="${ui.escape(current.id)}" data-activity-status="${current.status}" ${open ? 'open' : ''}><summary aria-label="${label}"><span class="activity-label">${status.label}</span> <span class="activity-count">${count}</span> <span class="elapsed" title="${seconds} seconds">in ${duration}</span></summary><div class="activity-body">${body}</div></details>`;
 }
 
 function answerActions(current, answer, ui) {
-  const copy = `<button type="button" class="answer-action" data-action="copyAnswer" data-id="${ui.escape(answer.id)}" aria-label="Copy Answer" title="Copy Answer">${ui.icon('copy')}<span>Copy</span></button>`;
+  const copy = `<button type="button" class="answer-action" data-action="copyAnswer" data-id="${ui.escape(answer.id)}" aria-label="Copy Answer" title="Copy Answer">${ui.icon('copy')}</button>`;
   const fork =
     ui.canHistory && current.status === 'completed' && current.history?.afterEntryId
       ? ui.itemButton('forkAfter', 'repo-forked', 'Fork After This Answer', current.id, ui.disabled)
@@ -60,7 +70,8 @@ function answerActions(current, answer, ui) {
 }
 
 function answerBlock(current, answer, ui) {
-  return `<div class="assistant-answer" role="group" aria-label="Assistant answer"><span class="role-label assistant-role">${ui.icon('comment-discussion')}Assistant</span>${modelOutput(answer, 'answer', ui)}${answerActions(current, answer, ui)}</div>`;
+  const footer = `<div class="answer-footer">${answerActions(current, answer, ui)}${outputMeta(answer, { ...ui, className: 'output-metadata answer-metadata' })}</div>`;
+  return `<div class="assistant-answer" role="group" aria-label="Assistant answer"><span class="role-label assistant-role">Assistant</span>${modelOutput(answer, 'answer', { ...ui, showMetadata: false })}${footer}</div>`;
 }
 
 export function turn(current, ui) {
