@@ -5,6 +5,7 @@ import type { HostTools } from './host-tools.js';
 import type { HistorySnapshot } from './history.js';
 import { applyCompactionUsage } from './session-presentation.js';
 import { assertNativeBudget } from './storage-files.js';
+import { markPromptSent } from './stream-metrics.js';
 import {
   bindTurnHistory,
   type Attachment,
@@ -75,6 +76,7 @@ export async function runPrompt(run: PromptRun): Promise<void> {
         if (client.historyAvailable) before = await client.history();
         await store.save();
         abort.signal.throwIfAborted();
+        markPromptSent(current);
         return client.prompt(promptBlocks(current.prompt, run.attached));
       },
     );
