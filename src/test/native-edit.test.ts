@@ -215,3 +215,14 @@ test('invalid read paths and shared-store failures do not poison later edits', a
   assert.equal(result.isError, false);
   assert.equal(current.results.length, 1);
 });
+
+test('a fresh read refreshes a stale snapshot after an external change', async (context) => {
+  const current = await setup(context);
+  await writeFile(current.source, 'newer');
+  await current.handlers.get('tool_result')!(current.event, current.native);
+  const result = await current.execute({ op: 'update', content: 'after' });
+  assert.equal(result.isError, false);
+  const mutation = current.results.at(-1)!;
+  if (mutation.op !== 'write') assert.fail('expected a write mutation');
+  assert.equal(mutation.before, 'newer');
+});
