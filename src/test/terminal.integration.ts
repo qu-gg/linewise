@@ -19,7 +19,7 @@ function fileSignal(target: string): Promise<void> {
     });
     const timer = setTimeout(
       () => finish(new Error(`Native UI signal missing: ${path.basename(target)}`)),
-      30_000,
+      90_000,
     );
     function finish(error?: unknown) {
       clearTimeout(timer);

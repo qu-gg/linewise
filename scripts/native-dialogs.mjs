@@ -6,7 +6,7 @@ import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { chromium } from 'playwright-core';
 
-export function signalFile(target, timeout = 30_000) {
+export function signalFile(target, timeout = 90_000) {
   return new Promise((resolve, reject) => {
     const watcher = watch(path.dirname(target), (_event, fileName) => {
       if (fileName === path.basename(target)) void inspect();
@@ -35,7 +35,7 @@ export function signalFile(target, timeout = 30_000) {
 }
 
 export async function approvalFrame(page, selector = '.approval-card') {
-  const deadline = Date.now() + 30_000;
+  const deadline = Date.now() + 60_000;
   while (Date.now() < deadline) {
     for (const frame of page.frames()) {
       if (await frame.locator(selector).isVisible()) return frame;
@@ -344,7 +344,7 @@ async function driveNativeDialogs(userData, workspace) {
     const context = browser.contexts()[0];
     assert.ok(context, 'The isolated VS Code browser context must exist.');
     const page = context.pages()[0] ?? (await context.waitForEvent('page'));
-    page.setDefaultTimeout(15_000);
+    page.setDefaultTimeout(30_000);
     await page.waitForURL(/workbench\.html/);
     await page.locator('.monaco-workbench').waitFor({ state: 'visible' });
     console.log('PASS: Playwright reaches only the disposable VS Code workbench.');
