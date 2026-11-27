@@ -4,6 +4,23 @@ import path from 'node:path';
 import { reviewHunks } from './review-hunks.js';
 import { changeKind } from './review-types.js';
 
+const lineStats = new WeakMap<Change, { added: number; removed: number }>();
+
+export function changeLineStats(change: Change) {
+  let stats = lineStats.get(change);
+  if (!stats) {
+    const parts = diffLines(change.before ?? '', change.destination?.after ?? change.after ?? '');
+    stats = {
+      added: parts.filter((part) => part.added).reduce((sum, part) => sum + (part.count ?? 0), 0),
+      removed: parts
+        .filter((part) => part.removed)
+        .reduce((sum, part) => sum + (part.count ?? 0), 0),
+    };
+    lineStats.set(change, stats);
+  }
+  return stats;
+}
+
 export function reviewImages(change: Change) {
   return [
     { path: `/${change.id}/before/${path.basename(change.path)}`, text: change.before ?? '' },
@@ -87,7 +104,7 @@ export function reviewSummary(
     : change.after === null
       ? `${source} (Deleted)`
       : source;
-  const parts = diffLines(change.before ?? '', change.destination?.after ?? change.after ?? '');
+  const stats = changeLineStats(change);
   return {
     id: change.id,
     name,
@@ -98,7 +115,6 @@ export function reviewSummary(
       return { ...operation, turn: index < 0 ? undefined : index + 1 };
     }),
     hunks: presentedHunks(change),
-    added: parts.filter((part) => part.added).reduce((sum, part) => sum + (part.count ?? 0), 0),
-    removed: parts.filter((part) => part.removed).reduce((sum, part) => sum + (part.count ?? 0), 0),
+    ...stats,
   };
 }

@@ -12,7 +12,7 @@ export default {
       from: {
         path: '^(src/(?!test/)|media/)',
         pathNot:
-          '^src/(extension|workspace|host-tools|host-permissions|host-inspect|host-search|host-questions|host-rename|host-code-actions|host-notebook|host-image-context|host-tasks|host-terminals|chat-view|inline-review-view|storage-view|host-view|host-activation)\\.ts$',
+          '^src/(extension|workspace|host-tools|host-permissions|host-inspect|host-search|host-questions|host-rename|host-code-actions|host-notebook|host-image-context|host-tasks|host-terminals|chat-view|inline-review-view|storage-view|host-view|host-activation|integrated-browser)\\.ts$',
       },
       to: { path: '^vscode$' },
     },

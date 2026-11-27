@@ -56,6 +56,19 @@ select:focus-visible {
   flex-direction: column;
   overflow: hidden;
 }
+.chat-shell {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+.chat-pane {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
 .toolbar {
   min-height: 34px;
   display: flex;

@@ -1,14 +1,48 @@
+import { existsSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { chromium } from 'playwright-core';
 import type { Browser, BrowserContext, Page } from 'playwright-core';
 import { browserRequest } from './browser-policy.js';
 import type { BrowserRequest } from './browser-policy.js';
 
+type LaunchOptions = Parameters<typeof chromium.launch>[0];
+type Launch = (options: LaunchOptions) => Promise<Browser>;
+
 export interface BrowserOptions {
   signal: AbortSignal;
   executablePath?: string;
   headless?: boolean;
+  launch?: Launch;
+  exists?: (target: string) => boolean;
   approve(request: BrowserRequest, signal: AbortSignal): Promise<boolean>;
+}
+
+const SYSTEM_BROWSERS = [
+  process.env.CHROME_PATH,
+  process.env.BRAVE_PATH,
+  '/usr/bin/brave-browser',
+  '/usr/bin/chromium',
+  '/usr/bin/chromium-browser',
+  '/usr/bin/google-chrome',
+  '/usr/bin/google-chrome-stable',
+  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser',
+  '/Applications/Chromium.app/Contents/MacOS/Chromium',
+].filter((candidate): candidate is string => Boolean(candidate));
+
+function missingExecutable(error: unknown): boolean {
+  return error instanceof Error && /executable doesn't exist|enoent/i.test(error.message);
+}
+
+function unavailable(error: unknown, executable?: string): Error {
+  const target = executable ? ` at ${executable}` : '';
+  const detail = error instanceof Error ? error.message : String(error);
+  return new Error(
+    `No usable Chromium executable${target} for OMP-owned Playwright pages. ` +
+      'Set omp.browser.executablePath to an absolute Chromium, Chrome or Brave path, ' +
+      `or install Playwright Chromium with "npx playwright-core install chromium-headless-shell". ${detail}`,
+    { cause: error },
+  );
 }
 
 async function snapshot(page: Page) {
@@ -90,15 +124,30 @@ export class OwnedBrowser {
     if (this.disposed) throw new Error('Owned browser has closed.');
   }
 
+  private async launch(): Promise<Browser> {
+    const launch = this.options.launch ?? chromium.launch.bind(chromium);
+    const headless = this.options.headless ?? true;
+    const executable = this.options.executablePath;
+    try {
+      return await launch({ executablePath: executable, headless });
+    } catch (error) {
+      if (!missingExecutable(error)) throw error;
+      if (executable) throw unavailable(error, executable);
+      const fallback = SYSTEM_BROWSERS.find(this.options.exists ?? existsSync);
+      if (!fallback) throw unavailable(error);
+      try {
+        return await launch({ executablePath: fallback, headless });
+      } catch (failure) {
+        throw unavailable(failure, fallback);
+      }
+    }
+  }
+
   private async start(): Promise<BrowserContext> {
     this.assertCurrent();
     if (this.context) return this.context;
-    this.launching ??= chromium.launch({
-      executablePath: this.options.executablePath,
-      headless: this.options.headless ?? true,
-    });
+    this.launching ??= this.launch();
     const browser = await this.launching;
-    this.assertCurrent();
     const context = await browser.newContext({
       acceptDownloads: false,
       serviceWorkers: 'block',
@@ -121,6 +170,10 @@ export class OwnedBrowser {
     if (!page || page.isClosed())
       throw new Error('No open page belongs to this session owner and pageId.');
     return page;
+  }
+
+  currentUrl(): string | undefined {
+    for (const page of [...this.pages.values()].reverse()) if (!page.isClosed()) return page.url();
   }
 
   private async open(url: string): Promise<string> {
@@ -263,6 +316,9 @@ export class SessionBrowser {
   private closing?: Promise<void>;
   private busy = false;
 
+  currentUrl(): string | undefined {
+    return this.current?.browser.currentUrl();
+  }
   async bind(owner: string): Promise<void> {
     await this.closing;
     if (this.current && this.current.owner !== owner) await this.revoke();

@@ -164,7 +164,9 @@ test('broker rejects retired tokens, propagates refusal, and cancellation closes
   const active = path.join(directory, 'active.json');
   const original = await readFile(active);
   try {
-    await writeFile(active, JSON.stringify({ id: randomUUID() }), { mode: 0o600 });
+    await writeFile(active, JSON.stringify({ id: randomUUID(), pid: process.pid }), {
+      mode: 0o600,
+    });
     await assert.rejects(exchangeMutations(directory, [operation]), /retired prompt/);
     assert.equal(calls, 0);
     await writeFile(active, original);
@@ -182,4 +184,29 @@ test('broker rejects retired tokens, propagates refusal, and cancellation closes
   await chmod(directory, 0o755);
   const invalid = new MutationBroker(directory, async () => null, new AbortController().signal);
   await assert.rejects(invalid.start(), /private canonical/);
+});
+
+test('exchange refuses a stale broker owner instead of waiting for a response', async (context) => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'omp-broker-stale-'));
+  context.after(() => rm(directory, { recursive: true, force: true }));
+  await writeFile(path.join(directory, 'active.json'), JSON.stringify({ id: randomUUID() }), {
+    mode: 0o600,
+  });
+  await assert.rejects(
+    exchangeMutations(directory, [
+      { op: 'delete', path: '/workspace/file.txt', before: 'original' },
+    ]),
+    /stale or invalid/,
+  );
+  await writeFile(
+    path.join(directory, 'active.json'),
+    JSON.stringify({ id: randomUUID(), pid: 2_147_483_646 }),
+    { mode: 0o600 },
+  );
+  await assert.rejects(
+    exchangeMutations(directory, [
+      { op: 'delete', path: '/workspace/file.txt', before: 'original' },
+    ]),
+    /Mutation broker is not running/,
+  );
 });

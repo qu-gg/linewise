@@ -5,9 +5,10 @@ interface Application {
   perform(action: () => Promise<void>): Promise<void>;
   preflight(): Promise<void>;
   connect(fresh?: boolean, selected?: SavedSession): Promise<void>;
-  switchSession(): Promise<void>;
   cancel(): Promise<void>;
+  switchSession(): Promise<void>;
   closeBrowser(): Promise<void>;
+  openInBrowser(url?: string): Promise<void>;
   dispatch(message: unknown): Promise<void>;
 }
 
@@ -46,6 +47,15 @@ export function registerHostCommands(
     vscode.commands.registerCommand('omp.closeBrowser', () =>
       application.perform(() => application.closeBrowser()),
     ),
+    vscode.commands.registerCommand('omp.openInBrowser', async (target?: string | vscode.Uri) => {
+      const url = target instanceof vscode.Uri ? target.toString() : target;
+      if (url) return application.perform(() => application.openInBrowser(url));
+      const input = await vscode.window.showInputBox({
+        prompt: 'URL to open in the VS Code integrated browser',
+        placeHolder: 'http://localhost:3000',
+      });
+      if (input) return application.perform(() => application.openInBrowser(input));
+    }),
   );
 }
 

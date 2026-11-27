@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.1.5
+
+Feature release for the responsive session picker and browser hardening.
+
+- Replace the tabbed session manager with a VS Code-style session picker:
+  `Today`, `Yesterday`, `Last 7 days`, and `Older` groups, relative activity,
+  pending-review diff totals, search, and an optional Archived group. Panels at
+  least 620 px wide show the picker beside the chat as a remembered, collapsible
+  sidebar; narrower panels keep the full-surface picker.
+- Harden OMP-owned Playwright launch: use `omp.browser.executablePath`, then
+  pinned Chromium, then common system Chromium/Chrome/Brave executables, with an
+  actionable error when none launch. Add **Linewise: Open in VS Code Browser**
+  for a user-visible integrated-browser tab of the current page URL; it is not
+  agent-controlled and does not synchronize state.
+- Fail fast when a stale mutation broker owner is no longer running, instead of
+  waiting for an outside-workspace read or mutation response that cannot arrive.
+- Keep the local Linux x64, VS Code 1.147.0 and OMP 18.21.0 acceptance profile.
+  Remote-SSH, multi-root lifecycle and other platforms remain outside that
+  profile. No Marketplace distribution is included.
+
 ## 0.1.4
 
 Patch release for native edit provenance and recoverable retries.

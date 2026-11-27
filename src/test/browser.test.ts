@@ -13,6 +13,7 @@ import { fixture, reset, Uri } from './vscode-fixture.js';
 
 register(new URL('./vscode-loader.js', import.meta.url), import.meta.url);
 const { HostTools } = await import('../host-tools.js');
+const { openIntegratedBrowser } = await import('../integrated-browser.js');
 
 test('owned browser accepts bounded HTTP actions but no existing sessions or script execution', () => {
   const pageId = randomUUID();
@@ -63,6 +64,72 @@ test('owned browser refuses invalid/stale pages and consent without launching a 
   await assert.rejects(browser.execute({ action: 'pages' }), /Stopped owned browser/);
   await browser.dispose();
   await browser.dispose();
+});
+
+test('owned browser falls back to a system executable when pinned Chromium is missing', async (context) => {
+  engine(context);
+  const calls: Array<Parameters<typeof chromium.launch>[0]> = [];
+  const browser = new OwnedBrowser({
+    signal: new AbortController().signal,
+    approve: async () => true,
+    exists: (target) => target === '/usr/bin/brave-browser',
+    launch: async (options) => {
+      calls.push(options);
+      if (!options?.executablePath) throw new Error("Executable doesn't exist at /missing");
+      return chromium.launch(options);
+    },
+  });
+  context.after(() => browser.dispose());
+  const opened = JSON.parse(await browser.execute({ action: 'open', url: 'https://example.com' }));
+  assert.equal(opened.url, 'https://example.com');
+  assert.deepEqual(
+    calls.map((options) => options?.executablePath),
+    [undefined, '/usr/bin/brave-browser'],
+  );
+  assert.equal(browser.currentUrl(), 'https://example.com');
+});
+
+test('owned browser reports missing explicit or unavailable browser executables', async (context) => {
+  const launch = async () => {
+    throw new Error("Executable doesn't exist at /missing");
+  };
+  const explicit = new OwnedBrowser({
+    signal: new AbortController().signal,
+    executablePath: '/opt/browser',
+    launch,
+    approve: async () => true,
+  });
+  context.after(() => explicit.dispose());
+  await assert.rejects(
+    explicit.execute({ action: 'open', url: 'https://example.com' }),
+    /No usable Chromium executable at \/opt\/browser/,
+  );
+  const unavailable = new OwnedBrowser({
+    signal: new AbortController().signal,
+    launch,
+    exists: () => false,
+    approve: async () => true,
+  });
+  context.after(() => unavailable.dispose());
+  await assert.rejects(
+    unavailable.execute({ action: 'open', url: 'https://example.com' }),
+    /omp\.browser\.executablePath/,
+  );
+});
+
+test('integrated browser command prefers the VS Code tab and falls back externally', async () => {
+  reset();
+  assert.equal(await openIntegratedBrowser('https://example.com'), 'integrated');
+  assert.deepEqual(fixture.commandCalls.at(-1), {
+    id: 'workbench.action.browser.open',
+    args: [{ url: 'https://example.com/', openToSide: false }],
+  });
+  fixture.commands.set('workbench.action.browser.open', () => {
+    throw new Error('Integrated browser unavailable');
+  });
+  assert.equal(await openIntegratedBrowser('http://127.0.0.1:3000/'), 'external');
+  assert.equal(fixture.commandCalls.at(-1)?.id, 'external');
+  await assert.rejects(openIntegratedBrowser('file:///tmp/page.html'), /HTTP/);
 });
 
 test('owned browser separates lifetime from per-prompt consent and cancellation', async (context) => {
@@ -382,6 +449,7 @@ test('registered browser uses the actual prompt broker, explicit consent and ima
     captured = JSON.parse(opened.content[0]!.text!).pageId;
     const image = await invoke({ action: 'screenshot', pageId: captured });
     assert.equal(image.content[0]!.type, 'image');
+    assert.equal(tools.browserUrl(), 'https://example.com');
     assert.equal(image.content[0]!.data, state.image.toString('base64'));
   });
   assert.equal(state.closed, false);
@@ -399,6 +467,7 @@ test('registered browser uses the actual prompt broker, explicit consent and ima
   abort.abort(new Error('Stopped broker'));
   await assert.rejects(invoke({ action: 'pages' }), /Stopped broker/);
   await tools.finish();
+  assert.equal(tools.browserUrl(), undefined);
   assert.equal(state.closed, true);
 });
 

@@ -2,7 +2,7 @@
   "name": "vs-omp",
   "displayName": "Linewise",
   "description": "Open agent coding. Granular review. Inside VS Code. Powered by Oh My Pi.",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "private": true,
   "publisher": "vs-omp-local",
   "license": "MIT",
@@ -120,6 +120,11 @@
         "command": "omp.closeBrowser",
         "title": "Linewise: Close Owned Browser",
         "icon": "$(close-all)"
+      },
+      {
+        "command": "omp.openInBrowser",
+        "title": "Linewise: Open in VS Code Browser",
+        "icon": "$(globe)"
       },
       {
         "command": "omp.inspectStorage",

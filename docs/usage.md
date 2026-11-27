@@ -26,7 +26,7 @@ Text context is bounded to eight snapshots, 64 KiB per snapshot and 128 KiB tota
 
 Todos is the agent's latest structured plan; Queued Prompts contains your future follow-ups. The queue runs serially only after cleanup, pauses on failure, and clears on Stop or ownership/history changes. It is transient, not restored after reload, and does not steer an already running model request.
 
-Search Recent/Archived sessions; Archive/Restore is reversible metadata, not deletion. Open does not implicitly resume an agent. Edit and Continue and before/after forks retain recoverable conversation originals, but leave files, pending review ownership, buffers, memory, and external effects unchanged.
+Search and filter sessions grouped by recency (`Today`, `Yesterday`, `Last 7 days`, `Older`), with relative activity, pending-review line totals, and an optional Archived group. Wide panels (about 620 px or more) show the picker beside the conversation as a collapsible sidebar; narrower panels open it full-surface. Archive/Restore is reversible metadata, not deletion. Open does not implicitly resume an agent. Edit and Continue and before/after forks retain recoverable conversation originals, but leave files, pending review ownership, buffers, memory, and external effects unchanged.
 
 Context usage/cost comes from provider updates, not estimates. Compaction can consume model requests and does not create a machine-state checkpoint. Old/unreported/stale values remain qualified. Memory is host-local by default and may retain facts from abandoned branches.
 
@@ -47,7 +47,7 @@ Command approval shows the actual executable/arguments/cwd/environment; Allow On
 
 Pipe/PTY commands support prompt-owned run/start/output/wait/stop. Preview services are not persistent workspace services. Human Take Over enables input only after permanently withholding future model-visible capture for that execution. Type secrets directly in that terminal. Resume Agent and actual process completion jointly release the hold; previous captured output and scrollback are not erased.
 
-Browser pages are explicitly owned Playwright sessions, not your existing browser profile/tabs. Independent consent governs launch/navigation/interactions; state may persist across completed prompts in the same owner. **Linewise: Close Owned Browser**, Stop, disconnect/failure, and ownership/history changes revoke pages. No browser is downloaded or attached through CDP by the model.
+Browser pages are explicitly owned Playwright sessions, not your existing browser profile/tabs. Independent consent governs launch/navigation/interactions; state may persist across completed prompts in the same owner. **Linewise: Close Owned Browser**, Stop, disconnect/failure, and ownership/history changes revoke pages. No browser is downloaded or attached through CDP by the model. If the pinned Chromium is unavailable, Linewise tries configured or common system Chromium/Chrome/Brave executables and reports an actionable error if none launch. **Linewise: Open in VS Code Browser** opens the current owned page URL in VS Code's integrated browser for inspection; it is a separate user-visible tab, not the agent-controlled page, and its cookies, navigation and state are not synchronized.
 
 ## Storage
 

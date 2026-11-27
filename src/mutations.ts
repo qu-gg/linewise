@@ -69,7 +69,7 @@ const requestSchema = z
     mutations: z.array(mutationSchema).max(8),
   })
   .strict();
-const scopeSchema = z.object({ id: z.uuid() }).strict();
+const scopeSchema = z.object({ id: z.uuid(), pid: z.number().int().positive() }).strict();
 const permitSchema = z
   .object({ id: toolIdentity, scope: z.uuid(), input: z.string().max(128 * 1024) })
   .strict();
@@ -83,6 +83,24 @@ export function mutationId(title: string): string | undefined {
   if (!title.startsWith(prefix)) return;
   const id = title.slice(prefix.length);
   return z.uuid().safeParse(id).success ? id : undefined;
+}
+
+function ownerAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === 'EPERM';
+  }
+}
+
+async function activeScope(directory: string) {
+  const parsed = scopeSchema.safeParse(await readEnvelope(path.join(directory, 'active.json')));
+  if (!parsed.success)
+    throw new Error('Mutation broker state is stale or invalid. Restart the Linewise session.');
+  if (!ownerAlive(parsed.data.pid))
+    throw new Error('Mutation broker is not running. Restart the Linewise session.');
+  return parsed.data;
 }
 
 async function privateDirectory(directory: string): Promise<void> {
@@ -228,7 +246,10 @@ export class MutationBroker {
     });
     const temporary = path.join(this.directory, `active-${this.id}.tmp`);
     try {
-      await writeFile(temporary, JSON.stringify({ id: this.id }), { mode: 0o600, flag: 'wx' });
+      await writeFile(temporary, JSON.stringify({ id: this.id, pid: process.pid }), {
+        mode: 0o600,
+        flag: 'wx',
+      });
       await rename(temporary, path.join(this.directory, 'active.json'));
       this.signal.throwIfAborted();
     } catch (error) {
@@ -321,14 +342,14 @@ function permitPath(directory: string, id: string): string {
 }
 
 export async function stagePermit(directory: string, id: string, input: string): Promise<void> {
-  const scope = scopeSchema.parse(await readEnvelope(path.join(directory, 'active.json')));
+  const scope = await activeScope(directory);
   const permit = permitSchema.parse({ id, scope: scope.id, input });
   await writeFile(permitPath(directory, permit.id), JSON.stringify(permit), {
     mode: 0o600,
     flag: 'wx',
   });
   try {
-    const current = scopeSchema.parse(await readEnvelope(path.join(directory, 'active.json')));
+    const current = await activeScope(directory);
     if (current.id !== scope.id) throw new Error('Permission belongs to a retired prompt.');
   } catch (error) {
     await cleanupPermit(directory, id);
@@ -356,13 +377,12 @@ export async function exchangeResult(
   toolCallId?: string,
 ): Promise<string | null> {
   signal?.throwIfAborted();
-  const scope = scopeSchema.parse(await readEnvelope(path.join(directory, 'active.json')));
+  const scope = await activeScope(directory);
   const id = randomUUID();
   const watcher = watch(directory, { signal });
   try {
-    const active = path.join(directory, 'active.json');
     const assertScope = async () => {
-      const current = scopeSchema.parse(await readEnvelope(active));
+      const current = await activeScope(directory);
       if (current.id !== scope.id) throw new Error('Mutation belongs to a retired prompt.');
     };
     const completed = new Promise<void>((resolve, reject) => {
