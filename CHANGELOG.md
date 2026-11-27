@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.1.4
+
+Patch release for native edit provenance and recoverable retries.
 
 - Fix native edit provenance: pin OMP's child process to hashline read/edit mode,
   share OMP's session edit store when available, record the requested read range
@@ -8,6 +10,9 @@
   validation errors, serialize unawaited read results before edit, and refuse a
   dirty open buffer before staging. Directory listing remains an OMP read-tool
   capability above the file-only ACP text read.
+- Keep the local Linux x64, VS Code 1.147.0 and OMP 18.21.0 acceptance profile.
+  Remote-SSH, multi-root lifecycle and other platforms remain outside that
+  profile. No Marketplace distribution is included.
 
 ## 0.1.3
 
