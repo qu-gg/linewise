@@ -2,7 +2,7 @@
   "name": "vs-omp",
   "displayName": "Linewise",
   "description": "Open agent coding. Granular review. Inside VS Code. Powered by Oh My Pi.",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "private": true,
   "publisher": "vs-omp-local",
   "license": "MIT",
@@ -252,7 +252,7 @@
           ],
           "default": "rules",
           "scope": "machine",
-          "description": "Default command permission mode for each connection. Allow All and YOLO are available only through the confirmed session picker and are never persisted. Workspace overrides are ignored."
+          "description": "Default command permission mode for each connection. Allow All and YOLO are available only through the in-chat confirmation menu and are never persisted. Workspace overrides are ignored."
         },
         "omp.permissions.useDefaultRules": {
           "type": "boolean",

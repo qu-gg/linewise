@@ -7,6 +7,7 @@ import { historySnapshotSchema } from './history.js';
 import type { HistorySnapshot } from './history.js';
 import { retentionPolicy } from './storage-policy.js';
 import { imageSchema } from './image-policy.js';
+import { permissionMode } from './terminal-policy.js';
 
 const block = z.object({
   id: z.string(),
@@ -306,6 +307,15 @@ export const webviewMessage = z.discriminatedUnion('type', [
   z
     .object({
       v: z.literal(1),
+      type: z.literal('permissions'),
+      mode: permissionMode,
+      confirmed: z.boolean().optional(),
+    })
+    .strict(),
+  z.object({ v: z.literal(1), type: z.literal('permissionSettings') }).strict(),
+  z
+    .object({
+      v: z.literal(1),
       type: z.literal('pasteImages'),
       images: z.array(imageSchema).min(1).max(8),
     })
@@ -325,7 +335,6 @@ export const webviewMessage = z.discriminatedUnion('type', [
       'openFolder',
       'compact',
       'inspectContext',
-      'permissions',
       'terminals',
       'clearQueue',
       'resumeQueue',

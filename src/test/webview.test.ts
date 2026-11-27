@@ -50,7 +50,7 @@ test('browser URL exposes an explicit integrated-tab action', () => {
   assert.equal(dom.window.document.querySelector('[data-action="openInBrowser"]'), null);
 });
 
-test('permission control reflects host mode, requests the native picker and disables unsafe changes', () => {
+test('permission control opens an inline menu, confirms elevation and disables unsafe changes', () => {
   assert.equal(dom.window.document.querySelector('.toolbar [data-action="permissions"]'), null);
   assert.equal(
     element('[data-action="permissions"]').previousElementSibling,
@@ -68,10 +68,37 @@ test('permission control reflects host mode, requests the native picker and disa
       element('[data-action="permissions"]').title,
       `Command Permissions: ${permissions === 'all' ? 'Allow All Except Restrictions' : label}`,
     );
-    click('permissions');
-    assert.deepEqual(messages.at(-1), { v: 1, type: 'permissions' });
   }
-  assert.match(element('[data-action="permissions"]').title, /YOLO/);
+  update({ permissions: 'rules' });
+  click('permissions');
+  assert.equal(element('#permission-mode-rules').getAttribute('aria-checked'), 'true');
+  assert.match(element('.permission-popover').textContent!, /Edit User Command Rules/);
+  element('#permission-mode-rules').click();
+  assert.equal(dom.window.document.querySelector('.permission-popover'), null);
+  assert.equal(messages.length, 0);
+
+  click('permissions');
+  element('[data-permission="mode"][data-mode="ask"]').click();
+  assert.deepEqual(messages.at(-1), { v: 1, type: 'permissions', mode: 'ask' });
+  assert.equal(dom.window.document.querySelector('.permission-popover'), null);
+
+  messages.length = 0;
+  click('permissions');
+  element('[data-permission="mode"][data-mode="all"]').click();
+  assert.equal(messages.length, 0);
+  assert.match(element('.permission-warning').textContent!, /without an OS sandbox/);
+  element('#permission-confirm').click();
+  assert.deepEqual(messages.at(-1), {
+    v: 1,
+    type: 'permissions',
+    mode: 'all',
+    confirmed: true,
+  });
+  assert.equal(dom.window.document.querySelector('.permission-popover'), null);
+
+  click('permissions');
+  element('[data-permission="settings"]').click();
+  assert.deepEqual(messages.at(-1), { v: 1, type: 'permissionSettings' });
   for (const status of [
     { busy: true },
     { busy: false, connected: false },

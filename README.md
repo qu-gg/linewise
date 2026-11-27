@@ -117,12 +117,7 @@ Answer bounded single-choice, multiple-choice, and free-text questions directly 
 
 ### Permissions You Can See
 
-Choose **Command Rules**, **Ask Every Time**, or separately confirmed **Allow All Except Restrictions** and **YOLO Commands**. Elevated modes are connection-scoped and reset on session or connection changes. Commands use your host permissions, not an OS sandbox; outside-workspace file access and web/browser consent remain independent.
-
-<p align="center">
-   <a href="docs/images/linewise-permissions.png"><img src="docs/images/linewise-permissions.png" alt="Native OMP Command Permissions picker showing Ask Every Time, Command Rules, Allow All Except Restrictions, YOLO Commands, and Edit User Command Rules" width="100%"></a><br>
-   <sub>The actual permission picker. This capture left Rules unchanged and did not enable an elevated mode.</sub>
-</p>
+Open the permission menu beside Memory to choose **Command Rules**, **Ask Every Time**, or separately confirmed **Allow All Except Restrictions** and **YOLO Commands** without leaving the chat. Elevated modes show their warning and explicit Enable step inside the same panel. They are connection-scoped and reset on session or connection changes. Commands use your host permissions, not an OS sandbox; outside-workspace file access and web/browser consent remain independent.
 
 ### Activity, Plans, And Follow-Ups
 

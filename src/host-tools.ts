@@ -100,8 +100,8 @@ export class HostTools {
     this.commandPermissions.reset();
   }
 
-  pickPermissions(): Promise<void> {
-    return this.commandPermissions.pick();
+  setPermissions(mode: PermissionMode, confirmed = false): void {
+    this.commandPermissions.set(mode, confirmed);
   }
 
   private assertPermissionIdle(): void {

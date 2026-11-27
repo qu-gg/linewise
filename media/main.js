@@ -1,4 +1,5 @@
-import { toolbar, permissions } from './toolbar.js';
+import { toolbar } from './toolbar.js';
+import { bindPermissions, permissionControl, togglePermissions } from './permissions.js';
 import { changesPanel as reviewPanel, reviewRequest } from './review.js';
 import { canSubmit, composer } from './composer.js';
 import {
@@ -63,6 +64,7 @@ const activityUi = { escape, icon, itemButton, expanded };
 const send = (type, extra = {}) => vscode.postMessage({ v: 1, type, ...extra });
 bindApprovals(send);
 bindQuestions(send, render);
+bindPermissions(send, render, () => state);
 bindSessions(
   send,
   () => {
@@ -160,7 +162,7 @@ function render() {
     icon,
     working,
     changesPanel,
-    permissions,
+    permissions: permissionControl,
     contextPanel,
     contextOpen,
     percentage,
@@ -333,6 +335,7 @@ function buttonAction(target) {
       picker.modelPickerOpen()
         ? picker.closeModelPicker(render)
         : picker.openModelPicker(send, render),
+    permissions: () => togglePermissions(render, () => state),
     forkBefore: () => send('forkTurn', { id: target.dataset.id, boundary: 'before' }),
     forkAfter: () => send('forkTurn', { id: target.dataset.id, boundary: 'after' }),
     context: () => contextAction('context'),

@@ -135,7 +135,9 @@ test('runtime probe pins supported OMP and host routes session selection and adv
   const id = host.status()!.sessionId;
   await host.request({ type: 'sessions' });
   assert.equal(host.status()!.sessionId, id);
-  await host.request({ type: 'permissions' });
+  await host.request({ type: 'permissions', mode: 'ask' });
+  assert.equal(host.status()!.permissions, 'ask');
+  await host.request({ type: 'permissions', mode: 'rules' });
   assert.equal(host.status()!.permissions, 'rules');
   await assert.rejects(host.request({ type: 'terminals' }), /No active prompt owns/);
   await transport.client!.handlers.update({

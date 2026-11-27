@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.1.6
+
+Feature release for the inline command-permission menu.
+
+- Replace the native Quick Pick and modal warning flow with a menu that expands
+  inside the chat above the status bar. It keeps the current mode visible,
+  lists Ask, Rules, Allow All and YOLO with descriptions, and opens user command
+  rules from the same panel.
+- Keep elevated permission safety explicit: Allow All and YOLO require their
+  warning and an Enable step inside the menu, and the host still refuses an
+  unconfirmed elevation and rechecks trust and command-cleanup state.
+- Keep the local Linux x64, VS Code 1.147.0 and OMP 18.21.0 acceptance profile.
+  Remote-SSH, multi-root lifecycle and other platforms remain outside that
+  profile. No Marketplace distribution is included.
+
 ## 0.1.5
 
 Feature release for the responsive session picker and browser hardening.

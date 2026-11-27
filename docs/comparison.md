@@ -44,13 +44,13 @@ Undo restores `Footer:` without losing the accepted `HEADER:` edit. The pending 
 
 ## Beyond Review
 
-The [README workflow gallery](../README.md#a-familiar-agent-workflow) also shows session management, explicit file attachments, in-chat questions, and the native command-permission picker. Context and question views use 1000 x 800 pixels; session and permission views use 1000 x 660 pixels with the chat sidebar maximized. These are native controls with synthetic records and a guarded scripted provider, not painted mockups.
+The [README workflow gallery](../README.md#a-familiar-agent-workflow) also shows session management, explicit file attachments, and in-chat questions. Context and question views use 1000 x 800 pixels; session views use 1000 x 660 pixels with the chat sidebar maximized. These are native controls with synthetic records and a guarded scripted provider, not painted mockups.
 
-The feature capture verified submitted attachment snapshots, all three question answers, session search and archive/restore, and that cancelling the permission picker left Rules unchanged. It did not enable Allow All/YOLO or certify every workflow described in the capability matrix. Review and feature checks have separate evidence scopes; no complete Local parity or new release acceptance is implied.
+The feature capture verified submitted attachment snapshots, all three question answers, and session search and archive/restore. A separate native acceptance run confirmed that the inline permission menu enables and then restores Allow All and YOLO while preserving ask exceptions. Unrelated workflows in the capability matrix remain separately governed. Review and feature checks have separate evidence scopes; no complete Local parity or new release acceptance is implied.
 
 ## Provenance And Limits
 
-All nine PNGs are unaltered Playwright screenshots of disposable native extension-development workbenches. There is no cropping, compositing, pixel replacement, or metadata redaction. Routine notifications were dismissed or disabled in those documentation profiles; synthetic handshake files were hidden from Explorer. The normal profile and native notification/privacy tests were not changed.
+All eight PNGs are unaltered Playwright screenshots of disposable native extension-development workbenches. There is no cropping, compositing, pixel replacement, or metadata redaction. Routine notifications were dismissed or disabled in those documentation profiles; synthetic handshake files were hidden from Explorer. The normal profile and native notification/privacy tests were not changed.
 
 The images contain only PNG image chunks, with no text or EXIF metadata. Their dimensions, SHA-256 hashes, capture environment, and evidence level are recorded in [the image ledger](images/provenance.json) and checked by `npm run check:public`. Project-written fixture code/text is MIT licensed; visible upstream workbench/interface elements retain their respective rights and do not imply endorsement. See [attribution](../ATTRIBUTION.md).
 

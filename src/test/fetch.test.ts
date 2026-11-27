@@ -305,9 +305,7 @@ test('registered web reads require per-URL consent through the broker under comm
     },
   );
   for (const mode of ['all', 'yolo'] as const) {
-    fixture.quickPick = mode;
-    fixture.approval = mode === 'all' ? 'Enable Allow All' : 'Enable YOLO';
-    await tools.pickPermissions();
+    tools.setPermissions(mode, true);
     assert.equal(tools.permissions, mode);
     allowed = true;
     await tools.run(

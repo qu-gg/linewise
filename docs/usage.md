@@ -32,7 +32,7 @@ Context usage/cost comes from provider updates, not estimates. Compaction can co
 
 ## Command Permissions
 
-While idle, use the permission menu beside Memory:
+While idle, open the permission menu beside Memory. It expands inside the chat above the status bar; Allow All and YOLO show their warning and an explicit Enable step in the same panel before applying:
 
 - **Command Rules:** supported literal read-only commands can qualify automatically; others prompt unless an explicit user rule allows them.
 - **Ask Every Time:** commands prompt except explicit denies, which block.

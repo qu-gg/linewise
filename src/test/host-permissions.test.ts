@@ -23,24 +23,19 @@ function permissions() {
   };
 }
 
-test('YOLO requires its own confirmation, has an explicit warning and never becomes a default', async () => {
+test('elevated permission modes require explicit confirmation and never become defaults', () => {
   const { controller } = permissions();
-  fixture.quickPick = 'yolo';
-  await controller.pick();
   assert.equal(controller.value, 'rules');
-  fixture.approval = 'Enable Allow All';
-  await controller.pick();
-  assert.equal(controller.value, 'rules');
-  fixture.approval = 'Enable YOLO';
-  await controller.pick();
+  assert.throws(() => controller.set('all'), /explicit confirmation/);
+  assert.throws(() => controller.set('yolo'), /explicit confirmation/);
+  controller.set('all', true);
+  assert.equal(controller.value, 'all');
+  controller.set('all');
+  assert.equal(controller.value, 'all');
+  controller.set('yolo', true);
   assert.equal(controller.value, 'yolo');
-  const warning = fixture.warnings.at(-1)!;
-  assert.match(warning.detail!, /without an OS sandbox/);
-  assert.match(warning.detail!, /cannot reliably detect/);
-  assert.match(warning.detail!, /File review.*Stop stay unchanged/);
-  const count = fixture.warnings.length;
-  await controller.pick();
-  assert.equal(fixture.warnings.length, count);
+  controller.set('rules');
+  assert.equal(controller.value, 'rules');
   controller.reset();
   assert.equal(controller.value, 'rules');
   for (const mode of ['all', 'yolo']) {
@@ -49,76 +44,24 @@ test('YOLO requires its own confirmation, has an explicit warning and never beco
   }
 });
 
-test('Allow All to YOLO requires a second confirmation and restrictions can be restored', async () => {
+test('permission changes fail closed when untrusted or while a prompt owns cleanup', () => {
+  const trusted = permissions();
+  fixture.trusted = false;
+  assert.throws(() => trusted.controller.set('ask'), /Not idle and trusted/);
+  reset();
+  const { controller, busy } = permissions();
+  busy();
+  assert.throws(() => controller.set('yolo', true), /Not idle and trusted/);
+  assert.equal(controller.value, 'rules');
+});
+
+test('the configured default is the only persisted permission state', () => {
+  fixture.configuration.set('omp.permissions.defaultMode', 'ask');
   const { controller } = permissions();
-  fixture.quickPick = 'all';
-  fixture.approval = 'Enable Allow All';
-  await controller.pick();
-  fixture.quickPick = 'yolo';
-  await controller.pick();
-  assert.equal(controller.value, 'all');
-  fixture.approval = 'Enable YOLO';
-  await controller.pick();
-  assert.equal(controller.value, 'yolo');
-  fixture.quickPick = 'ask';
-  await controller.pick();
   assert.equal(controller.value, 'ask');
-});
-
-test('reset and a newer picker retire late YOLO confirmations', async () => {
-  for (const newer of ['reset', 'ask']) {
-    const { controller } = permissions();
-    let allow!: (answer: string) => void;
-    let shown!: () => void;
-    const displayed = new Promise<void>((resolve) => {
-      shown = resolve;
-    });
-    fixture.quickPick = 'yolo';
-    fixture.onWarning = () => {
-      shown();
-      return new Promise<string>((resolve) => {
-        allow = resolve;
-      });
-    };
-    const pending = controller.pick();
-    await displayed;
-    if (newer === 'reset') controller.reset();
-    else {
-      fixture.quickPick = 'ask';
-      await controller.pick();
-    }
-    allow('Enable YOLO');
-    await pending;
-    assert.equal(controller.value, newer === 'reset' ? 'rules' : 'ask');
-    fixture.onWarning = undefined;
-  }
-});
-
-test('trust loss or operation startup before confirmation cannot grant YOLO', async () => {
-  for (const change of ['trust', 'busy']) {
-    const { controller, busy } = permissions();
-    let allow!: (answer: string) => void;
-    let shown!: () => void;
-    const displayed = new Promise<void>((resolve) => {
-      shown = resolve;
-    });
-    fixture.quickPick = 'yolo';
-    fixture.onWarning = () => {
-      shown();
-      return new Promise<string>((resolve) => {
-        allow = resolve;
-      });
-    };
-    const pending = controller.pick();
-    await displayed;
-    if (change === 'trust') fixture.trusted = false;
-    else busy();
-    const rejected = assert.rejects(pending, /Not idle and trusted/);
-    allow('Enable YOLO');
-    await rejected;
-    assert.equal(controller.value, 'rules');
-    reset();
-  }
+  controller.set('all', true);
+  controller.reset();
+  assert.equal(controller.value, 'ask');
 });
 
 test('YOLO executes owned shell compositions without approval but preserves command restrictions', async (context) => {
@@ -132,9 +75,7 @@ test('YOLO executes owned shell compositions without approval but preserves comm
     await tools.finish();
     await rm(cwd, { recursive: true, force: true });
   });
-  fixture.quickPick = 'yolo';
-  fixture.approval = 'Enable YOLO';
-  await tools.pickPermissions();
+  tools.setPermissions('yolo', true);
   assert.equal(tools.permissions, 'yolo');
   const sessionId = 'native';
   tools.begin({
@@ -154,7 +95,7 @@ test('YOLO executes owned shell compositions without approval but preserves comm
   };
   assert.equal((await tools.waitForExit(owned)).exitCode, 0);
   assert.equal(await readFile(path.join(cwd, 'yolo.txt'), 'utf8'), 'yolo');
-  assert.equal(fixture.warnings.length, 1);
+  assert.equal(fixture.warnings.length, 0);
   await assert.rejects(
     tools.create({ sessionId, command: '/sbin/wipefs', args: ['--help'] }),
     /YOLO safety restriction/,

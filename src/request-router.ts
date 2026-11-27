@@ -1,4 +1,5 @@
 import type { SidebarRequest } from './host-view.js';
+import type { PermissionMode } from './terminal-policy.js';
 
 export interface RequestHandlers {
   connect(): Promise<void>;
@@ -11,7 +12,8 @@ export interface RequestHandlers {
   prompt(text: string): Promise<void>;
   editPrompt(id: string, text: string): Promise<void>;
   forkTurn(id: string, boundary: 'before' | 'after'): Promise<void>;
-  permissions(): Promise<void>;
+  permissions(mode: PermissionMode, confirmed: boolean): Promise<void>;
+  permissionSettings(): Promise<void>;
   terminals(): Promise<void> | undefined;
   config(id: 'model' | 'thinking', value: string): Promise<void>;
   openInBrowser(): Promise<void>;
@@ -57,7 +59,10 @@ async function conversationRequest(
       await handlers.forkTurn(request.id, request.boundary);
       break;
     case 'permissions':
-      await handlers.permissions();
+      await handlers.permissions(request.mode, request.confirmed ?? false);
+      break;
+    case 'permissionSettings':
+      await handlers.permissionSettings();
       break;
     case 'terminals':
       await handlers.terminals();
