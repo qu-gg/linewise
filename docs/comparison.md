@@ -20,6 +20,22 @@ A guarded scripted OMP provider runs the fixture. The fixture really changes the
 
 The native Local workbench uses a recorded-only participant and model that refuses generation. Its table and tool record are synthetic transcript content; it does not edit a file or demonstrate Local's native edit-review controls. This is a visual transcript reference, not authenticated Local agent execution, performance evidence, or an editing-parity test.
 
+## Matched Transcript Render Pair
+
+These two native fixture captures use VS Code 1.147.0, OMP 19.2.1, Dark 2026, zoom 0, and a 1440 x 900 workbench. Both show the same synthetic two-turn chat and the same surrounding workbench; only the transcript presentation changed. The before capture is `release/v0.1.7` at `19925d4` (before #29), and the after capture is `v0.1.7` at `50477da`. The test-run file panel remains visible; no UI was painted, cropped, or composited.
+
+### Before #29
+
+![Pre-#29 Linewise transcript with separate turns and no persistent speaker or answer actions](images/transcript-before.png)
+
+The older transcript separates turns with spacing and a small completed-step line; it has no persistent speaker identity or answer action row.
+
+### After #29
+
+![Linewise v0.1.7 transcript with You and Assistant identity, completed status, and persistent copy action](images/transcript-after.png)
+
+The current transcript adds `You`/`Assistant` identity, a scannable completed/passed status, and persistent answer metadata and copy action. The deterministic [transcript UI tests](../src/test/webview-transcript-ui.test.ts) cover the tool, running, failed, collapsed/expanded, focus, scroll, selection, disclosure, and batching states beyond this matched pair.
+
 ## Selective Hunk Review
 
 The editor views use 1440 x 960 pixels with the same theme and zoom. The primary sidebar is hidden and chat occupies about 640 pixels, leaving room to read both the file and conversation. Linewise's custom review editor is read-only; floating controls decide individual pending hunks rather than arbitrary individual lines.
@@ -50,7 +66,7 @@ The feature capture verified submitted attachment snapshots, all three question 
 
 ## Provenance And Limits
 
-All eight PNGs are unaltered Playwright screenshots of disposable native extension-development workbenches. There is no cropping, compositing, pixel replacement, or metadata redaction. Routine notifications were dismissed or disabled in those documentation profiles; synthetic handshake files were hidden from Explorer. The normal profile and native notification/privacy tests were not changed.
+The original eight PNGs and the matched transcript pair are unaltered Playwright screenshots of disposable native extension-development workbenches. There is no cropping, compositing, pixel replacement, or metadata redaction. Routine notifications were dismissed or disabled in those documentation profiles; synthetic handshake files were hidden from Explorer. The normal profile and native notification/privacy tests were not changed.
 
 The images contain only PNG image chunks, with no text or EXIF metadata. Their dimensions, SHA-256 hashes, capture environment, and evidence level are recorded in [the image ledger](images/provenance.json) and checked by `npm run check:public`. Project-written fixture code/text is MIT licensed; visible upstream workbench/interface elements retain their respective rights and do not imply endorsement. See [attribution](../ATTRIBUTION.md).
 
