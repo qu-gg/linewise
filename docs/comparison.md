@@ -12,7 +12,7 @@ Both views use VS Code 1.146.0 on Linux x64, the Dark 2026 theme, zoom 0, and a 
 
 ![Linewise transcript with its changed-file summary](images/linewise-chat.png)
 
-OMP 18.21.0 runs through a guarded scripted provider. The fixture really changes the disposable file through Linewise's file-tool/review path. The displayed model name is fixture presentation, not a claim that that model generated this reply. The summary offers review actions for the actual pending changes.
+A guarded scripted OMP provider runs the fixture. The fixture really changes the disposable file through Linewise's file-tool/review path. The displayed model name is fixture presentation, not a claim that that model generated this reply. The summary offers review actions for the actual pending changes.
 
 ### VS Code Local Reference
 

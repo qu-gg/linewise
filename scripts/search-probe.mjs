@@ -35,6 +35,7 @@ try {
       'update.mode': 'none',
       'telemetry.telemetryLevel': 'off',
       'workbench.startupEditor': 'none',
+      ...(process.env.OMP_EXECUTABLE ? { 'omp.executablePath': process.env.OMP_EXECUTABLE } : {}),
       'files.watcherExclude': { '**/scale-*': true },
     }),
     { mode: 0o600 },

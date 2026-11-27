@@ -8,6 +8,7 @@ import yauzl from 'yauzl';
 import { parseStringPromise } from 'xml2js';
 import { ptyRuntimeFiles } from './pty-runtime.mjs';
 import { validateMaintainer } from './release-run.mjs';
+import { OMP_TESTED_VERSION, VSCODE_TESTED_VERSION } from './version-policy.mjs';
 
 export const profile = 'local-linux-x64-single-root';
 const browserFiles = JSON.parse(
@@ -228,8 +229,8 @@ export function validateAcceptance(acceptance, candidate) {
   assert.equal(acceptance.profile, profile);
   assert.equal(acceptance.platform, 'linux');
   assert.equal(acceptance.arch, 'x64');
-  assert.equal(acceptance.omp, '18.21.0');
-  assert.equal(acceptance.vscode, '1.147.0');
+  assert.equal(acceptance.omp, OMP_TESTED_VERSION);
+  assert.equal(acceptance.vscode, VSCODE_TESTED_VERSION);
   validateMaintainer(acceptance.owner);
   assert.equal(acceptance.native, true);
   assert.equal(acceptance.packaged, true);

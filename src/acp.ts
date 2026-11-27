@@ -19,6 +19,7 @@ import { exchangeHistory, historyCommand } from './history.js';
 import type { HistoryOperation, HistorySnapshot } from './history.js';
 import type { TerminalManager } from './terminal.js';
 import type { ImagePayload } from './image-policy.js';
+import { ompVersionRequirement, supportsOmpVersion } from './omp-version.js';
 
 export interface ClientHandlers {
   closed?(): void;
@@ -92,6 +93,15 @@ export function createClientApp(handlers: ClientHandlers): ClientApp {
     .onRequest('*', async () => {
       throw new Error('Unsupported client operation; access denied.');
     });
+}
+
+function assertCompatibleRuntime(info: InitializeResponse): void {
+  if (
+    info.protocolVersion !== PROTOCOL_VERSION ||
+    !supportsOmpVersion(info.agentInfo?.version ?? '')
+  ) {
+    throw new Error(`This build supports ${ompVersionRequirement()} with ACP v1 only.`);
+  }
 }
 
 export class OmpClient {
@@ -221,12 +231,7 @@ export class OmpClient {
         },
         { cancellationSignal: AbortSignal.timeout(15_000) },
       );
-      if (
-        this.info.protocolVersion !== PROTOCOL_VERSION ||
-        this.info.agentInfo?.version !== '18.21.0'
-      ) {
-        throw new Error('This feasibility build supports OMP 18.21.0 with ACP v1 only.');
-      }
+      assertCompatibleRuntime(this.info);
       await this.openSession(options, connection);
       await new Promise<void>((resolve, reject) => {
         const timer = setTimeout(

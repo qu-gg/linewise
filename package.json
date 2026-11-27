@@ -236,7 +236,7 @@
           "type": "string",
           "default": "omp",
           "scope": "machine",
-          "description": "User-installed OMP 18.21.0 executable on the workspace host."
+          "description": "User-installed OMP 19.2.1 executable on the workspace host."
         },
         "omp.model": {
           "type": "string",
@@ -337,7 +337,7 @@
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "2.7.0",
-    "@oh-my-pi/pi-natives": "18.21.0",
+    "@oh-my-pi/pi-natives": "19.2.1",
     "@vscode/codicons": "^0.0.46-24",
     "diff": "^8.0.4",
     "dompurify": "^3.4.18",

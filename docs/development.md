@@ -4,7 +4,7 @@
 
 - Node **24.11+**, preferably Node 24 LTS; `.nvmrc` selects Node 24.
 - npm and the committed lockfile.
-- For native acceptance: Linux x64, **VS Code 1.147.0**, **OMP 18.21.0**, and disposable trusted single-root workspaces.
+- For native acceptance: Linux x64, **VS Code 1.147.0**, **OMP 19.2.1**, and disposable trusted single-root workspaces.
 - For owned-browser tests: an installed compatible Chromium browser. The extension does not download one.
 
 ```sh
@@ -16,6 +16,26 @@ npm run build
 `npm run check` performs formatting, lint, strict types, quality-tool self-tests, fresh deterministic coverage, complexity budgets, and architecture checks. It does not require credentials or paid inference. See [QUALITY.md](../QUALITY.md).
 
 Press F5 to open a development workbench. Open a disposable fixture folder and run **Linewise: Open Chat**. Keep development user-data/extensions/workspace directories separate from your everyday profile. Do not import real logins or private settings into fixtures.
+
+## Updating The OMP Pin
+
+`src/omp-version.ts` is the single runtime source of truth. `OMP_TESTED_VERSION` is the exact release-acceptance pin; `OMP_MINIMUM_VERSION` and `OMP_MAJOR` define the forward-compatible runtime window. A user may run a newer patch/minor within the tested major without a Linewise update; release acceptance still requires the exact tested build.
+
+1. Download and verify the new Linux x64 OMP release. Run its ACP spike before changing pins:
+
+   ```sh
+   OMP_EXECUTABLE=/path/to/omp npm run check:native
+   ```
+
+2. Update `OMP_TESTED_VERSION`, `OMP_MINIMUM_VERSION`, and `OMP_MAJOR` in `src/omp-version.ts`. Raise the minimum only when older releases are known to break.
+3. Install the matching native package, which is released in lockstep with OMP:
+
+   ```sh
+   npm install --save-exact @oh-my-pi/pi-natives@<omp-version>
+   ```
+
+4. Update the current-profile lines in `README.md`, `RELEASE.md`, `docs/development.md`, `CHANGELOG.md`, and the `omp.executablePath` description in `package.json`. Leave historical changelog entries and image provenance untouched unless those artifacts are regenerated.
+5. Run `npm run check`; it runs `scripts/version-check.mjs`, which rejects stale package, lockfile, current-profile docs, and hardcoded source versions. Then run `OMP_EXECUTABLE=/path/to/omp npm run check:native`.
 
 ## Useful Commands
 

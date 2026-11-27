@@ -439,6 +439,10 @@ test('host brokers read/delete/move preimages and rejects executable side effect
       exchangeMutations(directory, [{ op: 'write', path: target, before: null, content: '#!' }]),
       /Executable-bit/,
     );
+    await exchangeMutations(directory, [
+      { op: 'write', path: target, before: null, content: 'const marker = "#!";\n' },
+    ]);
+    await exchangeMutations(directory, [{ ...move, content: 'moved "#!" marker' }]);
   });
   const missing = new HostTools(
     { normalize: async (_target, content) => content },

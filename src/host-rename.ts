@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import path from 'node:path';
-import { checkedPath } from './file-policy.js';
+import { checkedPath, hasShebang } from './file-policy.js';
 import { PathGuard } from './path-guard.js';
 import type { RenameRequest } from './rename-policy.js';
 
@@ -122,7 +122,7 @@ function postimage(capture: Capture, edits: readonly vscode.TextEdit[]): string 
     content = content.slice(0, range.start) + range.text + content.slice(range.end);
     previous = range.start;
   }
-  if (Buffer.byteLength(content) > 1_048_576 || content.includes('\0') || content.includes('#!'))
+  if (Buffer.byteLength(content) > 1_048_576 || content.includes('\0') || hasShebang(content))
     throw new Error('Rename postimage exceeds the supported text policy.');
   return content;
 }

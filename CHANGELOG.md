@@ -11,7 +11,14 @@ Feature release for the inline command-permission menu.
 - Keep elevated permission safety explicit: Allow All and YOLO require their
   warning and an Enable step inside the menu, and the host still refuses an
   unconfirmed elevation and rechecks trust and command-cleanup state.
-- Keep the local Linux x64, VS Code 1.147.0 and OMP 18.21.0 acceptance profile.
+- Upgrade the tested OMP profile to 19.2.1. Runtime preflight accepts newer
+  19.x releases; release acceptance remains pinned to the tested version.
+- Treat only a leading interpreter shebang as an executable-bit mutation. A
+  `#!` literal elsewhere in a file no longer blocks native edit, write, move or
+  rename review.
+- Make a repeated `bash` stop on an already released managed job a no-op instead
+  of reporting an unknown terminal.
+- Keep the local Linux x64, VS Code 1.147.0 and OMP 19.2.1 acceptance profile.
   Remote-SSH, multi-root lifecycle and other platforms remain outside that
   profile. No Marketplace distribution is included.
 

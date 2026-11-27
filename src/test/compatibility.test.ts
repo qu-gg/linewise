@@ -1,4 +1,5 @@
 import test from 'node:test';
+import type { TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
@@ -8,8 +9,9 @@ import { StorageMaintenance } from '../retention.js';
 import { setup } from './extension-setup.js';
 import { fixture } from './vscode-fixture.js';
 import { transport } from './acp-fixture.js';
+import { OMP_TESTED_VERSION } from '../omp-version.js';
 
-async function storage(context: import('node:test').TestContext) {
+async function storage(context: TestContext) {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'omp-compatibility-'));
   context.after(() => rm(directory, { recursive: true, force: true }));
   return new StateStore(directory);
@@ -126,11 +128,11 @@ test('5000-turn persistence, inspection and export remain bounded on the support
 test('runtime probe pins supported OMP and host routes session selection and advertised context commands', async (context) => {
   const host = await setup(context);
   await fixture.commands.get('omp.preflight')!();
-  assert.ok(fixture.logs.some((message) => message.includes('Runtime: 18.21.0')));
-  transport.version = '18.20.0';
+  assert.ok(fixture.logs.some((message) => message.includes(`Runtime: ${OMP_TESTED_VERSION}`)));
+  transport.version = '19.0.0';
   await fixture.commands.get('omp.preflight')!();
-  assert.match(host.status()!.error, /18.21.0 is required/);
-  transport.version = '18.21.0';
+  assert.match(host.status()!.error, /or newer \d+\.x is required/);
+  transport.version = OMP_TESTED_VERSION;
   await host.request({ type: 'new' });
   const id = host.status()!.sessionId;
   await host.request({ type: 'sessions' });

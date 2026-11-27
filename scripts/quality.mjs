@@ -18,6 +18,7 @@ export function run(script, args = [], env = process.env) {
 }
 
 const tasks = {
+  versions: () => run('scripts/version-check.mjs'),
   public: () => run('scripts/public-check.mjs'),
   lint: () => run('node_modules/eslint/bin/eslint.js', ['.', '--max-warnings', '0']),
   format: () => run('node_modules/prettier/bin/prettier.cjs', ['--check', '.']),
@@ -27,6 +28,7 @@ const tasks = {
       'quality/metrics.test.mjs',
       'quality/architecture.test.mjs',
       'quality/release.test.mjs',
+      'quality/version.test.mjs',
       'quality/live.test.mjs',
       'quality/live-transport.test.mjs',
       'quality/customization.test.mjs',

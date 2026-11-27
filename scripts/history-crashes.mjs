@@ -97,6 +97,15 @@ async function crashCase(directory, stage) {
   const userData = path.join(current, 'user-data');
   await mkdir(workspace, { recursive: true });
   await mkdir(userData);
+  await mkdir(path.join(userData, 'User'), { recursive: true });
+  await writeFile(
+    path.join(userData, 'User', 'settings.json'),
+    JSON.stringify({
+      'chat.disableAIFeatures': true,
+      ...(process.env.OMP_EXECUTABLE ? { 'omp.executablePath': process.env.OMP_EXECUTABLE } : {}),
+    }),
+    { mode: 0o600 },
+  );
   await cp(path.join(process.cwd(), 'dist/playwright'), path.join(current, 'playwright'), {
     recursive: true,
   });

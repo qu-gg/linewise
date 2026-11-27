@@ -3,6 +3,10 @@ import { homedir } from 'node:os';
 import path from 'node:path';
 import { PathGuard } from './review.js';
 
+export function hasShebang(content: string): boolean {
+  return content.startsWith('#!') && !content.startsWith('#![');
+}
+
 const textExtensions = new Set([
   '.txt',
   '.md',

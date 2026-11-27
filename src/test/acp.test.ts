@@ -152,6 +152,20 @@ test('pre-execution policy rejects unreviewable mutation routes and allows plain
     }),
     undefined,
   );
+  assert.equal(
+    guardReason({
+      toolName: 'write',
+      input: { path: 'src/shebang.ts', content: 'const marker = "#!";\n' },
+    }),
+    undefined,
+  );
+  assert.equal(
+    guardReason({
+      toolName: 'write',
+      input: { path: 'src/lib.rs', content: '#![allow(dead_code)]\nfn main() {}\n' },
+    }),
+    undefined,
+  );
   assert.equal(guardReason({ toolName: 'read', input: { path: 'README.md' } }), undefined);
   assert.equal(guardReason({ toolName: 'read', input: { path: '.' } }), undefined);
   assert.equal(

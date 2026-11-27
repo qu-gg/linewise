@@ -48,6 +48,7 @@ async function prepare() {
       'update.mode': 'none',
       'telemetry.telemetryLevel': 'off',
       'workbench.startupEditor': 'none',
+      ...(process.env.OMP_EXECUTABLE ? { 'omp.executablePath': process.env.OMP_EXECUTABLE } : {}),
     }),
   );
   await build({

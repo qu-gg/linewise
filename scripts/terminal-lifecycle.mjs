@@ -62,6 +62,7 @@ async function prepare(directory, scenario) {
     path.join(userData, 'User', 'settings.json'),
     JSON.stringify({
       'workbench.startupEditor': 'none',
+      ...(process.env.OMP_EXECUTABLE ? { 'omp.executablePath': process.env.OMP_EXECUTABLE } : {}),
       'window.restoreWindows': 'all',
       'files.hotExit': 'onExitAndWindowClose',
       'extensions.autoCheckUpdates': false,

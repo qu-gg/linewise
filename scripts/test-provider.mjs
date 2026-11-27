@@ -64,6 +64,7 @@ try {
       'update.mode': 'none',
       'telemetry.telemetryLevel': 'off',
       'workbench.startupEditor': 'none',
+      ...(process.env.OMP_EXECUTABLE ? { 'omp.executablePath': process.env.OMP_EXECUTABLE } : {}),
       'python.languageServer': 'None',
       'python.useEnvironmentsExtension': false,
       'python.experiments.enabled': false,

@@ -5,6 +5,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { profile, validateAcceptance, verifyDirectory } from './release.mjs';
 import { validateMaintainer } from './release-run.mjs';
+import { OMP_TESTED_VERSION, VSCODE_TESTED_VERSION } from './version-policy.mjs';
 
 export function acceptanceArguments(args) {
   const [directory, output, manual, rollback] = args;
@@ -23,9 +24,9 @@ export function acceptanceArguments(args) {
 }
 
 export function validateRuntimeVersions(vscode, omp) {
-  assert.equal(vscode, '1.147.0');
-  assert.equal(omp, 'omp/18.21.0');
-  return { vscode, omp: '18.21.0' };
+  assert.equal(vscode, VSCODE_TESTED_VERSION);
+  assert.equal(omp, `omp/${OMP_TESTED_VERSION}`);
+  return { vscode, omp: OMP_TESTED_VERSION };
 }
 
 function execute(command, args, env = process.env) {
@@ -64,7 +65,10 @@ async function main() {
     ...process.env,
     ELECTRON_RUN_AS_NODE: undefined,
   }).split('\n')[0];
-  const versions = validateRuntimeVersions(vscodeVersion, execute('omp', ['--version']));
+  const versions = validateRuntimeVersions(
+    vscodeVersion,
+    execute(process.env.OMP_EXECUTABLE || 'omp', ['--version']),
+  );
   execute('npm', ['audit', '--audit-level=moderate']);
   nodeGate(['scripts/quality.mjs', 'release']);
   nodeGate(['scripts/test-extension.mjs'], {

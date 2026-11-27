@@ -46,7 +46,7 @@ const child = spawn(
     'acp',
     '--config',
     configPath,
-    ...(toolsEnabled ? [] : terminalsEnabled ? ['--tools', 'bash'] : ['--no-tools']),
+    ...(toolsEnabled ? [] : terminalsEnabled ? ['--tools', 'bash'] : ['--tools', '']),
     '--no-extensions',
     '--no-title',
     ...(toolsEnabled
