@@ -2,6 +2,7 @@ import type { SessionNotification } from '@agentclientprotocol/sdk';
 import { stripVTControlCharacters } from 'node:util';
 import { appendChunk } from './state.js';
 import type { ChatBlock, Turn } from './state.js';
+import { pauseTextStream } from './stream-metrics.js';
 
 export function updateTurn(
   current: Turn,
@@ -22,8 +23,10 @@ export function updateTurn(
       { model: outputModel(current.prompt, commands, model) },
     );
   } else if (update.sessionUpdate === 'tool_call' || update.sessionUpdate === 'tool_call_update') {
+    pauseTextStream(current);
     updateTool(current, update);
   } else if (update.sessionUpdate === 'plan') {
+    pauseTextStream(current);
     updatePlan(current, update);
   }
 }

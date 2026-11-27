@@ -8,6 +8,7 @@ import type { HistorySnapshot } from './history.js';
 import { retentionPolicy } from './storage-policy.js';
 import { imageSchema } from './image-policy.js';
 import { permissionMode } from './terminal-policy.js';
+import { recordChunkMetrics, streamMetrics } from './stream-metrics.js';
 const block = z.object({
   id: z.string(),
   kind: z.enum(['text', 'thought', 'tool', 'plan']),
@@ -59,6 +60,7 @@ const turn = z.object({
       afterEntryId: z.string().nullable(),
     })
     .optional(),
+  stream: streamMetrics.optional(),
 });
 const usage = z.object({
   used: z.number().finite().nonnegative(),
@@ -136,7 +138,6 @@ export type ChatBlock = z.infer<typeof block>;
 export type Turn = z.infer<typeof turn>;
 export type SavedSession = z.infer<typeof session>;
 export type Attachment = z.infer<typeof attachment>;
-
 export function bindTurnHistory(
   current: Turn,
   before: HistorySnapshot,
@@ -152,7 +153,6 @@ export function bindTurnHistory(
       afterEntryId: after.leafId,
     };
 }
-
 export function cloneSession(
   source: SavedSession,
   id: string,
@@ -179,7 +179,6 @@ export function cloneSession(
   if (cloned.usage) cloned.usage.stale = true;
   return cloned;
 }
-
 function historyPrefix(
   before: HistorySnapshot['entries'],
   after: HistorySnapshot['entries'],
@@ -194,7 +193,6 @@ function historyPrefix(
     );
   });
 }
-
 function historyBookkeeping(entries: HistorySnapshot['entries'], offset: number): boolean {
   return entries
     .slice(offset)
@@ -285,8 +283,8 @@ export function appendChunk(
     current.blocks.push(chunk);
   }
   chunk.text = (chunk.text + text).slice(0, 256_000);
+  recordChunkMetrics(current, kind, text, metadata.receivedAt);
 }
-
 export const webviewMessage = z.discriminatedUnion('type', [
   z
     .object({

@@ -353,6 +353,23 @@ select option {
 .session-cost dd {
   font-weight: 600;
 }
+.context-throughput {
+  display: grid;
+  gap: 6px;
+  margin: 8px 0 0;
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+}
+.context-throughput > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: baseline;
+}
+.context-throughput dd {
+  margin: 0;
+  text-align: right;
+}
 .context-popover dd {
   margin: 0;
   text-align: right;

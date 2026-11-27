@@ -1,0 +1,163 @@
+.role-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 18px;
+  margin-bottom: 3px;
+  color: var(--vscode-descriptionForeground);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.role-label .codicon {
+  font-size: 11px;
+}
+.assistant-role {
+  margin-top: 2px;
+}
+.prompt-actions,
+.answer-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 24px;
+}
+.prompt-actions {
+  justify-content: flex-end;
+  opacity: 0;
+  pointer-events: none;
+}
+.prompt-row:hover .prompt-actions,
+.prompt-row:focus-within .prompt-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+.answer-actions {
+  justify-content: flex-start;
+  margin-top: 4px;
+}
+.answer-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 7px;
+  border: 1px solid var(--vscode-widget-border);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--vscode-descriptionForeground);
+  font-size: 11px;
+}
+.answer-action:hover {
+  background: var(--vscode-toolbar-hoverBackground);
+  color: var(--vscode-foreground);
+}
+.answer-action .codicon {
+  font-size: 12px;
+}
+.activity > summary > .codicon {
+  font-size: 13px;
+  flex-shrink: 0;
+}
+.activity.status-running > summary > .codicon:first-child {
+  color: var(--vscode-progressBar-background, var(--vscode-focusBorder));
+}
+.activity.status-completed > summary > .codicon:first-child {
+  color: var(--vscode-testing-iconPassed);
+}
+.activity.status-failed > summary > .codicon:first-child {
+  color: var(--vscode-errorForeground);
+}
+.activity.status-cancelled > summary > .codicon:first-child {
+  color: var(--vscode-descriptionForeground);
+}
+.activity-label {
+  color: var(--vscode-foreground);
+  font-weight: 600;
+}
+.activity-count,
+.activity-stats {
+  color: var(--vscode-descriptionForeground);
+  font-size: 11px;
+}
+.activity-stats {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.activity-stat {
+  white-space: nowrap;
+}
+.activity-stat.passed {
+  color: var(--vscode-testing-iconPassed);
+}
+.activity-stat.failed {
+  color: var(--vscode-errorForeground);
+}
+.activity-stat.cancelled {
+  color: var(--vscode-descriptionForeground);
+}
+.activity-stat.running {
+  color: var(--vscode-progressBar-background, var(--vscode-focusBorder));
+}
+.tool-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.tool-status {
+  flex-shrink: 0;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.tool > summary .tool-status {
+  margin-left: auto;
+}
+.tool-status.passed {
+  color: var(--vscode-testing-iconPassed);
+}
+.tool-status.failed {
+  color: var(--vscode-errorForeground);
+}
+.tool-status.cancelled {
+  color: var(--vscode-descriptionForeground);
+}
+.tool-status.running {
+  color: var(--vscode-progressBar-background, var(--vscode-focusBorder));
+}
+.tool.status-failed > summary {
+  color: var(--vscode-errorForeground);
+}
+.tool.status-failed > summary .tool-status,
+.tool.status-failed > summary .show-output {
+  color: var(--vscode-errorForeground);
+}
+.tool.status-passed > summary > .codicon:first-child,
+.thought.status-passed > summary > .codicon:first-child {
+  color: var(--vscode-testing-iconPassed);
+}
+.model-output:hover > .output-metadata,
+.model-output:focus-within > .output-metadata,
+.model-output.answer > .output-metadata {
+  opacity: 0.85;
+}
+.model-output.answer > .output-metadata {
+  pointer-events: auto;
+  margin-top: 8px;
+}
+.assistant-answer {
+  margin-top: 15px;
+}
+.assistant-answer .answer {
+  margin-top: 0;
+}
+.tool-failure {
+  margin: 7px 10px 0;
+  font-size: 11px;
+}
+.tool-failure .codicon {
+  flex-shrink: 0;
+  font-size: 12px;
+}
+.terminal-pane > .failure {
+  padding-top: 1px;
+}

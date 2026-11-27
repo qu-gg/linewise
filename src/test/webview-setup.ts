@@ -16,6 +16,7 @@ let session = 0;
 export let remembered: {
   expanded?: Record<string, boolean>;
   draft?: string;
+  sessionId?: string;
   editing?: { pending: boolean; text: string };
   drafts?: Record<string, string>;
 } = {};
