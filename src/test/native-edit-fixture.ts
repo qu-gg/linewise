@@ -10,12 +10,15 @@ interface Plan {
   paths?: string[];
 }
 
+export const recordedSnapshots: Array<{ target: string; seenLines?: number[] | null }> = [];
+
 export class EditStore {
   private readonly contents = new Map<string, string>();
   headText(target: string): string | undefined {
     return this.contents.get(target);
   }
-  recordSnapshotFile(target: string): string {
+  recordSnapshotFile(target: string, seenLines?: number[] | null): string {
+    recordedSnapshots.push({ target, seenLines });
     this.contents.set(target, readFileSync(target, 'utf8'));
     return 'FAKE';
   }

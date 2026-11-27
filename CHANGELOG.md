@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Fix native edit provenance: pin OMP's child process to hashline read/edit mode,
+  keep the read snapshot after recoverable validation errors, and treat a read
+  body without hashline numbers as no provenance instead of marking only line 0.
+
 ## 0.1.3
 
 Patch release for clipboard image context.

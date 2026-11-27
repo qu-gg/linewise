@@ -122,6 +122,10 @@ export class OmpClient {
       stdio: ['pipe', 'pipe', 'pipe'],
       env: {
         ...process.env,
+        // Linewise registers a hashline edit tool; OMP otherwise falls back to
+        // replace mode for some models, dropping read line numbers and tags.
+        PI_EDIT_VARIANT: 'hashline',
+        PI_STRICT_EDIT_MODE: '1',
         VS_OMP_ARTIFACTS_ROOT: options.artifacts,
         VS_OMP_HISTORY_DIR: this.historyDirectory,
       },

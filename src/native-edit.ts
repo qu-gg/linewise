@@ -135,10 +135,10 @@ async function recordRead(
   if (pathReason(plain)) return;
   const target = await checkedPath(plain, context.cwd).catch(() => undefined);
   if (!target) return;
-  const metadata = await stat(target);
-  if (!metadata.isFile() || metadata.size > 1024 * 1024) return;
+  const metadata = await stat(target).catch(() => undefined);
+  if (!metadata?.isFile() || metadata.size > 1024 * 1024) return;
   const current = snapshots();
-  const tag = current.recordSnapshotFile(target, result.toolName === 'read' ? [0] : undefined);
+  const tag = current.recordSnapshotFile(target);
   if (tag)
     result.content.forEach((block) => {
       if (block.type === 'text' && block.text)
@@ -159,7 +159,6 @@ export async function installNativeEdit(api: NativeEditApi, runtime?: Runtime): 
     api.on(event, () => stores.clear());
   api.on('tool_result', async (result, context) => {
     if (result.toolName === 'edit') {
-      if (result.isError) stores.clear();
       await cleanupPermit(directory(), result.toolCallId);
       return;
     }
@@ -206,11 +205,9 @@ export async function installNativeEdit(api: NativeEditApi, runtime?: Runtime): 
           mutations.push(toMutation(request, capture));
           return { written: request.content ?? '' };
         });
-        if (outcome.isError) {
-          stores.clear();
-          if (mutations.length)
-            throw new Error('Native edit failed after staging; no host mutation was submitted.');
-        } else if (mutations.length) {
+        if (outcome.isError && mutations.length)
+          throw new Error('Native edit failed after staging; no host mutation was submitted.');
+        if (!outcome.isError && mutations.length) {
           signal?.throwIfAborted();
           await exchangeMutations(directory(), mutations, signal, toolCallId);
           signal?.throwIfAborted();

@@ -33,6 +33,8 @@ const options: SessionConfigOption[] = [
 ];
 const app = new AgentApp()
   .onRequest('initialize', () => {
+    assert.equal(process.env.PI_EDIT_VARIANT, 'hashline');
+    assert.equal(process.env.PI_STRICT_EDIT_MODE, '1');
     if (process.argv.includes('--unauthenticated'))
       throw RequestError.authRequired(undefined, 'Run omp and /login github-copilot.');
     return {

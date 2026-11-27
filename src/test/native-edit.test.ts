@@ -153,3 +153,27 @@ test('native adapter refuses stale, aliased, uncaptured, malformed and partially
   assert.equal(current.results.length, 1);
   await installNativeEdit(current.api);
 });
+
+test('recoverable native edit errors retain the read snapshot for the documented retry', async (context) => {
+  const current = await setup(context);
+  assert.equal((await current.execute({ op: 'update', error: 'before' })).isError, true);
+  const retried = await current.execute({ op: 'update', content: 'after' });
+  assert.equal(retried.isError, false);
+  assert.deepEqual(
+    current.results.map((mutation) => [
+      mutation.op,
+      'content' in mutation ? mutation.content : null,
+    ]),
+    [['write', 'after']],
+  );
+});
+
+test('read results record a snapshot without a line-0 provenance sentinel', async (context) => {
+  const current = await setup(context);
+  runtime.recordedSnapshots.length = 0;
+  await current.handlers.get('tool_result')!(current.event, current.native);
+  assert.deepEqual(
+    runtime.recordedSnapshots.map(({ seenLines }) => seenLines),
+    [undefined],
+  );
+});
