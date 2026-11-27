@@ -85,6 +85,39 @@ function activityDiff(current, changes) {
   };
 }
 
+function toolChainKey(block) {
+  return `toolchain:${block.id}`;
+}
+
+function toolChain(blocks, current, ui) {
+  const key = toolChainKey(blocks[0]);
+  const open = ui.expanded[key] ?? true;
+  const body = blocks.map((block) => activity(block, current, ui)).join('');
+  return `<details class="tool-chain" data-disclosure="${ui.escape(key)}" ${open ? 'open' : ''}><summary>Finished with ${activityStepCount(blocks.length)}</summary><div class="tool-chain-body">${body}</div></details>`;
+}
+
+function activityBody(current, details, ui) {
+  const content = [];
+  let tools = [];
+  const flush = () => {
+    if (!tools.length) return;
+    content.push(
+      tools.length === 1 ? activity(tools[0], current, ui) : toolChain(tools, current, ui),
+    );
+    tools = [];
+  };
+  for (const block of details) {
+    if (block.kind === 'tool') {
+      tools.push(block);
+      continue;
+    }
+    flush();
+    content.push(activity(block, current, ui));
+  }
+  flush();
+  return content.join('');
+}
+
 function turnActivity(current, details, ui) {
   if (!details.length && current.status !== 'running') return '';
   const status = turnStatus[current.status] ?? turnStatus.completed;
@@ -98,7 +131,7 @@ function turnActivity(current, details, ui) {
   const counts = activityCounts(details);
   const label = `${status.label} ${count}${timing.suffix}${diff.suffix}${activityCountSuffix(counts)}`;
   const open = activityOpen(ui.expanded, current);
-  const body = details.map((block) => activity(block, current, ui)).join('');
+  const body = activityBody(current, details, ui);
   return `<details class="activity status-${current.status}" data-disclosure="${ui.escape(current.id)}" data-activity-status="${current.status}" ${open ? 'open' : ''}><summary aria-label="${label}"><span class="activity-label">${status.label}</span> <span class="activity-count">${count}</span>${timing.html}${diff.html}</summary><div class="activity-body">${body}</div></details>`;
 }
 
@@ -139,7 +172,13 @@ export function transcriptSignature(state, wide) {
 }
 
 export function turnSignature(current, expanded, state) {
-  const opens = [current.id, ...current.blocks.map((block) => block.id)]
+  const opens = [
+    current.id,
+    ...current.blocks.flatMap((block) => [
+      block.id,
+      ...(block.kind === 'tool' ? [toolChainKey(block)] : []),
+    ]),
+  ]
     .map((id) => (expanded[id] ? '1' : '0'))
     .join('');
   return `${JSON.stringify(current)}|${opens}|${activityDiff(current, state.changes).suffix}`;

@@ -70,10 +70,38 @@
   font-variant-numeric: tabular-nums;
 }
 .activity-diff .added {
-  color: var(--vscode-gitDecoration-addedResourceForeground, var(--vscode-testing-iconPassed));
+  color: var(--vscode-chat-linesAddedForeground, var(--vscode-testing-iconPassed));
 }
 .activity-diff .removed {
-  color: var(--vscode-gitDecoration-deletedResourceForeground, var(--vscode-errorForeground));
+  color: var(--vscode-chat-linesRemovedForeground, var(--vscode-errorForeground));
+}
+.tool-chain {
+  margin: 6px 0 10px;
+}
+.tool-chain > summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 22px;
+  padding: 2px 0;
+  color: var(--vscode-descriptionForeground);
+  font-size: 12px;
+}
+.tool-chain > summary::after {
+  content: '\eab6';
+  font-family: codicon;
+  margin-left: auto;
+}
+.tool-chain[open] > summary::after {
+  transform: rotate(90deg);
+}
+.tool-chain-body {
+  border-left: 1px solid var(--vscode-tree-indentGuidesStroke, var(--vscode-widget-border));
+  margin: 7px 0 8px 5px;
+  padding-left: 11px;
+}
+.tool-chain-body > .tool:last-child {
+  margin-bottom: 0;
 }
 .activity.status-failed .activity-label {
   color: var(--vscode-errorForeground);
