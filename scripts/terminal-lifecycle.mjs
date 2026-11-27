@@ -345,7 +345,7 @@ async function mixedAttention(page, hit, directory, result) {
   const frame = await approvalFrame(page, 'button[aria-label="OMP Terminals"]');
   await page.screenshot({ path: path.join(directory, 'mixed-held.png') });
   await chmod(path.join(directory, 'mixed-held.png'), 0o600);
-  await frame.getByRole('button', { name: /^Stop/ }).click();
+  await frame.getByRole('button', { name: 'Stop', exact: true }).click();
   const outcome = JSON.parse(await result);
   assert.equal(outcome.ok, true);
   assert.equal(outcome.staleActionIgnored, true);
