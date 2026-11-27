@@ -66,6 +66,50 @@ export function connectionPresentation(
   };
 }
 
+export const PROMPT_HISTORY_LIMIT = 50;
+
+interface PromptCandidate {
+  prompt: string;
+  at: number;
+}
+
+function sameRootCandidates(
+  sessions: readonly SavedSession[],
+  active: SavedSession,
+): PromptCandidate[] {
+  const candidates: PromptCandidate[] = [];
+  for (const saved of sessions) {
+    if (saved.id === active.id || saved.root !== active.root) continue;
+    for (const turn of saved.turns)
+      candidates.push({ prompt: turn.prompt, at: turn.endedAt ?? turn.startedAt });
+  }
+  return candidates;
+}
+
+function uniqueRecent(candidates: readonly PromptCandidate[]): string[] {
+  const seen = new Set<string>();
+  const recent: string[] = [];
+  for (const candidate of candidates) {
+    if (!candidate.prompt.trim() || seen.has(candidate.prompt)) continue;
+    seen.add(candidate.prompt);
+    recent.push(candidate.prompt);
+    if (recent.length === PROMPT_HISTORY_LIMIT) break;
+  }
+  return recent;
+}
+
+// The composer traverses the active session's prompts from its turns, so recall
+// only carries bounded, deduplicated prompts from other retained same-root sessions.
+export function promptRecents(
+  sessions: readonly SavedSession[],
+  active: SavedSession | undefined,
+): string[] {
+  if (!active) return [];
+  const candidates = sameRootCandidates(sessions, active);
+  candidates.sort((left, right) => right.at - left.at);
+  return uniqueRecent(candidates);
+}
+
 export function sessionPresentation(session: SavedSession | undefined) {
   return {
     sessionId: session?.id,

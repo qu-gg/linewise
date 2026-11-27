@@ -30,6 +30,8 @@ import { contextPanel as sessionInfo, usagePercentage } from './context-info.js'
 import { activity, modelOutput } from './activity.js';
 import { pasteImages } from './clipboard.js';
 import * as picker from './model-picker.js';
+import { bindPromptRecall, recallPrompts } from './prompt-history.js';
+import { promptRow } from './prompt-card.js';
 const vscode = acquireVsCodeApi();
 const remembered = vscode.getState() ?? {};
 const expanded = remembered.expanded ?? {};
@@ -63,6 +65,14 @@ function button(action, name, label, extra = '') {
 }
 const activityUi = { escape, icon, itemButton, expanded };
 const send = (type, extra = {}) => vscode.postMessage({ v: 1, type, ...extra });
+const promptRecall = bindPromptRecall(app, {
+  prompts: () => recallPrompts(state.turns, state.promptHistory),
+  getDraft: () => draft,
+  setDraft: (value) => {
+    draft = value;
+  },
+  canSubmit: (value) => canSubmit(state, value),
+});
 bindApprovals(send);
 bindQuestions(send, render);
 bindPermissions(send, render, () => state);
@@ -75,21 +85,6 @@ bindSessions(
   () => state,
   remembered.sessions,
 );
-function promptEditor(disabled) {
-  return `<textarea id="history-prompt" aria-label="Edit Previous Prompt" ${disabled ? 'readonly' : ''}>${escape(editing.text)}</textarea><p class="history-note">Files and shared memory stay unchanged.</p><div class="edit-actions"><button type="button" class="text-button secondary" data-action="cancelEdit" ${editing.pending ? 'disabled' : ''}>Cancel</button><button type="button" class="text-button secondary" data-action="applyEdit" ${disabled || !state.canHistory || !editing.text.trim() ? 'disabled' : ''}>${icon('arrow-up')}Send</button></div>`;
-}
-
-function promptRow(current) {
-  const disabled = working() || editing?.pending;
-  const editor = editing?.id === current.id;
-  const prompt = editor ? promptEditor(disabled) : escape(current.prompt);
-  const actions =
-    state.canHistory && current.history && !editor
-      ? `<div class="prompt-actions">${itemButton('edit', 'edit', 'Edit and Continue', current.id, disabled)}${itemButton('forkBefore', 'repo-forked', 'Fork Before This Prompt', current.id, disabled)}</div>`
-      : '';
-  return `<div class="prompt-row"><div class="user-message ${editor ? 'editing' : ''}">${prompt}</div>${actions}</div>`;
-}
-
 function turnActivity(current, details) {
   if (!details.length && current.status !== 'running') return '';
   const count = details.filter((block) => block.kind === 'tool').length;
@@ -123,11 +118,10 @@ function turn(current) {
       !(block.kind === 'plan' && block.entries && current === state.turns.at(-1)),
   );
   const failures = details.filter((block) => block.kind === 'tool' && block.status === 'failed');
-  return `<article class="turn">${promptRow(current)}${turnActivity(current, details)}${questionResults(current, { escape, icon })}${failures.map((block) => `<div class="failure" role="status">${icon('warning')}${escape(block.title)} failed</div>`).join('')}${answer ? modelOutput(answer, 'answer', activityUi) : ''}${afterAnswer(current)}</article>`;
+  return `<article class="turn">${promptRow(current, { state, editing, working, escape, icon, itemButton })}${turnActivity(current, details)}${questionResults(current, { escape, icon })}${failures.map((block) => `<div class="failure" role="status">${icon('warning')}${escape(block.title)} failed</div>`).join('')}${answer ? modelOutput(answer, 'answer', activityUi) : ''}${afterAnswer(current)}</article>`;
 }
 
 const percentage = () => usagePercentage(state.context);
-
 function contextPanel() {
   return sessionInfo(state, contextOpen, { escape, icon, button, working });
 }
@@ -183,6 +177,7 @@ function render() {
   refreshApproval(app);
   picker.refreshModelPicker(app);
   restoreFocus(app, focused);
+  promptRecall.restore();
   announce(state);
 }
 
@@ -192,6 +187,7 @@ function submit() {
   if (!canSubmit(state, draft)) return;
   notice = '';
   send(state.busy ? 'queuePrompt' : 'prompt', { text: draft });
+  promptRecall.reset();
   draft = '';
   remember();
   render();
@@ -207,7 +203,7 @@ function applyEdit() {
 
 function remember() {
   vscode.setState({
-    draft,
+    draft: promptRecall.draft,
     drafts,
     sessionId: draftSession,
     editing,
@@ -228,6 +224,7 @@ app.addEventListener('input', (event) => {
     return;
   }
   if (event.target.id !== 'prompt') return;
+  promptRecall.reset();
   draft = event.target.value;
   remember();
   const submitButton = document.querySelector('.send');
@@ -396,9 +393,11 @@ function editResult(data) {
 function switchDraft(incoming) {
   const owner = incoming.sessionId ?? 'new';
   if (owner === draftSession) return;
-  if (draftSession) drafts[draftSession] = draft;
+  const outgoing = promptRecall.draft;
+  if (draftSession) drafts[draftSession] = outgoing;
+  promptRecall.reset();
   const initialDraft = !draftSession || draftSession === 'new';
-  draft = drafts[owner] ?? (initialDraft ? draft : '');
+  draft = drafts[owner] ?? (initialDraft ? outgoing : '');
   if (draftSession === 'new') delete drafts.new;
   if (draftSession) editing = null;
   draftSession = owner;
@@ -421,6 +420,7 @@ function pruneDrafts(ids) {
   const retained = new Set(ids);
   for (const id of Object.keys(drafts)) if (!retained.has(id)) delete drafts[id];
   if (draftSession && !retained.has(draftSession)) {
+    promptRecall.reset();
     draft = '';
     editing = null;
     draftSession = undefined;
@@ -473,6 +473,7 @@ window.addEventListener('blur', () => send('focus', { focused: false }));
 const messageActions = {
   editResult,
   draft: (data) => {
+    promptRecall.reset();
     draft = data.text;
     remember();
     render();
