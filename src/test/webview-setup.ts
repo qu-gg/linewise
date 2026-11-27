@@ -1,9 +1,13 @@
-import { after, before, beforeEach } from 'node:test';
+import { after, afterEach, before, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { JSDOM } from 'jsdom';
+import { JSDOM, VirtualConsole } from 'jsdom';
 
+const runtimeErrors: string[] = [];
+const virtualConsole = new VirtualConsole();
+virtualConsole.on('jsdomError', (error) => runtimeErrors.push(error.message));
 export const dom = new JSDOM('<!doctype html><main id="app"></main>', {
   url: 'https://webview.example/',
+  virtualConsole,
 });
 export const messages: Record<string, unknown>[] = [];
 const frames: FrameRequestCallback[] = [];
@@ -15,6 +19,36 @@ export let remembered: {
   editing?: { pending: boolean; text: string };
   drafts?: Record<string, string>;
 } = {};
+
+let wide = false;
+const layoutListeners = new Set<() => void>();
+const mediaQuery = {
+  get matches() {
+    return wide;
+  },
+  media: '',
+  onchange: null,
+  addListener(listener: () => void) {
+    layoutListeners.add(listener);
+  },
+  removeListener(listener: () => void) {
+    layoutListeners.delete(listener);
+  },
+  addEventListener(type: string, listener: () => void) {
+    if (type === 'change') layoutListeners.add(listener);
+  },
+  removeEventListener(type: string, listener: () => void) {
+    if (type === 'change') layoutListeners.delete(listener);
+  },
+  dispatchEvent() {
+    return false;
+  },
+};
+export function viewport(value: boolean, notify = false) {
+  wide = value;
+  Object.defineProperty(dom.window, 'matchMedia', { configurable: true, value: () => mediaQuery });
+  if (notify) for (const listener of layoutListeners) listener();
+}
 
 before(async () => {
   Object.assign(globalThis, {
@@ -35,6 +69,7 @@ before(async () => {
       return frames.length;
     },
   });
+  viewport(false);
   await import(new URL('../../media/main.js', import.meta.url).href);
   assert.equal(messages[0]!.type, 'ready');
 });
@@ -73,6 +108,7 @@ export function turn(blocks: object[] = [{ id: 'answer', kind: 'text', text: 'An
   };
 }
 beforeEach(() => {
+  viewport(false);
   state = {
     turns: [],
     changes: [],
@@ -93,4 +129,8 @@ beforeEach(() => {
     new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
   );
   messages.length = 0;
+});
+
+afterEach(() => {
+  assert.deepEqual(runtimeErrors.splice(0), []);
 });

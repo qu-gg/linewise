@@ -440,6 +440,10 @@ export class HostTools {
     return this.manager(request).release(request);
   }
 
+  browserUrl(): string | undefined {
+    return this.browsers.currentUrl();
+  }
+
   closeBrowser(): Promise<void> {
     return this.browsers.revoke();
   }

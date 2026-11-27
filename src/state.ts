@@ -331,6 +331,7 @@ export const webviewMessage = z.discriminatedUnion('type', [
       'resumeQueue',
       'keepAll',
       'discardAll',
+      'openInBrowser',
     ]),
   }),
   z.object({

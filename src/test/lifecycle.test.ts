@@ -24,6 +24,23 @@ test('Close Owned Browser command revokes an idle connection without disconnecti
   assert.deepEqual(host.storedState!().changes, []);
 });
 
+test('Open in VS Code Browser command forwards URLs and handles missing input', async (context) => {
+  await setup(context);
+  await fixture.commands.get('omp.openInBrowser')!('https://example.com');
+  assert.deepEqual(fixture.commandCalls.at(-1), {
+    id: 'workbench.action.browser.open',
+    args: [{ url: 'https://example.com/', openToSide: false }],
+  });
+  await fixture.commands.get('omp.openInBrowser')!(Uri.parse('https://example.com/uri'));
+  assert.deepEqual(fixture.commandCalls.at(-1), {
+    id: 'workbench.action.browser.open',
+    args: [{ url: 'https://example.com/uri', openToSide: false }],
+  });
+  const calls = fixture.commandCalls.length;
+  await fixture.commands.get('omp.openInBrowser')!();
+  assert.equal(fixture.commandCalls.length, calls);
+});
+
 test('workspace folder events revoke retained browser pages even between prompts', async (context) => {
   const host = await setup(context);
   await host.request({ type: 'connect' });

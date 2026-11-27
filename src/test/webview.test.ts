@@ -42,6 +42,14 @@ test('composer preserves text, submits once, and blocks whitespace, busy and con
   assert.equal(messages.length, 1);
 });
 
+test('browser URL exposes an explicit integrated-tab action', () => {
+  update({ browserUrl: 'https://example.com/' });
+  click('openInBrowser');
+  assert.deepEqual(messages, [{ v: 1, type: 'openInBrowser' }]);
+  update({ browserUrl: '' });
+  assert.equal(dom.window.document.querySelector('[data-action="openInBrowser"]'), null);
+});
+
 test('permission control reflects host mode, requests the native picker and disables unsafe changes', () => {
   assert.equal(dom.window.document.querySelector('.toolbar [data-action="permissions"]'), null);
   assert.equal(

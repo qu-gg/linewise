@@ -24,6 +24,7 @@ import { assertSessionResumable } from './sessions.js';
 import { ModelRoutes, type AppliedRoute, type LaunchRoute } from './model-route.js';
 import { OpenRouterRoutes } from './model-routes.js';
 import { routeRequest, type RequestHandlers } from './request-router.js';
+import { openIntegratedBrowser } from './integrated-browser.js';
 
 const execute = promisify(execFile);
 let application: OmpView | undefined;
@@ -142,6 +143,7 @@ class OmpView extends HostOperations implements vscode.WebviewViewProvider {
       }),
     terminals: () => this.tools?.pickTerminal(this.view.chat.focusTerminals),
     config: (id, value) => this.configure(id, value),
+    openInBrowser: () => this.openInBrowser(),
     sessionCommand: (command) => this.sessionCommand(command),
   };
 
@@ -350,6 +352,12 @@ class OmpView extends HostOperations implements vscode.WebviewViewProvider {
 
   closeBrowser = () => this.tools?.closeBrowser() ?? Promise.resolve();
 
+  async openInBrowser(url?: string) {
+    const target = url ?? this.tools?.browserUrl();
+    if (!target) throw new Error('No owned browser page is open.');
+    await openIntegratedBrowser(target, this.output);
+  }
+
   async cancel(): Promise<void> {
     if (this.operation && !this.busy) throw new Error('Wait for the current operation to finish.');
     this.view.followUps.clear(true);
@@ -429,6 +437,7 @@ class OmpView extends HostOperations implements vscode.WebviewViewProvider {
       ...this.view.sessionPresentation(),
       canCompact: this.commands.includes('compact'),
       canInspectContext: this.commands.includes('context'),
+      browserUrl: this.tools?.browserUrl() ?? '',
       host: vscode.env.remoteName ?? 'Local',
       workspace: vscode.workspace.workspaceFolders?.[0]?.name ?? '',
       error: this.error,

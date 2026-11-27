@@ -14,6 +14,7 @@ export interface RequestHandlers {
   permissions(): Promise<void>;
   terminals(): Promise<void> | undefined;
   config(id: 'model' | 'thinking', value: string): Promise<void>;
+  openInBrowser(): Promise<void>;
   sessionCommand(command: 'compact' | 'context'): Promise<void>;
 }
 
@@ -32,6 +33,8 @@ export function routeRequest(request: SidebarRequest, handlers: RequestHandlers)
     case 'modelCatalog':
       handlers.postModelCatalog();
       return Promise.resolve();
+    case 'openInBrowser':
+      return handlers.openInBrowser();
     case 'modelRoute':
       return handlers.selectModelRoute(request.value);
     default:

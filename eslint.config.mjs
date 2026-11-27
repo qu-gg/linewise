@@ -68,4 +68,8 @@ export default [
     files: ['media/**/*.js'],
     languageOptions: { globals: { ...globals.browser, acquireVsCodeApi: 'readonly' } },
   },
+  {
+    files: ['docs/**/*.js'],
+    languageOptions: { globals: globals.browser },
+  },
 ];

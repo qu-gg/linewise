@@ -184,3 +184,42 @@ test('session metadata writes validate titles and owner IDs and roll back on per
   });
   await assert.rejects(editSession(store, 'original', 'archiveSession'), /operation to finish/);
 });
+
+test('session list reports last activity and pending-review line totals', () => {
+  const data: StateStore['data'] = {
+    version: 1,
+    sessions: [
+      {
+        id: 'saved',
+        root: 'file:///workspace',
+        label: 'Saved',
+        turns: [
+          {
+            id: 'turn',
+            prompt: 'Prompt',
+            status: 'completed',
+            startedAt: 10,
+            endedAt: 20,
+            blocks: [],
+          },
+        ],
+      },
+    ],
+    changes: [
+      {
+        id: 'change',
+        sessionId: 'saved',
+        path: '/workspace/file.ts',
+        before: 'old\n',
+        after: 'new\nlines\n',
+        state: 'pending',
+        updatedAt: 1,
+      },
+    ],
+  };
+  const listed = sessionList(data)[0]!;
+  assert.equal(listed.lastActivityAt, 20);
+  assert.equal(listed.pendingReview, true);
+  assert.equal(listed.added, 2);
+  assert.equal(listed.removed, 1);
+});

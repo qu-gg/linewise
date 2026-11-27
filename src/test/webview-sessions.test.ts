@@ -1,8 +1,19 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { dom, element, input, message, messages, update } from './webview-setup.js';
+import { dom, element, input, message, messages, update, viewport } from './webview-setup.js';
 
+const DAY = 86_400_000;
 const action = (name: string) => element<HTMLButtonElement>(`[data-session="${name}"]`).click();
+const key = (selector: string, value: string) =>
+  element(selector).dispatchEvent(
+    new dom.window.KeyboardEvent('keydown', { key: value, bubbles: true, cancelable: true }),
+  );
+const checkbox = (checked: boolean) => {
+  const field = element<HTMLInputElement>('#session-show-archived');
+  field.checked = checked;
+  field.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+};
+const now = Date.now();
 const sessions = [
   {
     id: 'one',
@@ -11,6 +22,9 @@ const sessions = [
     active: true,
     archived: false,
     pendingReview: true,
+    lastActivityAt: now - 2 * DAY,
+    added: 2,
+    removed: 1,
   },
   {
     id: 'two',
@@ -18,32 +32,92 @@ const sessions = [
     root: 'file:///workspace/second',
     active: false,
     archived: true,
+    lastActivityAt: now - 8 * DAY,
+  },
+];
+const wideSessions = () => [
+  {
+    id: 'today',
+    title: 'Active now',
+    root: 'file:///workspace/today',
+    active: true,
+    archived: false,
+    pendingReview: true,
+    lastActivityAt: Date.now() - 1000,
+    added: 2,
+    removed: 1,
+  },
+  {
+    id: 'week',
+    title: 'This week',
+    root: 'file:///workspace/week',
+    active: false,
+    archived: false,
+    lastActivityAt: Date.now() - 4 * DAY,
+  },
+  {
+    id: 'older',
+    title: 'Long ago',
+    root: 'file:///workspace/older',
+    active: false,
+    archived: false,
+    lastActivityAt: Date.now() - 40 * DAY,
+  },
+  {
+    id: 'archived',
+    title: 'Archived item',
+    root: 'file:///workspace/archived',
+    active: false,
+    archived: true,
+    lastActivityAt: Date.now() - 2 * DAY,
   },
 ];
 
-test('session manager searches and switches recent/archive views without generation or deletion', () => {
+test('session picker searches, filters archived sessions, and switches without generation or deletion', () => {
   update({ sessions });
   message({ type: 'showSessions' });
   assert.equal(dom.window.document.activeElement, element('#session-search'));
   assert.equal(element('.session-open strong').textContent, '<First>');
   assert.equal(element('.session-open').getAttribute('aria-current'), 'true');
+  assert.equal(element('.session-diff').textContent, '+2-1');
+  assert.match(element('.session-time').textContent!, /2 days ago/);
   assert.equal(dom.window.document.querySelector('.session-open First'), null);
   input('#session-search', 'missing');
   assert.match(element('.session-empty').textContent!, /No matching/);
   input('#session-search', '');
-  action('archived');
-  assert.equal(element('.session-open strong').textContent, 'Archived title');
+  action('filters');
+  checkbox(true);
+  assert.equal(
+    element('.session-group[data-group="archived"] .session-open strong').textContent,
+    'Archived title',
+  );
   action('restoreSession');
-  assert.deepEqual(messages, [{ v: 1, type: 'restoreSession', id: 'two' }]);
-  action('recent');
+  checkbox(false);
+  assert.equal(dom.window.document.querySelector('.session-group[data-group="archived"]'), null);
   action('archiveSession');
   action('refresh');
-  assert.deepEqual(messages.slice(1), [
+  assert.deepEqual(messages, [
+    { v: 1, type: 'restoreSession', id: 'two' },
     { v: 1, type: 'archiveSession', id: 'one' },
     { v: 1, type: 'refreshSessions' },
   ]);
+  action('toggleSearch');
+  assert.equal(dom.window.document.querySelector('#session-search'), null);
+  action('toggleSearch');
+  assert.ok(element('#session-search'));
   action('close');
   assert.equal(dom.window.document.activeElement, element('#prompt'));
+});
+
+test('escape dismisses the session filter menu without closing the picker', () => {
+  update({ sessions });
+  message({ type: 'showSessions' });
+  action('filters');
+  assert.ok(element('#session-show-archived'));
+  key('[data-session="filters"]', 'Escape');
+  assert.equal(dom.window.document.querySelector('#session-show-archived'), null);
+  assert.ok(element('.session-manager'));
+  action('close');
 });
 
 test('session rename is explicit and owner-bound; busy manager keeps Stop and safe browsing reachable', () => {
@@ -57,7 +131,6 @@ test('session rename is explicit and owner-bound; busy manager keeps Stop and sa
   assert.equal(dom.window.document.querySelector('#session-title'), null);
   assert.equal(element<HTMLButtonElement>('[data-session="archiveSession"]').disabled, true);
   assert.equal(element<HTMLButtonElement>('[data-action="cancel"]').disabled, false);
-  action('archived');
   action('close');
   assert.equal(dom.window.document.querySelector('.session-manager'), null);
 });
@@ -96,29 +169,24 @@ test('archiving preserves the old draft without leaking it to new chat, and atte
   assert.equal(messages.length, 0);
 });
 
-test('manager keyboard tabs, rename cancellation, and failed-save drafts remain usable without accidental submission', () => {
-  const key = (selector: string, value: string) =>
-    element(selector).dispatchEvent(
-      new dom.window.KeyboardEvent('keydown', { key: value, bubbles: true, cancelable: true }),
-    );
+test('manager escape levels, rename cancellation, and failed-save drafts remain usable without accidental submission', () => {
   update({ sessions });
   message({ type: 'showSessions' });
-  action('recent');
-  for (const [value, selected] of [
-    ['ArrowLeft', 'archived'],
-    ['ArrowRight', 'recent'],
-    ['End', 'archived'],
-    ['Home', 'recent'],
-  ]) {
-    key('[role="tab"][aria-selected="true"]', value!);
-    assert.equal(dom.window.document.activeElement, element(`#sessions-${selected}`));
-    assert.equal(element<HTMLButtonElement>('[role="tab"][aria-selected="false"]').tabIndex, -1);
-  }
+  assert.equal(dom.window.document.activeElement, element('#session-search'));
+  key('#session-search', 'Escape');
+  assert.ok(element('.session-manager'));
+  assert.ok(element('[data-session="toggleSearch"]'));
+  key('[data-session="toggleSearch"]', 'Escape');
+  assert.equal(dom.window.document.querySelector('.session-manager'), null);
+  assert.equal(dom.window.document.activeElement, element('#prompt'));
+  message({ type: 'showSessions' });
+  action('toggleSearch');
   action('rename');
-  input('#session-title', 'Never submitted');
+  input('#session-title', 'Closed search');
   key('#session-title', 'Escape');
   assert.equal(dom.window.document.querySelector('#session-title'), null);
   assert.equal(messages.length, 0);
+  action('toggleSearch');
   action('rename');
   input('#session-title', 'Retain on failed save');
   key('#session-title', 'Enter');
@@ -128,8 +196,62 @@ test('manager keyboard tabs, rename cancellation, and failed-save drafts remain 
   assert.equal(element<HTMLInputElement>('#session-title').value, 'Retain on failed save');
   assert.equal(element<HTMLInputElement>('#session-title').disabled, false);
   action('cancelRename');
+  assert.equal(dom.window.document.querySelector('#session-title'), null);
   key('#session-search', 'Escape');
+  key('[data-session="toggleSearch"]', 'Escape');
   assert.equal(dom.window.document.querySelector('.session-manager'), null);
   assert.equal(dom.window.document.activeElement, element('#prompt'));
   assert.equal(messages.length, 1);
+});
+
+test('wide panels show a persistent, collapsible sessions sidebar with grouped activity and diff stats', () => {
+  viewport(true, true);
+  update({ sessions: wideSessions() });
+  assert.ok(element('.session-sidebar'));
+  assert.equal(dom.window.document.querySelector('.session-manager.session-surface'), null);
+  assert.ok(element('.chat-pane .transcript'));
+  assert.equal(
+    element('.session-group[data-group="today"] .session-open strong').textContent,
+    'Active now',
+  );
+  assert.equal(
+    element('.session-group[data-group="week"] .session-open strong').textContent,
+    'This week',
+  );
+  assert.equal(
+    element('.session-group[data-group="older"] .session-open strong').textContent,
+    'Long ago',
+  );
+  assert.equal(element('.session-group[data-group="today"] .session-diff').textContent, '+2-1');
+  assert.match(
+    element('.session-group[data-group="week"] .session-time').textContent!,
+    /4 days ago/,
+  );
+  assert.match(element('.session-group[data-group="older"] .session-time').textContent!, /month/);
+  assert.equal(dom.window.document.querySelector('.session-group[data-group="archived"]'), null);
+  action('filters');
+  checkbox(true);
+  assert.equal(
+    element('.session-group[data-group="archived"] .session-open strong').textContent,
+    'Archived item',
+  );
+  action('restoreSession');
+  checkbox(false);
+  action('new');
+  assert.ok(element('.session-sidebar'));
+  assert.deepEqual(messages, [
+    { v: 1, type: 'restoreSession', id: 'archived' },
+    { v: 1, type: 'new' },
+  ]);
+  action('collapse');
+  assert.equal(dom.window.document.querySelector('.session-sidebar'), null);
+  assert.ok(element('.chat-pane .transcript'));
+  message({ type: 'showSessions' });
+  assert.ok(element('.session-sidebar'));
+  assert.equal(dom.window.document.activeElement, element('#session-search'));
+  viewport(false);
+  update({});
+  assert.equal(dom.window.document.querySelector('.session-sidebar'), null);
+  assert.equal(dom.window.document.querySelector('.session-manager'), null);
+  assert.ok(element('.transcript'));
 });

@@ -1,3 +1,4 @@
+import { changeLineStats } from './review-presentation.js';
 import { sessionTitle, type SavedSession, type StateStore } from './state.js';
 
 export function assertSessionResumable(saved: SavedSession | undefined) {
@@ -34,7 +35,16 @@ export function isSessionRequest(request: { type: string }): request is SessionR
 }
 
 export function sessionList(data: StateStore['data']) {
-  const reviewed = new Set(data.changes.map((change) => change.sessionId));
+  const reviewed = new Set<string>();
+  const totals = new Map<string, { added: number; removed: number }>();
+  for (const change of data.changes) {
+    reviewed.add(change.sessionId);
+    const stats = changeLineStats(change);
+    const total = totals.get(change.sessionId) ?? { added: 0, removed: 0 };
+    total.added += stats.added;
+    total.removed += stats.removed;
+    totals.set(change.sessionId, total);
+  }
   return [...data.sessions]
     .reverse()
     .map((saved) => ({
@@ -47,6 +57,8 @@ export function sessionList(data: StateStore['data']) {
       pendingReview: reviewed.has(saved.id),
       recovering: saved.historyTransition !== undefined,
       lastActivityAt: saved.turns.at(-1)?.endedAt ?? saved.turns.at(-1)?.startedAt ?? 0,
+      added: totals.get(saved.id)?.added ?? 0,
+      removed: totals.get(saved.id)?.removed ?? 0,
     }))
     .sort((first, second) => second.lastActivityAt - first.lastActivityAt);
 }

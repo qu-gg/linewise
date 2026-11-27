@@ -9,7 +9,21 @@ import {
 } from './accessibility.js';
 import { approvalCard, bindApprovals, refreshApproval } from './approvals.js';
 import { questionCard, questionResults, bindQuestions } from './questions.js';
-import { sessionManager, showSessions, bindSessions, managerState } from './sessions.js';
+import {
+  bindSessions,
+  isWide,
+  managerState,
+  sessionManager,
+  sessionSidebar,
+  showSessions,
+} from './sessions.js';
+import {
+  chatFrame,
+  followTranscript,
+  removeChatSurface,
+  restoreTranscript,
+  watchLayout,
+} from './layout.js';
 import { contextPanel as sessionInfo, usagePercentage } from './context-info.js';
 import { activity, modelOutput } from './activity.js';
 import { pasteImages } from './clipboard.js';
@@ -58,9 +72,8 @@ bindSessions(
   () => state,
   remembered.sessions,
 );
-
 function promptEditor(disabled) {
-  return `<textarea id="history-prompt" aria-label="Edit Previous Prompt" ${disabled ? 'readonly' : ''}>${escape(editing.text)}</textarea><p class="history-note">Files and shared memory stay unchanged.</p><div class="edit-actions"><button type="button" class="text-button secondary" data-action="cancelEdit" ${editing.pending ? 'disabled' : ''}>Cancel</button><button type="button" class="text-button" data-action="applyEdit" ${disabled || !state.canHistory || !editing.text.trim() ? 'disabled' : ''}>${icon('arrow-up')}Send</button></div>`;
+  return `<textarea id="history-prompt" aria-label="Edit Previous Prompt" ${disabled ? 'readonly' : ''}>${escape(editing.text)}</textarea><p class="history-note">Files and shared memory stay unchanged.</p><div class="edit-actions"><button type="button" class="text-button secondary" data-action="cancelEdit" ${editing.pending ? 'disabled' : ''}>Cancel</button><button type="button" class="text-button secondary" data-action="applyEdit" ${disabled || !state.canHistory || !editing.text.trim() ? 'disabled' : ''}>${icon('arrow-up')}Send</button></div>`;
 }
 
 function promptRow(current) {
@@ -129,32 +142,54 @@ function statusBanner() {
 
 function render() {
   const oldTranscript = document.querySelector('.transcript');
-  const follow =
-    !oldTranscript ||
-    oldTranscript.scrollHeight - oldTranscript.scrollTop - oldTranscript.clientHeight < 60;
+  const follow = followTranscript(oldTranscript);
   const scroll = oldTranscript?.scrollTop ?? 0;
   const dockScroll = document.querySelector('.dock-sections')?.scrollTop ?? 0;
   const focused = captureFocus(app);
-  const manager = sessionManager(state, { escape, icon, button });
-  app.innerHTML = `${toolbar(state, button, escape)}
-    ${statusBanner()}${manager}
-    <section class="transcript" aria-label="Conversation">${state.turns.map(turn).join('')}${approvalCard(state, { escape, icon }, 'command')}${questionCard(state, { escape, icon })}${!state.workspace ? '<button class="text-button" data-action="openFolder">Open Folder</button>' : ''}</section>
-    ${composer(state, draft, { button, itemButton, escape, icon, working, changesPanel, permissions, contextPanel, contextOpen, percentage, expanded })}`;
+  const ui = { escape, icon, button };
+  const wide = isWide();
+  const manager = wide ? '' : sessionManager(state, ui);
+  const sidebar = wide ? sessionSidebar(state, ui) : '';
+  const header = toolbar(state, button, escape);
+  const banner = statusBanner();
+  const transcriptMarkup = `<section class="transcript" aria-label="Conversation">${state.turns.map(turn).join('')}${approvalCard(state, { escape, icon }, 'command')}${questionCard(state, { escape, icon })}${!state.workspace ? '<button class="text-button" data-action="openFolder">Open Folder</button>' : ''}</section>`;
+  const footer = composer(state, draft, {
+    button,
+    itemButton,
+    escape,
+    icon,
+    working,
+    changesPanel,
+    permissions,
+    contextPanel,
+    contextOpen,
+    percentage,
+    expanded,
+  });
+  app.innerHTML = chatFrame({
+    wide,
+    header,
+    banner,
+    manager,
+    sidebar,
+    transcript: transcriptMarkup,
+    footer,
+  });
   const transcript = document.querySelector('.transcript');
   if (manager) {
-    transcript.remove();
-    document.querySelector('#composer').closest('footer').remove();
+    removeChatSurface();
     restoreFocus(app, focused);
     announce(state);
     return;
   }
-  transcript.scrollTop = follow ? transcript.scrollHeight : scroll;
-  document.querySelector('.dock-sections').scrollTop = dockScroll;
+  restoreTranscript(transcript, follow, scroll, dockScroll);
   refreshApproval(app);
   picker.refreshModelPicker(app);
   restoreFocus(app, focused);
   announce(state);
 }
+
+watchLayout(render, remember);
 
 function submit() {
   if (!canSubmit(state, draft)) return;
