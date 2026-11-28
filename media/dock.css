@@ -461,6 +461,9 @@ select option {
   .toolbar {
     padding-left: 8px;
   }
+  .memory-status {
+    display: none;
+  }
   .transcript {
     padding-left: 8px;
     padding-right: 8px;
