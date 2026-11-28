@@ -105,7 +105,7 @@ export function turn(blocks: object[] = [{ id: 'answer', kind: 'text', text: 'An
     startedAt: 1,
     endedAt: 1001,
     blocks,
-    history: { beforeEntryId: 'before', afterEntryId: 'after' },
+    history: { sessionId: 'session', promptEntryId: 'before', afterEntryId: 'after' },
   };
 }
 beforeEach(() => {

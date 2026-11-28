@@ -328,6 +328,7 @@
     "metrics": "node scripts/quality.mjs metrics",
     "architecture": "node scripts/quality.mjs architecture",
     "test:extension": "npm run build && node scripts/test-extension.mjs",
+    "capture:docs": "VS_OMP_CAPTURE_DOCS=1 npm run test:extension",
     "test:live": "node scripts/quality.mjs live",
     "test": "node scripts/quality.mjs test",
     "spike:mutations": "npm run build && node scripts/mutation-spike.mjs",

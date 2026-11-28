@@ -9,7 +9,16 @@
     "zoomLevel": 0,
     "editorFontSize": 14
   },
-  "environmentScope": "The top-level environment describes the original reference images; pairEnvironment describes transcript-before.png and transcript-after.png.",
+  "environmentScope": "The top-level environment describes the Local reference and pre-existing feature images; matchedComparisonEnvironment describes linewise-chat.png; pairEnvironment describes transcript-before.png and transcript-after.png.",
+  "matchedComparisonEnvironment": {
+    "appliesTo": ["linewise-chat.png"],
+    "platform": "linux-x64",
+    "vscode": "1.147.0",
+    "omp": "19.2.1",
+    "theme": "Dark 2026",
+    "zoomLevel": 0,
+    "viewport": "600x900"
+  },
   "pairEnvironment": {
     "appliesTo": ["transcript-before.png", "transcript-after.png"],
     "platform": "linux-x64",
@@ -19,7 +28,7 @@
     "zoomLevel": 0,
     "viewport": "1440x900",
     "beforeCommit": "19925d4",
-    "afterCommit": "50477da"
+    "afterCommit": "Local-parity retry/docs pass"
   },
   "task": "Change Header: and Footer: to uppercase in review-sample.ts.",
   "realInferenceRequests": 0,
@@ -31,8 +40,8 @@
       "file": "linewise-chat.png",
       "width": 600,
       "height": 900,
-      "sha256": "00d4dc84aabc09906a78dd43744cedb1ee2684750d0923e93235697cac55e3c1",
-      "evidence": "Native Linewise transcript; guarded scripted OMP provider and real fixture file changes"
+      "sha256": "08f38a58ed8ba984f6cf12870fc80412224af72dccb413a26dc33f851521d795",
+      "evidence": "Native current Linewise transcript at 600x900; guarded scripted OMP provider, real fixture file changes, Start Over and retry/copy/fork actions"
     },
     {
       "file": "linewise-context.png",
@@ -87,8 +96,8 @@
       "file": "transcript-after.png",
       "width": 1440,
       "height": 900,
-      "sha256": "0ee4d49cf04df7177615da26e4024945b5bdab35bf8460ded3459311c8638a26",
-      "evidence": "Native v0.1.7 two-turn fixture at 1440x900; same workbench and content as transcript-before.png"
+      "sha256": "88bda5c8409f8cb22dd2b922a37a299383c54fcc8442f9105ad88c945d4286ac",
+      "evidence": "Native current Local-parity two-turn fixture at 1440x900; same workbench and content as transcript-before.png"
     },
     {
       "file": "transcript-before.png",

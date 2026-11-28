@@ -12,6 +12,7 @@ export interface RequestHandlers {
   prompt(text: string): Promise<void>;
   editPrompt(id: string, text: string): Promise<void>;
   forkTurn(id: string, boundary: 'before' | 'after'): Promise<void>;
+  retryTurn(id: string): Promise<void>;
   permissions(mode: PermissionMode, confirmed: boolean): Promise<void>;
   permissionSettings(): Promise<void>;
   terminals(): Promise<void> | undefined;
@@ -57,6 +58,9 @@ async function conversationRequest(
       break;
     case 'forkTurn':
       await handlers.forkTurn(request.id, request.boundary);
+      break;
+    case 'retryTurn':
+      await handlers.retryTurn(request.id);
       break;
     case 'permissions':
       await handlers.permissions(request.mode, request.confirmed ?? false);

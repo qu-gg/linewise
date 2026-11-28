@@ -347,13 +347,25 @@ function turnActivity(current, details, ui) {
   return `<details class="activity status-${current.status}" data-disclosure="${ui.escape(current.id)}" data-activity-status="${current.status}" ${open ? 'open' : ''}><summary aria-label="${label}"><span class="activity-label">${status.label}</span> <span class="activity-count">${count}</span>${timing.html}${diff.html}</summary><div class="activity-body">${body}</div></details>`;
 }
 
+function retryAction(current, ui) {
+  if (
+    !ui.canHistory ||
+    !current.prompt.trim() ||
+    current.status !== 'completed' ||
+    !current.history?.promptEntryId ||
+    ui.turns?.at(-1)?.id !== current.id
+  )
+    return '';
+  return `<button type="button" class="answer-action" data-action="retryTurn" data-id="${ui.escape(current.id)}" aria-label="Retry" title="Retry" ${ui.disabled ? 'disabled' : ''}>${ui.icon('refresh')}</button>`;
+}
+
 function answerActions(current, answer, ui) {
   const copy = `<button type="button" class="answer-action" data-action="copyAnswer" data-id="${ui.escape(answer.id)}" aria-label="Copy Answer" title="Copy Answer">${ui.icon('copy')}</button>`;
   const fork =
     ui.canHistory && current.status === 'completed' && current.history?.afterEntryId
       ? ui.itemButton('forkAfter', 'repo-forked', 'Fork After This Answer', current.id, ui.disabled)
       : '';
-  return `<div class="answer-actions">${copy}${fork}</div>`;
+  return `<div class="answer-actions">${retryAction(current, ui)}${copy}${fork}</div>`;
 }
 
 function answerBlock(current, answer, ui) {

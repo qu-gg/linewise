@@ -375,6 +375,66 @@ async function driveUsage(page, workspace, output) {
   }
 }
 
+function reviewSampleOriginal() {
+  return [
+    "export function formatHeader(value = '') {",
+    '  return `Header: ${value}`;',
+    '}',
+    '',
+    'export const sampleRows = [',
+    ...'one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen'
+      .split(' ')
+      .map((word) => `  '${word}',`),
+    '];',
+    '',
+    "export function formatFooter(value = '') {",
+    '  return `Footer: ${value}`;',
+    '}',
+    '',
+  ].join('\n');
+}
+
+export async function driveDocsCapture(userData, workspace, ready, done) {
+  assert.ok(ready && done, 'Docs capture requires explicit ready and done signals.');
+  await signalFile(ready, 120000);
+  const active = await signalFile(path.join(userData, 'DevToolsActivePort'));
+  const port = Number(active.split('\n')[0]);
+  assert.ok(Number.isInteger(port) && port > 0 && port <= 65535);
+  const browser = await chromium.connectOverCDP(`http://127.0.0.1:${port}`);
+  await mkdir('reports/native-ux', { recursive: true, mode: 0o700 });
+  const output = await mkdtemp('reports/native-ux/docs-');
+  await chmod(output, 0o700);
+  try {
+    const context = browser.contexts()[0];
+    const page = context.pages()[0] ?? (await context.waitForEvent('page'));
+    page.setDefaultTimeout(30000);
+    const frame = await approvalFrame(page, '#prompt');
+    await writeFile(path.join(workspace, 'review-sample.ts'), reviewSampleOriginal(), {
+      mode: 0o600,
+    });
+    await frame
+      .locator('#prompt')
+      .fill('Change Header: and Footer: to uppercase in review-sample.ts.');
+    await frame.locator('#prompt').press('Enter');
+    await frame.locator('.assistant-answer').last().waitFor({ state: 'visible' });
+    await frame.locator('.file-review').last().waitFor({ state: 'visible' });
+    await page.getByRole('button', { name: 'Maximize Secondary Side Bar', exact: true }).click();
+    await page.setViewportSize({ width: 600, height: 900 });
+    const toast = page.locator('.notifications-toasts .notification-list-item').last();
+    if (await toast.isVisible()) {
+      await toast.hover();
+      await toast.getByRole('button', { name: /^Clear Notification/ }).click();
+    }
+    await frame.locator('#prompt').fill('');
+    await page.waitForTimeout(500);
+    await capture(page, output, 'comparison-600');
+    await writeFile(done, 'done', { mode: 0o600 });
+    console.log(`PASS: native docs comparison capture: ${output}`);
+  } finally {
+    await browser.close();
+  }
+}
+
 export async function driveNativeUX(userData, workspace, installed = false) {
   const active = await signalFile(path.join(userData, 'DevToolsActivePort'));
   const port = Number(active.split('\n')[0]);

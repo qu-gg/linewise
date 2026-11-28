@@ -22,9 +22,10 @@ import {
 } from './native-dialogs.mjs';
 import { liveSettings } from './live-guard.mjs';
 import { ensureTestDisplay } from './test-display.mjs';
-import { driveNativeUX } from './native-ux.mjs';
+import { driveDocsCapture, driveNativeUX } from './native-ux.mjs';
 
 const live = process.env.VS_OMP_LIVE_TESTS === '1';
+const docsCapture = process.env.VS_OMP_CAPTURE_DOCS === '1';
 if (live) liveSettings();
 await ensureTestDisplay();
 const questions =
@@ -72,6 +73,8 @@ const workspaceFile = path.join(
   installed ? 'test.code-workspace' : 'native.code-workspace',
 );
 const userData = path.join(profile, 'user-data');
+const docsReady = path.join(directory, 'docs-ready');
+const docsDone = path.join(directory, 'docs-done');
 const settingsFile = path.join(userData, 'User', 'settings.json');
 const originalSettings = installed ? await readFile(settingsFile) : undefined;
 const installedFolders = installed
@@ -144,7 +147,7 @@ try {
       },
     }),
   );
-  if (!live && !installed) await runNativeDialogs(directory);
+  if (!live && !installed && !docsCapture) await runNativeDialogs(directory);
   const testOptions = {
     vscodeExecutablePath: process.env.VSCODE_EXECUTABLE || '/usr/share/code/code',
     extensionDevelopmentPath: extensionDevelopmentPath
@@ -164,6 +167,9 @@ try {
       ...(process.env.OMP_EXECUTABLE ? { OMP_EXECUTABLE: process.env.OMP_EXECUTABLE } : {}),
       VS_OMP_EXPECTED_EXTENSION_PATH: installedExtension,
       VS_OMP_UX_REOPEN: undefined,
+      VS_OMP_DOCS_CAPTURE: docsCapture ? '1' : undefined,
+      VS_OMP_DOCS_READY: docsReady,
+      VS_OMP_DOCS_DONE: docsDone,
       VS_OMP_FIXTURE_CONTEXT: path.join(directory, 'provider-context.json'),
       ...(live
         ? {
@@ -199,8 +205,10 @@ try {
     testing,
     ...(!live
       ? [
-          driveNativeUX(userData, workspace, !!installed),
-          ...(!installed ? [driveTerminalControls(userData, workspace)] : []),
+          docsCapture
+            ? driveDocsCapture(userData, workspace, docsReady, docsDone)
+            : driveNativeUX(userData, workspace, !!installed),
+          ...(!installed && !docsCapture ? [driveTerminalControls(userData, workspace)] : []),
         ]
       : []),
     ...(nativeInput
@@ -216,7 +224,7 @@ try {
   ]);
   const failures = outcomes.filter((outcome) => outcome.status === 'rejected');
   if (failures.length) throw new AggregateError(failures.map((outcome) => outcome.reason));
-  if (!live && !installed)
+  if (!live && !installed && !docsCapture)
     await runTests({
       ...testOptions,
       extensionTestsEnv: { ...testOptions.extensionTestsEnv, VS_OMP_UX_REOPEN: '1' },

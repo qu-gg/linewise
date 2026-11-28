@@ -117,7 +117,7 @@ Answer bounded single-choice, multiple-choice, and free-text questions directly 
 
 ### Permissions You Can See
 
-Open the permission menu beside Memory to choose **Command Rules**, **Ask Every Time**, or separately confirmed **Allow All Except Restrictions** and **YOLO Commands** without leaving the chat. Elevated modes show their warning and explicit Enable step inside the same panel. The selected mode lasts for the workbench window and is inherited by new chats; elevated modes reset on extension reload, workspace trust change, or history rollback, while reconnect preserves the current mode. Commands use your host permissions, not an OS sandbox; outside-workspace file access and web/browser consent remain independent.
+Open the permission menu beside Memory to choose **Command Rules**, **Ask Every Time**, or separately confirmed **Allow All Except Restrictions** and **YOLO Commands** without leaving the chat. Elevated modes show their warning and explicit Enable step inside the same panel. The selected mode lasts for the workbench window and is inherited by new chats; elevated modes reset on extension reload, workspace trust change, or explicit edit/fork history rollback, while reconnect and same-session retry preserve the current mode. Commands use your host permissions, not an OS sandbox; outside-workspace file access and web/browser consent remain independent.
 
 ### Activity, Plans, And Follow-Ups
 

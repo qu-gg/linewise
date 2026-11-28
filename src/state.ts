@@ -8,6 +8,7 @@ import type { HistorySnapshot } from './history.js';
 import { retentionPolicy } from './storage-policy.js';
 import { imageSchema } from './image-policy.js';
 import { permissionMode } from './terminal-policy.js';
+import { usageSchema, type Usage } from './usage-schema.js';
 import { recordChunkMetrics, streamMetrics } from './stream-metrics.js';
 const block = z.object({
   id: z.string(),
@@ -62,14 +63,6 @@ const turn = z.object({
     .optional(),
   stream: streamMetrics.optional(),
 });
-const usage = z.object({
-  used: z.number().finite().nonnegative(),
-  size: z.number().finite().positive(),
-  cost: z
-    .object({ amount: z.number().finite().nonnegative(), currency: z.string().min(1) })
-    .optional(),
-  stale: z.boolean().optional(),
-});
 export const sessionTitle = z
   .string()
   .trim()
@@ -83,7 +76,7 @@ const session = z.object({
   title: sessionTitle.optional(),
   archivedAt: z.number().finite().nonnegative().optional(),
   turns: z.array(turn),
-  usage: usage.optional(),
+  usage: usageSchema.optional(),
   sessionFile: z
     .string()
     .regex(/^[\w.-]+\.jsonl$/)
@@ -255,8 +248,8 @@ export function parseUsage(update: {
   used: number;
   size: number;
   cost?: unknown;
-}): z.infer<typeof usage> | undefined {
-  const parsed = usage.safeParse({ ...update, cost: update.cost ?? undefined });
+}): Usage | undefined {
+  const parsed = usageSchema.safeParse({ ...update, cost: update.cost ?? undefined });
   return parsed.success ? parsed.data : undefined;
 }
 
@@ -361,6 +354,13 @@ export const webviewMessage = z.discriminatedUnion('type', [
       type: z.literal('forkTurn'),
       id: z.string().min(1).max(100),
       boundary: z.enum(['before', 'after']),
+    })
+    .strict(),
+  z
+    .object({
+      v: z.literal(1),
+      type: z.literal('retryTurn'),
+      id: z.string().min(1).max(100),
     })
     .strict(),
   z.object({
