@@ -10,6 +10,8 @@ An external formatter, Git checkout, or editor save can change a file while a re
 
 If an edit reports `File has newer changes` or `Native edit preimage is stale`, read the current file once and retry. Do not force an edit over unrelated user work.
 
+The Changes list is an actionable projection: it shows only live, non-identical pending agent edits. Conflict snapshots remain in the journal for recovery, but stale or externally changed records do not appear as Keep/Undo rows.
+
 ## Agent Runtime
 
 Agent-owned shell commands can use the Node runtime bundled with VS Code. `omp.shell.nodeRuntime` defaults to `auto`, which uses the host runtime when `.nvmrc`, `.node-version`, or `package.json` engines declares Node 20 or newer. `host` always uses it; `system` preserves the inherited `node`. Commands also receive `LINEWISE_NODE` and `LINEWISE_NODE_VERSION`. This setting does not change the user's integrated terminal.
