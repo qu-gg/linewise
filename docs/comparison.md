@@ -6,13 +6,13 @@ The shared synthetic task is: **Change Header: and Footer: to uppercase in revie
 
 ## Matched Transcript Views
 
-Both views use VS Code 1.146.0 on Linux x64, the Dark 2026 theme, zoom 0, and a maximized secondary sidebar at 600 x 900 pixels. The prompt and final answer are shared; tool records and available controls intentionally differ.
+The Local reference uses VS Code 1.146.0 and OMP 18.21.0; the current Linewise capture uses VS Code 1.147.0 and OMP 19.2.1. Both use Linux x64, the Dark 2026 theme, zoom 0, and a maximized secondary sidebar at 600 x 900 pixels. The captures use independent synthetic fixtures for the same review task; the Linewise answer and changed-file summary are not byte-identical to the Local recorded table, and available controls intentionally differ.
 
 ### Linewise
 
-![Linewise transcript with its changed-file summary](images/linewise-chat.png)
+![Current Linewise transcript with Start Over, completed status, changed-file summary, and answer actions](images/linewise-chat.png)
 
-A guarded scripted OMP provider runs the fixture. The fixture really changes the disposable file through Linewise's file-tool/review path. The displayed model name is fixture presentation, not a claim that that model generated this reply. The summary offers review actions for the actual pending changes.
+A guarded scripted OMP provider runs the fixture. The fixture really changes the disposable file through Linewise's file-tool/review path. The displayed model name is fixture presentation, not a claim that that model generated this reply. The current transcript shows Start Over, completed status and diff stats, retry/copy/fork answer actions, and review controls for the actual pending changes. Retry rewinds the last completed response in place and keeps the active command-permission mode; it does not fork or reset permissions.
 
 ### VS Code Local Reference
 
@@ -22,7 +22,7 @@ The native Local workbench uses a recorded-only participant and model that refus
 
 ## Matched Transcript Render Pair
 
-These two native fixture captures use VS Code 1.147.0, OMP 19.2.1, Dark 2026, zoom 0, and a 1440 x 900 workbench. Both show the same synthetic two-turn chat and the same surrounding workbench; only the transcript presentation changed. The before capture is `release/v0.1.7` at `19925d4` (before #29), and the after capture is `v0.1.7` at `50477da`. The test-run file panel remains visible; no UI was painted, cropped, or composited.
+These two native fixture captures use VS Code 1.147.0, OMP 19.2.1, Dark 2026, zoom 0, and a 1440 x 900 workbench. Both show the same synthetic two-turn chat and the same surrounding workbench; only the transcript presentation changed. The before capture is `release/v0.1.7` at `19925d4` (before #29); the after capture is the current Local-parity transcript with retry and the final composer pass. The test-run file panel remains visible; no UI was painted, cropped, or composited.
 
 ### Before #29
 
@@ -30,11 +30,11 @@ These two native fixture captures use VS Code 1.147.0, OMP 19.2.1, Dark 2026, zo
 
 The older transcript separates turns with spacing and a small completed-step line; it has no persistent speaker identity or answer action row.
 
-### After #29
+### Current
 
-![Linewise v0.1.7 transcript with You and Assistant identity, completed status, and persistent copy action](images/transcript-after.png)
+![Current Linewise transcript with completed status, diff stats, Start Over, and retry/copy answer actions](images/transcript-after.png)
 
-The current transcript adds `You`/`Assistant` identity, a scannable completed/passed status, and persistent answer metadata and copy action. The deterministic [transcript UI tests](../src/test/webview-transcript-ui.test.ts) cover the tool, running, failed, collapsed/expanded, focus, scroll, selection, disclosure, and batching states beyond this matched pair.
+The current transcript follows Local more closely: per-message role labels are removed, completed status and diff stats remain scannable, Start Over is available above populated transcripts, and the latest answer exposes Retry, Copy, and the Linewise fork action. Retry replaces the last completed response in the same session and preserves the active command-permission mode. The deterministic [transcript UI tests](../src/test/webview-transcript-ui.test.ts) cover the tool, running, failed, collapsed/expanded, focus, scroll, selection, disclosure, retry, permission, and batching states beyond this matched pair.
 
 ## Selective Hunk Review
 

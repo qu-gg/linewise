@@ -26,6 +26,7 @@ import { OpenRouterRoutes } from './model-routes.js';
 import { routeRequest, type RequestHandlers } from './request-router.js';
 import { openIntegratedBrowser } from './integrated-browser.js';
 import { defaultPermissionMode } from './host-permissions.js';
+import { retryLastTurn } from './retry-turn.js';
 import type { PermissionMode } from './terminal-policy.js';
 
 const execute = promisify(execFile);
@@ -139,6 +140,8 @@ class OmpView extends HostOperations implements vscode.WebviewViewProvider {
     editPrompt: (id, text) =>
       this.view.editPrompt(id, () => this.branchHistory(id, 'before', text)),
     forkTurn: (id, boundary) => this.branchHistory(id, boundary),
+    retryTurn: (id) =>
+      retryLastTurn(this.view, id, (id, prompt) => this.branchHistory(id, 'before', prompt, false)),
     permissions: (mode, confirmed) =>
       this.idleOperation('config', async () => {
         if (!this.tools) throw new Error('Start a session before changing permissions.');
@@ -261,6 +264,7 @@ class OmpView extends HostOperations implements vscode.WebviewViewProvider {
     id: string,
     boundary: 'before' | 'after',
     replacement?: string,
+    resetPermissions = true,
   ): Promise<void> {
     if (this.operation) throw new Error('Wait for the current operation before changing history.');
     const target = historyBoundary(this.client, this.view.active(), id, boundary);
@@ -273,7 +277,7 @@ class OmpView extends HostOperations implements vscode.WebviewViewProvider {
         target,
         boundary,
         replacement !== undefined,
-        () => this.resetPermissionMode(),
+        resetPermissions ? () => this.resetPermissionMode() : () => {},
       );
       if (cloned) this.view.attachments.restore(cloned.id, selected, boundary === 'before');
     } finally {
@@ -283,7 +287,6 @@ class OmpView extends HostOperations implements vscode.WebviewViewProvider {
     else if (boundary === 'before')
       this.view.chat.post({ v: 1, type: 'draft', text: selected.prompt });
   }
-
   private async prompt(
     text: string,
     attach = true,
@@ -435,17 +438,14 @@ class OmpView extends HostOperations implements vscode.WebviewViewProvider {
       }
     }
   }
-
   private connectionPermissionMode(): PermissionMode {
     if (!vscode.workspace.isTrusted) this.permissionMode = undefined;
     return this.permissionMode ?? defaultPermissionMode();
   }
-
   private resetPermissionMode(): void {
     if (this.permissionMode !== 'all' && this.permissionMode !== 'yolo') return;
-    const fallback = defaultPermissionMode();
     this.tools?.resetPermissions();
-    this.permissionMode = this.tools?.permissions ?? fallback;
+    this.permissionMode = this.tools?.permissions ?? defaultPermissionMode();
   }
 
   private async finishTools(tools = this.tools): Promise<void> {

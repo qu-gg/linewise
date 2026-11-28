@@ -328,6 +328,7 @@ function buttonAction(target) {
     permissions: () => togglePermissions(render, () => state),
     forkBefore: () => send('forkTurn', { id: target.dataset.id, boundary: 'before' }),
     forkAfter: () => send('forkTurn', { id: target.dataset.id, boundary: 'after' }),
+    retryTurn: () => send('retryTurn', { id: target.dataset.id }),
     copyAnswer: () => send('copyTool', { id: target.dataset.id }),
     showChanges,
     context: () => contextAction('context'),

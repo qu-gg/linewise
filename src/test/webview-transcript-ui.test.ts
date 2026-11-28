@@ -64,6 +64,22 @@ test('transcript names the user, assistant and persistent answer actions', () =>
   assert.equal(dom.window.document.querySelector('[data-action="regenerate"]'), null);
 });
 
+test('retry is available only on the last completed answer and preserves the prompt boundary', () => {
+  const first = { ...turn(), id: 'first' };
+  const second = { ...turn(), id: 'second' };
+  update({ turns: [first, second] });
+  const retries = [...dom.window.document.querySelectorAll('[data-action="retryTurn"]')];
+  assert.equal(retries.length, 1);
+  assert.equal(retries[0]!.getAttribute('aria-label'), 'Retry');
+  assert.equal(retries[0]!.getAttribute('data-id'), 'second');
+  (retries[0] as HTMLButtonElement).click();
+  assert.deepEqual(messages.at(-1), { v: 1, type: 'retryTurn', id: 'second' });
+  update({ turns: [first, { ...second, status: 'running' }] });
+  assert.equal(dom.window.document.querySelectorAll('[data-action="retryTurn"]').length, 0);
+  update({ canHistory: false, turns: [first, second] });
+  assert.equal(dom.window.document.querySelectorAll('[data-action="retryTurn"]').length, 0);
+});
+
 test('activity and tool states are labelled and survive without color-only cues', () => {
   update({ turns: [turn(tools())] });
   assert.equal(element('.activity').dataset.activityStatus, 'completed');

@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { readFile, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { nativeMutationFiles, nativeWorkspaceFiles } from './native-files.js';
+import { waitForDocsCapture } from './docs.integration.js';
+import { retryLastTurn } from './retry.integration.js';
 import { nativeChat } from './chat.integration.js';
 import { prepareUXReopen, verifyUXReopen } from './ux.integration.js';
 import { inspectEditor } from '../host-inspect.js';
@@ -34,6 +36,7 @@ export async function run(): Promise<void> {
   await vscode.commands.executeCommand('omp.open');
   const root = vscode.workspace.workspaceFolders?.[0]?.uri;
   assert.ok(root);
+  if (process.env.VS_OMP_DOCS_CAPTURE === '1') return waitForDocsCapture({ extension, root });
   if (process.env.VS_OMP_EXPECTED_EXTENSION_PATH) return nativeInstalledOnboarding(root);
   if (process.env.VS_OMP_UX_REOPEN === '1') return verifyUXReopen(extension.exports, root);
   await nativeOnboarding(extension.exports, root);
@@ -71,6 +74,7 @@ export async function run(): Promise<void> {
   await firstFork(edited);
   const archive = await reopenBranches(edited);
   await operationGates({ ...prepared, archive });
+  await retryLastTurn(prepared);
   await nativeMutationFiles(extension.exports, root);
   await nativeChat(extension.exports, root);
   await prepareUXReopen(extension.exports, root);
