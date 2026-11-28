@@ -342,6 +342,16 @@ test('activity and thought disclosures stay collapsed across streamed updates', 
   assert.equal(remembered.expanded!['disclosure-thought'], true);
 });
 
+test('Start Over is available for a populated transcript and requests a new session', () => {
+  update({ turns: [turn()] });
+  const start = element<HTMLButtonElement>('.start-over');
+  assert.equal(start.textContent, 'Start Over');
+  start.click();
+  assert.deepEqual(messages.at(-1), { v: 1, type: 'new' });
+  update({ turns: [] });
+  assert.equal(element<HTMLElement>('.start-over').hidden, true);
+});
+
 test('copy answer requests the recorded output without inventing host metadata', () => {
   update({ turns: [turn()] });
   click('copyAnswer');

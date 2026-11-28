@@ -373,7 +373,8 @@ export function turn(current, ui) {
 
 export function transcriptMarkup(state, ui) {
   const turns = state.turns.map((current) => turn(current, { ...ui, turns: state.turns })).join('');
-  return `<section class="transcript" aria-label="Conversation">${turns}${approvalCard(state, ui, 'command')}${questionCard(state, ui)}${!state.workspace ? `<button class="text-button" data-action="openFolder">Open Folder</button>` : ''}</section>`;
+  const startOver = `<button type="button" class="start-over" data-action="new" ${state.turns.length ? '' : 'hidden'}>Start Over</button>`;
+  return `<section class="transcript" aria-label="Conversation">${startOver}${turns}${approvalCard(state, ui, 'command')}${questionCard(state, ui)}${!state.workspace ? `<button class="text-button" data-action="openFolder">Open Folder</button>` : ''}</section>`;
 }
 
 export function transcriptSignature(state, wide) {
@@ -460,6 +461,8 @@ function orderTurns(transcript, nodes) {
 }
 
 export function reconcileTurns(transcript, state, ui, cache) {
+  const startOver = transcript.querySelector('.start-over');
+  if (startOver) startOver.hidden = state.turns.length === 0;
   const retained = new Set();
   const nodes = state.turns.map((current) => {
     retained.add(current.id);
