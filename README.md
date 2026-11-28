@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-   <a href="#try-it"><b>Try v0.1.8</b></a> &middot;
+   <a href="#try-it"><b>Try v0.1.9</b></a> &middot;
    <a href="docs/comparison.md">See the review flow</a> &middot;
    <a href="TODO.md">Find a task</a> &middot;
    <a href="https://github.com/qu-gg/linewise/discussions">Join the discussion</a>
@@ -22,7 +22,7 @@
 <p align="center">
    <a href="LICENSE">MIT licensed</a> &middot;
    Public VS Code APIs + ACP &middot;
-   v0.1.8 &middot; Linux x64 preview
+   v0.1.9 &middot; Linux x64 preview
 </p>
 
 Linewise brings an open coding-agent harness into your editor, with a familiar chat experience inspired by VS Code's Local Harness. Manage sessions, attach chosen context, answer structured questions, inspect agent activity, and control command permissions alongside your code. Review text edits hunk by hunk and whole-file operations individually, keep the changes you want, and undo the ones you do not.
@@ -42,7 +42,7 @@ Of all the harnesses/agent experiences I have tried, the Local Harness in VSCode
 <!-- prettier-ignore-end -->
 
 > [!IMPORTANT]
-> **v0.1.8 is an early preview.** Contributors and careful testers are welcome. Start with a disposable workspace. Accepted VSIX downloads and checksums are listed on [GitHub Releases](https://github.com/qu-gg/linewise/releases); a source version alone is not a published release. There is no Marketplace listing.
+> **v0.1.9 is an early preview.** Contributors and careful testers are welcome. Start with a disposable workspace. Accepted VSIX downloads and checksums are listed on [GitHub Releases](https://github.com/qu-gg/linewise/releases); a source version alone is not a published release. There is no Marketplace listing.
 
 <p align="center">
    <a href="docs/comparison.md">
@@ -142,12 +142,12 @@ These are actual native controls exercised with synthetic file-tool changes. The
 
 ## Try It
 
-The v0.1.8 acceptance profile is **Linux x64, VS Code 1.147.0, OMP 19.2.1, and a trusted single-root local filesystem workspace**. Other platforms, Remote-SSH, multi-root lifecycle, and untrusted/virtual workspaces are not certified.
+The v0.1.9 acceptance profile is **Linux x64, VS Code 1.147.0, OMP 19.2.1, and a trusted single-root local filesystem workspace**. Other platforms, Remote-SSH, multi-root lifecycle, and untrusted/virtual workspaces are not certified.
 
 The VSIX's `linux-x64` target is not just a filename: it includes a matching native terminal dependency and currently Linux-only host behavior. Other compatible Linux distributions may work, but macOS, Windows, and ARM64 are not automatically supported. Help test or port a named target through the [platform compatibility workstream](TODO.md#platform-compatibility).
 
 1. Install [Oh My Pi](https://github.com/can1357/oh-my-pi) separately. `omp --version` must report `omp/19.2.1` or a newer 19.x release. Run `omp` and use its `/login` flow if your selected provider needs authentication; Linewise does not copy VS Code's Copilot credentials.
-2. Go to [GitHub Releases](https://github.com/qu-gg/linewise/releases), download the Linux x64 VSIX from [v0.1.8](https://github.com/qu-gg/linewise/releases/tag/v0.1.8), and verify it against the accompanying `SHA256SUMS`. Alternatively, build a development VSIX with **Node 24.11+**:
+2. Go to [GitHub Releases](https://github.com/qu-gg/linewise/releases), download the Linux x64 VSIX from [v0.1.9](https://github.com/qu-gg/linewise/releases/tag/v0.1.9), and verify it against the accompanying `SHA256SUMS`. Alternatively, build a development VSIX with **Node 24.11+**:
 
    ```sh
    git clone https://github.com/qu-gg/linewise.git
@@ -166,7 +166,7 @@ The extension ID remains `vs-omp-local.vs-omp`, and settings/command IDs retain 
 
 ## Control And Limits
 
-Review is independent of Git. Pending edits accumulate across prompts; conflicts refuse to overwrite newer user or external changes. Keep/Undo covers journaled file-tool changes, **not shell side effects or conversation history**.
+Review is independent of Git. Pending edits accumulate across prompts; stale or externally changed records are hidden from the actionable list and never overwrite newer user or external changes. Keep/Undo covers journaled file-tool changes, **not shell side effects or conversation history**.
 
 Commands run with your host permissions, **not in an OS sandbox**. Command Rules is the default; Ask, window-scoped Allow All, and explicitly confirmed YOLO are available. YOLO's static denylist is best effort, not a destruction detector. File-tool outside-workspace approval and URL/browser consent remain separate.
 

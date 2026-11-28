@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.1.9
+
+Feature release for actionable review, provider routing, and agent workflow hardening.
+
+- Add **Optimal** to the new-chat OpenRouter Route picker. It ranks eligible
+  providers by 30-minute p50 output throughput per completion token, uses each
+  provider's best eligible endpoint, and resolves to a real `model@provider` at
+  launch. OpenRouter only exposes throughput to authenticated catalog requests,
+  so Optimal is shown disabled with an explanation when the public catalog has
+  no metrics; Auto remains the default.
+- Recover stale file reviews instead of blocking: an external revert to the
+  review baseline supersedes the pending record, a file returned to the
+  postimage restores it, and Discard is a no-op when disk already matches the
+  baseline. A failed native host commit invalidates captured read snapshots so
+  the fresh-read retry can proceed.
+- Show only live, non-identical pending edits in the Changes list and session
+  pending-review totals. Conflict and no-op journal records stay available for
+  recovery but no longer appear as actionless Keep/Undo rows.
+- Run agent-owned shell commands on the VS Code host Node runtime. `auto`
+  detects `.nvmrc`, `.node-version`, or `package.json` engines; `host` and
+  `system` are explicit overrides. Commands receive `LINEWISE_NODE`, and the
+  user's integrated terminal is unchanged.
+- Add **Linewise: Prepare Pull Request**. It requires a clean branch that is not
+  behind `origin/main`, runs the repository check/verify/test script with the
+  host runtime, and copies a PR body with captured verification evidence. It
+  does not create, push, or merge the pull request.
+- Append a short trusted Linewise instruction baseline to every agent session,
+  including fresh repositories with no agent file. Repository `AGENTS.md`,
+  `.omp/AGENTS.md`, or Copilot instructions are appended after it.
+- Keep the local Linux x64, VS Code 1.147.0 and OMP 19.2.1 acceptance profile.
+  Remote-SSH, multi-root lifecycle and other platforms remain outside that
+  profile. No Marketplace distribution is included.
+
 ## 0.1.8
 
 Feature release for Local-style chat controls and in-place retry.
