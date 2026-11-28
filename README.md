@@ -136,7 +136,7 @@ Keep the Header hunk, then undo Footer. The accepted `HEADER:` remains while the
    <sub>Keep Header. Footer stays pending. Undo Footer without losing the accepted Header; see the final editor state in the comparison.</sub>
 </p>
 
-These are actual native controls exercised with synthetic file-tool changes. The [comparison page](docs/comparison.md) includes matched Linewise/Local transcript views, exact evidence limits, and image provenance. Creation, deletion, and moves use whole-operation review; arbitrary individual-line acceptance is not implemented.
+These are actual native controls exercised with synthetic file-tool changes. The inline editor wraps long proposed lines, shows added/removed overview marks with a viewport slider, and lets you edit the proposal before Keep; edits stay pending until Keep and can be reset to the agent's suggestion. Creation, deletion, and moves use whole-operation review; arbitrary individual-line acceptance is not implemented. The [comparison page](docs/comparison.md) includes matched Linewise/Local transcript views, exact evidence limits, and image provenance.
 
 ---
 

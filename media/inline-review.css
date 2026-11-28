@@ -10,8 +10,126 @@ body,
 }
 
 body {
+  display: flex;
+  flex-direction: column;
+  position: relative;
   background: var(--vscode-editor-background);
   color: var(--vscode-editor-foreground);
+}
+
+#toolbar {
+  z-index: 25;
+  display: flex;
+  flex: 0 0 auto;
+  gap: 4px;
+  align-items: center;
+  min-height: 34px;
+  padding: 3px 8px;
+  border-bottom: 1px solid var(--vscode-widget-border, transparent);
+  background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+}
+
+#toolbar[hidden] {
+  display: none;
+}
+
+#toolbar button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  border: 1px solid var(--vscode-widget-border, transparent);
+  border-radius: 3px;
+  padding: 0 8px;
+  background: var(--vscode-button-secondaryBackground, transparent);
+  color: var(--vscode-button-secondaryForeground, var(--vscode-editorWidget-foreground));
+  font: var(--vscode-font-size, 13px) var(--vscode-font-family);
+  cursor: pointer;
+}
+
+#toolbar button:hover:not(:disabled) {
+  background: var(--vscode-toolbar-hoverBackground);
+}
+
+#toolbar button:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
+#toolbar button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+#surface {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+#editor {
+  position: absolute;
+  inset: 0;
+}
+
+#overview {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 16px;
+  z-index: 5;
+  width: 10px;
+  border-left: 1px solid var(--vscode-editorOverviewRuler-border, transparent);
+  background: var(--vscode-editorOverviewRuler-background, transparent);
+  cursor: pointer;
+  touch-action: none;
+}
+
+.overview-marker {
+  position: absolute;
+  left: 0;
+  right: 0;
+  min-height: 2px;
+  opacity: 0.9;
+}
+
+.overview-marker.added {
+  background: var(
+    --vscode-editorOverviewRuler-addedForeground,
+    var(
+      --vscode-diffEditor-insertedTextBorder,
+      var(--vscode-gitDecoration-addedResourceForeground, #2ea043)
+    )
+  );
+}
+
+.overview-marker.removed {
+  background: var(
+    --vscode-editorOverviewRuler-deletedForeground,
+    var(
+      --vscode-diffEditor-removedTextBorder,
+      var(--vscode-gitDecoration-deletedResourceForeground, #f85149)
+    )
+  );
+}
+
+.overview-thumb {
+  position: absolute;
+  left: -1px;
+  right: -1px;
+  min-height: 8px;
+  border: 1px solid var(--vscode-editorOverviewRuler-border, transparent);
+  background: var(--vscode-scrollbarSlider-background, #79797966);
+  pointer-events: none;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }
 
 #status {
@@ -27,26 +145,48 @@ body {
 }
 
 .review-added {
-  background: var(--vscode-diffEditor-insertedLineBackground, #23863626);
+  background: var(
+    --vscode-diffEditor-insertedLineBackground,
+    var(--vscode-diffEditor-insertedTextBackground, #23863626)
+  );
+  box-shadow: inset 3px 0 0
+    var(
+      --vscode-diffEditor-insertedTextBorder,
+      var(--vscode-gitDecoration-addedResourceForeground, #2ea043)
+    );
 }
 
 .review-add-mark {
-  border-left: 3px solid var(--vscode-gitDecoration-addedResourceForeground, #2ea043);
+  border-left: 3px solid
+    var(
+      --vscode-diffEditor-insertedTextBorder,
+      var(--vscode-gitDecoration-addedResourceForeground, #2ea043)
+    );
 }
 
 .review-deleted {
-  background: var(--vscode-diffEditor-removedLineBackground, #da363326);
+  background: var(
+    --vscode-diffEditor-removedLineBackground,
+    var(--vscode-diffEditor-removedTextBackground, #da363326)
+  );
   color: var(--vscode-editor-foreground);
   font-family: var(--vscode-editor-font-family, monospace);
   font-size: var(--vscode-editor-font-size, 13px);
-  white-space: pre;
-  border-left: 3px solid var(--vscode-gitDecoration-deletedResourceForeground, #f85149);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  border-left: 3px solid
+    var(
+      --vscode-diffEditor-removedTextBorder,
+      var(--vscode-gitDecoration-deletedResourceForeground, #f85149)
+    );
   box-sizing: border-box;
 }
 
 .review-deleted > div {
-  height: 22px;
+  min-height: 22px;
   line-height: 22px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .review-old-number {
@@ -57,9 +197,14 @@ body {
   color: var(--vscode-editorLineNumber-foreground);
 }
 
+.review-old-code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .review-controls {
   position: absolute;
-  right: 20px;
+  right: 44px;
   display: flex;
   gap: 2px;
   height: 28px;

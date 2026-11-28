@@ -4,7 +4,7 @@ import * as modules from 'node:module';
 import { JSDOM } from 'jsdom';
 
 const dom = new JSDOM(
-  '<!doctype html><body data-worker="https://webview.example/inline-worker.js"><main id="editor"></main><div id="status" hidden></div></body>',
+  '<!doctype html><body data-worker="https://webview.example/inline-worker.js"><div id="toolbar" hidden></div><div id="surface"><main id="editor"></main><div id="overview"></div></div><div id="overview-summary"></div><div id="status" hidden></div></body>',
 );
 const root = dom.window.document.getElementById('editor')!;
 const messages: Record<string, unknown>[] = [];
@@ -33,6 +33,7 @@ const model = {
   },
 };
 let scroll = 0;
+let contentHeight = 500;
 let disposed = 0;
 let additions: unknown[] = [];
 let language = '';
@@ -109,6 +110,16 @@ const instance = {
       callback(event);
     }),
   onDidChangeCursorPosition: (callback: (event: unknown) => void) => events.set('cursor', callback),
+  onDidChangeModelContent: (callback: (event: unknown) => void) => events.set('content', callback),
+  getScrollHeight: () => contentHeight,
+  getScrollTop: () => scroll,
+  setScrollTop: (value: number) => {
+    scroll = value;
+    layoutZones();
+  },
+  getLayoutInfo: () => ({ height: 500, verticalScrollbarWidth: 14 }),
+  getTopForLineNumber: (line: number) => 16 + Math.max(0, line - 1) * 22,
+  getBottomForLineNumber: (line: number) => 16 + Math.max(0, line) * 22,
   dispose: () => {
     disposed++;
   },
@@ -202,6 +213,8 @@ function render(overrides: Record<string, unknown> = {}) {
         revision: 'current',
         pending: true,
         available: true,
+        editable: true,
+        edited: false,
         text: 'HEADER:\r\ncontext\r\nFOOTER:\r\n',
         extension: '.ts',
         parts: [
@@ -248,6 +261,10 @@ test('full-file inline rendering and floating controls preserve exact text and h
     [1, 3],
   );
   assert.equal(additions.length, 2);
+  const overview = dom.window.document.getElementById('overview')!;
+  assert.equal(overview.querySelectorAll('.overview-marker.added').length, 2);
+  assert.equal(overview.querySelectorAll('.overview-marker.removed').length, 2);
+  assert.ok(overview.querySelector('.overview-thumb'));
   assert.equal(revealed, 3);
   button('header', 'Keep').click();
   assert.deepEqual(messages.at(-1), {
@@ -308,6 +325,55 @@ test('inline deleted text is escaped; file fallbacks, EOF and scroll positions r
   dom.window.dispatchEvent(new dom.window.MessageEvent('message', { data: { type: 'unrelated' } }));
 });
 
+test('editable proposals show whole-file actions and send exact edited text', () => {
+  render();
+  model.text = 'HEADER:\r\ncontext\r\nFOOTER:\r\n// edited';
+  events.get('content')!({});
+  const toolbar = dom.window.document.getElementById('toolbar')!;
+  assert.equal(toolbar.hidden, false);
+  assert.ok(
+    [...root.querySelectorAll<HTMLElement>('.review-controls')].every((item) => item.hidden),
+  );
+  dom.window.document.querySelector<HTMLButtonElement>('[data-action="keepFile"]')!.click();
+  assert.deepEqual(messages.at(-1), {
+    type: 'reviewAction',
+    changeId: 'owned',
+    revision: 'current',
+    operation: 'keep',
+    text: 'HEADER:\r\ncontext\r\nFOOTER:\r\n// edited',
+  });
+  render({ edited: true, text: 'HEADER:\r\ncontext\r\nFOOTER:\r\n// edited' });
+  dom.window.document.querySelector<HTMLButtonElement>('[data-action="resetFile"]')!.click();
+  assert.deepEqual(messages.at(-1), { type: 'reset', changeId: 'owned', revision: 'current' });
+  render({ edited: false, text: 'HEADER:\r\ncontext\r\nFOOTER:\r\n' });
+  assert.equal(model.text, 'HEADER:\r\ncontext\r\nFOOTER:\r\n');
+  assert.equal(toolbar.hidden, true);
+});
+
+test('overview pointer and wheel navigation delegate to the editor scroll position', () => {
+  render();
+  const overview = dom.window.document.getElementById('overview')!;
+  contentHeight = 1000;
+  scroll = 0;
+  Object.defineProperty(overview, 'getBoundingClientRect', {
+    configurable: true,
+    value: () => ({ top: 0, left: 0, right: 10, bottom: 500, width: 10, height: 500 }),
+  });
+  overview.dispatchEvent(
+    new dom.window.MouseEvent('pointerdown', { clientY: 250, button: 0, bubbles: true }),
+  );
+  assert.equal(scroll, 250);
+  overview.dispatchEvent(
+    new dom.window.MouseEvent('pointerup', { clientY: 250, button: 0, bubbles: true }),
+  );
+  scroll = 250;
+  overview.dispatchEvent(
+    new dom.window.WheelEvent('wheel', { deltaY: 200, cancelable: true, bubbles: true }),
+  );
+  assert.equal(scroll, 450);
+  contentHeight = 500;
+});
+
 test('inline themes follow editor tokens and workers use only the owned local bundle', async () => {
   dom.window.document.body.classList.add('vscode-light');
   dom.window.document.body.style.setProperty('--vscode-editor-background', '#ffffff');
@@ -316,11 +382,15 @@ test('inline themes follow editor tokens and workers use only the owned local bu
   dom.window.document.body.style.setProperty('--vscode-editor-font-size', '15px');
   await Promise.resolve();
   assert.equal(theme.base, 'vs');
-  assert.deepEqual(theme.colors, {
-    'editor.background': '#ffffff',
-    'editor.foreground': '#111111',
+  const colors = theme.colors as Record<string, string>;
+  assert.equal(colors['editor.background'], '#ffffff');
+  assert.equal(colors['editor.foreground'], '#111111');
+  assert.deepEqual(options, {
+    fontFamily: 'Test Mono',
+    fontSize: 15,
+    wordWrap: 'on',
+    wrappingIndent: 'same',
   });
-  assert.deepEqual(options, { fontFamily: 'Test Mono', fontSize: 15 });
   const environment = (
     globalThis as unknown as { MonacoEnvironment: { getWorker: () => Promise<WorkerFixture> } }
   ).MonacoEnvironment;

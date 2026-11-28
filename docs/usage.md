@@ -14,9 +14,11 @@ Selecting a model makes it the active model and the default for new sessions in 
 
 ## Review
 
-Changed Files shows cumulative unresolved file-tool changes, with counts and file/bulk Keep/Discard actions. Selecting a file opens the public readonly inline review editor: green additions, red deletions, floating hunk Keep/Undo. Keep advances only that accepted baseline; Undo restores the selected pending hunk while preserving accepted text and exact line endings. Creation/deletion/moves retain whole-operation review.
+Changed Files shows cumulative unresolved file-tool changes, with counts and file/bulk Keep/Discard actions. Selecting a file opens the full-file inline review editor: syntax-aware added/removed lines, wrapped proposed text, a green/red overview strip with a viewport slider, and floating hunk Keep/Undo controls. The proposed text is editable before Keep; edits are pending review content only and are not written until Keep. While edited, hunk controls are disabled and whole-file **Keep file**, **Undo**, and **Reset to suggestion** actions remain available. Reset restores the agent's proposal; Undo restores the original baseline; Keep writes the exact edited proposal through the owner/revision-bound review journal. Creation, deletion, and moves retain whole-operation review.
 
-After all review resolves, an existing file returns to its ordinary editor; a deleted file's review closes. Busy/stale/conflicting/retired owners cannot mutate through the controls. If newer user or external changes cause a conflict, inspect the live file rather than trying to bypass the refusal.
+Keep advances only that accepted baseline; Undo restores the selected pending hunk while preserving accepted text and exact line endings. After all review resolves, an existing file returns to its ordinary editor; a deleted file's review closes. Busy/stale/conflicting/retired owners cannot mutate through the controls. If newer user or external changes cause a conflict, inspect the live file rather than trying to bypass the refusal.
+
+The overview strip maps added and removed regions to their approximate file positions and shows the visible fraction; click, drag, or scroll over it to navigate. Deleted view zones are measured after wrapping, and markers use the active diff/theme tokens. The strip is navigation assistance, not a claim of exact line-level acceptance or complete diff coverage.
 
 Review is independent of Git, includes unsaved text baselines where supported, and does not restore shell/task/web effects. Historical prompt edits and forks change conversation history, not workspace state.
 

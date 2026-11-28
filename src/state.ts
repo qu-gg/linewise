@@ -97,6 +97,8 @@ const change = z.object({
   path: z.string(),
   before: z.string().nullable(),
   after: z.string().nullable(),
+  applied: z.string().nullable().optional(),
+  suggestion: z.string().nullable().optional(),
   state: z.enum(['applying', 'pending', 'conflict']),
   updatedAt: z.number(),
   destination: z.object({ path: z.string(), before: z.null(), after: z.string() }).optional(),
@@ -381,6 +383,7 @@ export const webviewMessage = z.discriminatedUnion('type', [
       'restoreSession',
     ]),
     id: z.string().min(1).max(100),
+    text: z.string().max(1_048_576).optional(),
   }),
   z
     .object({

@@ -3,6 +3,7 @@ import type { TextFiles } from './review.js';
 import { contextSnapshot } from './context.js';
 import type { Attachment } from './state.js';
 import type { Change } from './review-types.js';
+import { editedProposal } from './review-types.js';
 import { reviewImages } from './review-presentation.js';
 import { reviewHunks } from './review-hunks.js';
 import path from 'node:path';
@@ -48,7 +49,7 @@ export class ReviewEditor implements vscode.CodeLensProvider, vscode.Disposable 
 
   provideCodeLenses(document: vscode.TextDocument): vscode.CodeLens[] {
     const change = this.current(document);
-    if (!change || change.state !== 'pending') return [];
+    if (!change || change.state !== 'pending' || editedProposal(change)) return [];
     return reviewHunks(change).flatMap((hunk) => {
       const line = Math.min(Math.max(0, hunk.newStart - 1), Math.max(0, document.lineCount - 1));
       const range = new vscode.Range(line, 0, line, 0);
@@ -118,7 +119,9 @@ export class ReviewEditor implements vscode.CodeLensProvider, vscode.Disposable 
   private lensAvailable(): boolean {
     const document = vscode.window.activeTextEditor?.document;
     const active = document && this.current(document);
-    return Boolean(active?.state === 'pending' && reviewHunks(active).length);
+    return Boolean(
+      active?.state === 'pending' && !editedProposal(active) && reviewHunks(active).length,
+    );
   }
 
   dispose(): void {

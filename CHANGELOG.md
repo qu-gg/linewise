@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- Add Local-style review navigation and editing to the full-file inline editor:
+  wrapped proposed text, added/removed overview marks with a draggable
+  viewport slider, VS Code diff theme tokens, and edit-before-Keep proposals.
+  Edited proposals remain pending review content until Keep, support Reset to
+  suggestion, and keep whole-file Keep/Undo available while hunk controls are
+  disabled. The review journal records the exact applied bytes and refuses
+  stale or externally changed preimages.
+
 ## 0.1.9
 
 Feature release for actionable review, provider routing, and agent workflow hardening.

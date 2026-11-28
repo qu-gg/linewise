@@ -30,6 +30,8 @@ export interface Change {
   path: string;
   before: string | null;
   after: string | null;
+  applied?: string | null;
+  suggestion?: string | null;
   state: 'applying' | 'pending' | 'conflict';
   updatedAt: number;
   destination?: { path: string; before: null; after: string };
@@ -39,6 +41,24 @@ export interface Change {
   hunkIds?: { id: string; signature: string }[];
   hunkIntent?: { before: string; after: string; hunkIds: { id: string; signature: string }[] };
   operations?: ReviewOperation[];
+}
+
+export function appliedText(change: Change): string | null {
+  if (change.destination) return change.destination.after;
+  return change.applied !== undefined ? change.applied : change.after;
+}
+
+export function suggestionText(change: Change): string | null {
+  if (change.destination) return change.destination.after;
+  return change.suggestion !== undefined ? change.suggestion : appliedText(change);
+}
+
+export function editedProposal(change: Change): boolean {
+  return !change.destination && change.after !== null && change.after !== appliedText(change);
+}
+
+export function editableProposal(change: Change): boolean {
+  return change.state === 'pending' && !change.destination && change.after !== null;
 }
 
 export function images(change: Change): Pick<Change, 'path' | 'before' | 'after'>[] {

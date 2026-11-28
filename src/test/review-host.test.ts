@@ -139,6 +139,30 @@ test('floating review dispatch rejects late controls and resolves only owned Hea
   );
 });
 
+test('editable proposals persist off disk and whole-file Keep writes the exact edited text', async (context) => {
+  const { host, target, before, change, surface, state, action } = await headerFooterHost(context);
+  const edited = `${before.replace('Header:', 'HEADER:').replace('Footer:', 'FOOTER:')}// reviewed\n`;
+  await surface.send({
+    type: 'proposal',
+    changeId: change.id,
+    revision: state().revision,
+    text: edited,
+  });
+  assert.equal(host.storedState!().changes[0]!.after, edited);
+  assert.equal(
+    Buffer.from(fixture.disk.get(target)!.bytes).toString(),
+    before.replace('Header:', 'HEADER:').replace('Footer:', 'FOOTER:'),
+  );
+  assert.equal(state().edited, true);
+  await surface.send({
+    ...action(undefined as unknown as string, 'keep'),
+    hunkId: undefined,
+    text: edited,
+  });
+  assert.equal(Buffer.from(fixture.disk.get(target)!.bytes).toString(), edited);
+  assert.deepEqual(host.status()!.changes, []);
+});
+
 test('a stale historical edit retains session state and returns a failed editing acknowledgement', async (context) => {
   const host = await setup(context);
   await assert.rejects(host.request({ type: 'editPrompt', id: 'missing', text: 'Replacement' }));
@@ -171,6 +195,14 @@ async function inlineLifecycle(context: import('node:test').TestContext) {
       dispatch: async (request) => {
         if (control.failure) throw new Error('Dirty buffer refused.');
         requests.push(request);
+      },
+      edit: async (id, text) => {
+        if (control.failure) throw new Error('Dirty buffer refused.');
+        requests.push({ type: 'proposal', id, text });
+      },
+      reset: async (id) => {
+        if (control.failure) throw new Error('Dirty buffer refused.');
+        requests.push({ type: 'reset', id });
       },
     },
     () => {},
@@ -339,6 +371,8 @@ test('editor review controls require an owned modified snapshot and an idle curr
     changes: () => changes,
     available: () => available,
     dispatch: async () => {},
+    edit: async () => {},
+    reset: async () => {},
   });
   context.after(() => {
     editor.dispose();
@@ -391,6 +425,8 @@ test('editor title actions navigate and resolve only the current hunk without re
     dispatch: async (request) => {
       requests.push(request);
     },
+    edit: async () => {},
+    reset: async () => {},
   });
   context.after(() => {
     editor.dispose();
@@ -423,4 +459,33 @@ test('editor title actions navigate and resolve only the current hunk without re
   assert.deepEqual(fixture.commandCalls.at(-1)!.args, ['omp.reviewAvailable', false]);
   await assert.rejects(editor.atCursor('Discard'), /current OMP change/);
   fixture.editor = undefined;
+});
+
+test('custom inline proposals and reset are revision-bound and never mutate stale owners', async (context) => {
+  const { surface, state, requests, change } = await inlineLifecycle(context);
+  await surface.send({
+    type: 'proposal',
+    changeId: change.id,
+    revision: state().revision,
+    text: 'edited proposal',
+  });
+  assert.deepEqual(requests.at(-1), {
+    type: 'proposal',
+    id: change.id,
+    text: 'edited proposal',
+  });
+  const length = requests.length;
+  await surface.send({
+    type: 'proposal',
+    changeId: change.id,
+    revision: 'stale',
+    text: 'stale proposal',
+  });
+  assert.equal(requests.length, length);
+  await surface.send({
+    type: 'reset',
+    changeId: change.id,
+    revision: state().revision,
+  });
+  assert.deepEqual(requests.at(-1), { type: 'reset', id: change.id });
 });
