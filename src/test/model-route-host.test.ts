@@ -8,19 +8,39 @@ import { transport } from './acp-fixture.js';
 const providerResponse = {
   data: {
     endpoints: [
+      {
+        provider_name: 'BaseTen',
+        tag: 'baseten/fast',
+        status: 0,
+        throughput_last_30m: { p50: 60 },
+        pricing: { completion: '0.000002' },
+      },
+      {
+        provider_name: 'Nebius',
+        tag: 'nebius/fp4',
+        status: 0,
+        throughput_last_30m: { p50: 100 },
+        pricing: { completion: '0.000005' },
+      },
+    ],
+  },
+};
+const blindProviderResponse = {
+  data: {
+    endpoints: [
       { provider_name: 'BaseTen', tag: 'baseten/fast', status: 0 },
       { provider_name: 'Nebius', tag: 'nebius/fp4', status: 0 },
     ],
   },
 };
 const originalFetch = globalThis.fetch;
-let mode: 'ok' | 'fail' = 'ok';
+let mode: 'ok' | 'fail' | 'blind' = 'ok';
 const requests: string[] = [];
 
 globalThis.fetch = (async (input) => {
   requests.push(String(input));
   if (mode === 'fail') return new Response('unavailable', { status: 503 });
-  return new Response(JSON.stringify(providerResponse), {
+  return new Response(JSON.stringify(mode === 'blind' ? blindProviderResponse : providerResponse), {
     status: 200,
     headers: { 'content-type': 'application/json' },
   });
@@ -65,12 +85,12 @@ test('new-chat route catalog applies an upstream pin through the OMP launch mode
   ]);
   await host.request({ type: 'connect' });
   await waitFor(
-    () => host.status()!.modelRoute.options.length > 1,
+    () => host.status()!.modelRoute.options.some((option) => option.value === 'baseten'),
     'route catalog was not published',
   );
   assert.deepEqual(
     host.status()!.modelRoute.options.map((option) => option.value),
-    ['auto', 'baseten', 'nebius'],
+    ['auto', 'optimal', 'baseten', 'nebius'],
   );
   assert.match(requests[0]!, /deepseek\/deepseek-v4\.1-flash-1017\/endpoints$/);
 
@@ -99,6 +119,45 @@ test('new-chat route catalog applies an upstream pin through the OMP launch mode
   await assert.rejects(host.request({ type: 'modelRoute', value: 'nebius' }), /new chat/);
 });
 
+test('Optimal route launches the best real provider and labels the applied route', async (context) => {
+  requests.length = 0;
+  mode = 'ok';
+  const host = await setup(context);
+  transport.nextSessionId = 'optimal-session';
+  transport.configOptions = modelCatalog([
+    {
+      name: 'DeepSeek V4.1 Flash 1017',
+      value: 'openrouter/deepseek/deepseek-v4.1-flash-1017',
+    },
+  ]);
+  await host.request({ type: 'connect' });
+  await waitFor(
+    () => host.status()!.modelRoute.options.length > 2,
+    'route catalog was not published',
+  );
+  assert.deepEqual(
+    host.status()!.modelRoute.options.map((option) => option.value),
+    ['auto', 'optimal', 'baseten', 'nebius'],
+  );
+
+  await host.request({ type: 'modelRoute', value: 'optimal' });
+  assert.equal(host.status()!.modelRoute.value, 'optimal');
+  assert.equal(host.status()!.configs.find((config) => config.id === 'model')!.route, undefined);
+
+  transport.nextSessionId = 'optimal-routed-session';
+  await host.request({ type: 'prompt', text: 'route optimally' });
+  assert.ok(transport.started!.args.includes('--model'));
+  assert.equal(
+    transport.started!.args[transport.started!.args.indexOf('--model') + 1],
+    'openrouter/deepseek/deepseek-v4.1-flash-1017@baseten',
+  );
+  assert.equal(
+    host.status()!.configs.find((config) => config.id === 'model')!.route?.label,
+    'Optimal · BaseTen',
+  );
+  assert.equal(host.storedState!().lastModel, 'openrouter/deepseek/deepseek-v4.1-flash-1017');
+});
+
 test('changing the model clears its pending route and non-OpenRouter models hide the picker', async (context) => {
   requests.length = 0;
   mode = 'ok';
@@ -114,7 +173,7 @@ test('changing the model clears its pending route and non-OpenRouter models hide
   ]);
   await host.request({ type: 'connect' });
   await waitFor(
-    () => host.status()!.modelRoute.options.length > 1,
+    () => host.status()!.modelRoute.options.some((option) => option.value === 'baseten'),
     'route catalog was not published',
   );
   await host.request({ type: 'modelRoute', value: 'nebius' });
@@ -127,7 +186,7 @@ test('changing the model clears its pending route and non-OpenRouter models hide
   assert.equal(host.status()!.modelRoute.value, 'auto');
   assert.equal(host.status()!.configs.find((config) => config.id === 'model')!.route, undefined);
   await waitFor(
-    () => host.status()!.modelRoute.options.length > 1,
+    () => host.status()!.modelRoute.options.some((option) => option.value === 'baseten'),
     'route catalog did not refresh',
   );
   assert.match(requests.at(-1)!, /qwen\/qwen3\.8-flash\/endpoints$/);
@@ -167,7 +226,7 @@ test('New Session clears a pending route and uses Auto routing', async (context)
   fixture.configuration.set('omp.model', 'openrouter/deepseek/deepseek-v4.1-flash-1017');
   await host.request({ type: 'connect' });
   await waitFor(
-    () => host.status()!.modelRoute.options.length > 1,
+    () => host.status()!.modelRoute.options.some((option) => option.value === 'baseten'),
     'route catalog was not published',
   );
   await host.request({ type: 'modelRoute', value: 'baseten' });
@@ -175,4 +234,34 @@ test('New Session clears a pending route and uses Auto routing', async (context)
   await host.request({ type: 'new' });
   assert.equal(host.status()!.modelRoute.value, 'auto');
   assert.equal(transport.started!.args.includes('--model'), false);
+});
+
+test('Optimal stays disabled and refuses launch without throughput metrics', async (context) => {
+  requests.length = 0;
+  mode = 'blind';
+  const host = await setup(context);
+  transport.nextSessionId = 'blind-route-session';
+  transport.configOptions = modelCatalog([
+    {
+      name: 'DeepSeek V4.1 Flash 1017',
+      value: 'openrouter/deepseek/deepseek-v4.1-flash-1017',
+    },
+  ]);
+  await host.request({ type: 'connect' });
+  await waitFor(
+    () =>
+      host
+        .status()!
+        .modelRoute.options.some((option) => option.value === 'optimal' && option.disabled),
+    'route catalog was not published',
+  );
+  const optimal = host.status()!.modelRoute.options.find((option) => option.value === 'optimal');
+  assert.ok(optimal);
+  assert.equal(optimal.disabled, true);
+  await assert.rejects(
+    host.request({ type: 'modelRoute', value: 'optimal' }),
+    /Optimal routing is unavailable/,
+  );
+  assert.equal(host.status()!.modelRoute.value, 'auto');
+  mode = 'ok';
 });
