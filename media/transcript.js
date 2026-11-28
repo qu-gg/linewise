@@ -112,7 +112,7 @@ function activityDiff(current, changes) {
   const text = `+${added} -${removed}`;
   return {
     suffix: ` ${text}`,
-    html: ` <span class="activity-diff"><span class="added">+${added}</span> <span class="removed">-${removed}</span></span>`,
+    html: ` <button type="button" class="activity-diff" data-action="showChanges" aria-label="View file changes, ${added} lines added, ${removed} lines deleted" title="View file changes"><span class="added">+${added}</span> <span class="removed">-${removed}</span></button>`,
   };
 }
 

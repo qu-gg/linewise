@@ -65,9 +65,18 @@
 .activity-diff {
   display: inline-flex;
   gap: 4px;
+  padding: 0 2px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
   color: var(--vscode-descriptionForeground);
+  font: inherit;
   font-size: 11px;
   font-variant-numeric: tabular-nums;
+}
+.activity-diff:hover {
+  background: var(--vscode-toolbar-hoverBackground);
+  color: var(--vscode-foreground);
 }
 .activity-diff .added {
   color: var(--vscode-chat-linesAddedForeground, var(--vscode-testing-iconPassed));

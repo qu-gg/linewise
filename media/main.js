@@ -1,6 +1,6 @@
 import { toolbar } from './toolbar.js';
 import { bindPermissions, permissionControl, togglePermissions } from './permissions.js';
-import { changesPanel as reviewPanel, reviewRequest } from './review.js';
+import { changesPanel as reviewPanel, reviewRequest, showChanges } from './review.js';
 import { canSubmit, composer } from './composer.js';
 import {
   announcements,
@@ -329,6 +329,7 @@ function buttonAction(target) {
     forkBefore: () => send('forkTurn', { id: target.dataset.id, boundary: 'before' }),
     forkAfter: () => send('forkTurn', { id: target.dataset.id, boundary: 'after' }),
     copyAnswer: () => send('copyTool', { id: target.dataset.id }),
+    showChanges,
     context: () => contextAction('context'),
     closeContext: () => contextAction('closeContext'),
     attachOffer: () => offerAction('attachOffer', target.dataset.id),

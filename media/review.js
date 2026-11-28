@@ -2,6 +2,14 @@ export function reviewRequest(target) {
   return target.dataset.id ? { id: target.dataset.id } : {};
 }
 
+export function showChanges() {
+  const changes = document.querySelector('.changes');
+  if (!changes) return;
+  changes.open = true;
+  changes.scrollIntoView?.({ block: 'nearest' });
+  changes.querySelector('summary')?.focus({ preventScroll: true });
+}
+
 export function changesPanel(state, expanded, { escape, icon, itemButton }) {
   if (!state.changes.length) return '';
   const working = state.busy || state.connecting;

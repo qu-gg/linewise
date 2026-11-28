@@ -309,6 +309,16 @@ test('per-turn stats sum exact operation totals and ignore whole-change fallback
   });
   assert.match(element('.activity > summary').textContent!, /\+5 -3/);
   assert.doesNotMatch(element('.activity > summary').textContent!, /\+99/);
+  const diff = element<HTMLButtonElement>('.activity-diff');
+  assert.equal(diff.tagName, 'BUTTON');
+  assert.match(
+    diff.getAttribute('aria-label')!,
+    /View file changes, 5 lines added, 3 lines deleted/,
+  );
+  const changes = element<HTMLDetailsElement>('.changes');
+  changes.open = false;
+  diff.click();
+  assert.equal(changes.open, true);
 });
 
 test('activity and thought disclosures stay collapsed across streamed updates', async () => {
