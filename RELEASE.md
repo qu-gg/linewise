@@ -1,6 +1,6 @@
 # Linewise Release Policy
 
-Linewise v0.1.7 is an early local-Linux preview. The matching GitHub tag/release records publication; no Marketplace distribution is approved. Public source preparation does not authorize a release, repository visibility change, model requests, or acceptance of newly changed bytes. Explicit maintainer launch approval remains subject to every gate below.
+Linewise v0.1.8 is an early local-Linux preview. The matching GitHub tag/release records publication; no Marketplace distribution is approved. Public source preparation does not authorize a release, repository visibility change, model requests, or acceptance of newly changed bytes. Explicit maintainer launch approval remains subject to every gate below.
 
 ## Supported Profile
 
@@ -12,7 +12,7 @@ Candidate and preflight builds use **Ubuntu 24.04**, not a moving native-build b
 
 The [platform compatibility workstream](TODO.md#platform-compatibility) owns planned expansion beyond this profile. `linux-x64` is both the VSIX target and the bundled native binary target; it is not merely an untested-host disclaimer. Another distro may use the same compatible artifact, while another OS/CPU architecture needs matching native dependencies and host behavior. Record actual system-library requirements rather than treating glibc 2.39 as a proven minimum or promising compatibility with musl.
 
-Before adding a downloadable target, review its build/native inventory and licenses, exact VSIX metadata, installed OMP/browser prerequisites, shell/permission/path/storage behavior, owned process cleanup, and fresh/update/manual acceptance on that target. Current packaging and acceptance schemas are Linux-specific: extend them through a reviewed implementation PR that preserves strict existing checks, not by retagging a Linux VSIX or deleting platform guards. [PLAT-07](TODO.md#plat-07) requires a maintainer-approved target profile and the applicable release gates; a contribution or CI build does not itself authorize publication or change the current v0.1.7 download.
+Before adding a downloadable target, review its build/native inventory and licenses, exact VSIX metadata, installed OMP/browser prerequisites, shell/permission/path/storage behavior, owned process cleanup, and fresh/update/manual acceptance on that target. Current packaging and acceptance schemas are Linux-specific: extend them through a reviewed implementation PR that preserves strict existing checks, not by retagging a Linux VSIX or deleting platform guards. [PLAT-07](TODO.md#plat-07) requires a maintainer-approved target profile and the applicable release gates; a contribution or CI build does not itself authorize publication or change the current v0.1.8 download.
 
 ## Authority And Visibility
 
@@ -46,7 +46,7 @@ npm run release:accept -- reports/candidate reports/acceptance.json \
 
 `release:accept` requires a clean matching commit, actual branded CLI versions, a fresh dependency audit, the complete release/native/crash gate, and an extracted exact-VSIX native check. It writes a new-only mode-0600 attestation outside the candidate directory. It does not bypass or automate owner desktop smoke.
 
-For v0.1.7, use `--rollback=passed` only after testing an update from the published v0.1.6 package. Do not claim a rollback test that did not happen; restoring an extension never restores workspace files, provider state, memory or external effects.
+For v0.1.8, use `--rollback=passed` only after testing an update from the published v0.1.7 package. Do not claim a rollback test that did not happen; restoring an extension never restores workspace files, provider state, memory or external effects.
 
 ## Launch Checklist
 

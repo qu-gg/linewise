@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.1.8
+
+Feature release for Local-style chat controls and in-place retry.
+
+- Finish the Local transcript/composer pass: Start Over with its divider
+  treatment, `Default permissions`, completed status and exact diff stats,
+  clickable tool headers, tool-type icons, semantic tool-chain summaries,
+  distinct search phrase/file labels, denied/skipped outcomes, and a narrower
+  status bar that keeps the permission label readable.
+- Add **Retry** to the latest completed answer. It rewinds and resends the same
+  prompt in the same session, preserving attachments, pending file review, and
+  the active command-permission mode. Manual Edit/Fork history rollback still
+  resets elevated modes. Retry refuses stale, running, missing, or blank-prompt
+  targets and never creates an active fork.
+- Refresh the native 600x900 and 1440x900 comparison captures and provenance,
+  and add `npm run capture:docs` for an isolated, toast-cleared docs capture.
+- Keep the local Linux x64, VS Code 1.147.0 and OMP 19.2.1 acceptance profile.
+  Remote-SSH, multi-root lifecycle and other platforms remain outside that
+  profile. No Marketplace distribution is included.
+
 ## 0.1.7
 
 Feature release for transcript/streaming UX and prompt reuse.
