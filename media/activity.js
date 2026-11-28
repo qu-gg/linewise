@@ -31,6 +31,10 @@ function toolTarget(block) {
   }
 }
 
+function searchKind(kind) {
+  return /glob|file|find|list/.test(kind) ? 'files' : 'text';
+}
+
 export function toolVisual(block) {
   const name = block.toolName ?? block.title ?? 'Tool';
   const kind = block.toolKind === 'execute' ? 'execute' : name.toLowerCase();
@@ -39,7 +43,13 @@ export function toolVisual(block) {
   if (/read|open|view/.test(kind))
     return { kind: 'read', icon: 'file', action: 'Read', target: toolTarget(block) };
   if (/search|grep|glob|find/.test(kind))
-    return { kind: 'search', icon: 'search', action: 'Searched', target: toolTarget(block) };
+    return {
+      kind: 'search',
+      searchKind: searchKind(kind),
+      icon: 'search',
+      action: 'Searched',
+      target: toolTarget(block),
+    };
   if (/edit|write|rename|notebook|code_action/.test(kind))
     return { kind: 'edit', icon: 'edit', action: 'Edited', target: toolTarget(block) };
   if (/fetch|browser|web/.test(kind))

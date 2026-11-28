@@ -183,6 +183,40 @@ test('tool chains summarize recognizable activity like Local', () => {
   );
 });
 
+test('tool chains distinguish text and file searches', () => {
+  update({
+    turns: [
+      turn([
+        {
+          id: 'phrase-one',
+          kind: 'tool',
+          toolName: 'Grep',
+          status: 'completed',
+          input: '{"pattern":"needle"}',
+        },
+        {
+          id: 'phrase-two',
+          kind: 'tool',
+          toolName: 'Grep',
+          status: 'completed',
+          input: '{"pattern":"other"}',
+        },
+        {
+          id: 'pattern-one',
+          kind: 'tool',
+          toolName: 'Glob',
+          status: 'completed',
+          input: '{"pattern":"*.ts"}',
+        },
+      ]),
+    ],
+  });
+  assert.equal(
+    element('.tool-chain-label').textContent,
+    'Searched for 2 phrases, Searched for 1 file pattern',
+  );
+});
+
 test('tool chains fall back to Finished with N steps', () => {
   update({
     turns: [
