@@ -321,12 +321,14 @@ test('pending snapshots survive reload with private permissions and corrupt stat
       after: 'agent work',
       state: 'pending',
       updatedAt: Date.now(),
+      operations: [{ kind: 'edit', at: 10, turnId: 'turn', added: 2, removed: 1 }],
     });
     await store.save();
     assert.equal((await stat(path.join(directory, 'state.json'))).mode & 0o777, 0o600);
     const restored = new StateStore(directory);
     await restored.load();
     assert.deepEqual(restored.data.changes, store.data.changes);
+    assert.equal(restored.data.changes[0]!.operations![0]!.added, 2);
     assert.deepEqual(restored.data.sessions, store.data.sessions);
     const change = store.data.changes[0]!;
     change.destination = { path: '/renamed.txt', before: null, after: 'agent work' };

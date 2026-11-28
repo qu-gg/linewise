@@ -1,3 +1,5 @@
+import { diffLines } from 'diff';
+
 export type Approval = (
   operation: {
     kind: 'read' | 'write' | 'delete' | 'move';
@@ -18,6 +20,8 @@ export interface Provenance {
 export interface ReviewOperation extends Provenance {
   kind: 'create' | 'edit' | 'delete' | 'rename';
   at: number;
+  added?: number;
+  removed?: number;
 }
 
 export interface Change {
@@ -51,6 +55,14 @@ export function changeKind(
   return after === null ? 'delete' : 'edit';
 }
 
+export function lineStats(before: string | null, after: string | null) {
+  const parts = diffLines(before ?? '', after ?? '');
+  return {
+    added: parts.filter((part) => part.added).reduce((sum, part) => sum + (part.count ?? 0), 0),
+    removed: parts.filter((part) => part.removed).reduce((sum, part) => sum + (part.count ?? 0), 0),
+  };
+}
+
 export function operationHistory(
   prior: Change | undefined,
   before: string | null,
@@ -60,6 +72,11 @@ export function operationHistory(
 ): ReviewOperation[] {
   return [
     ...(prior?.operations ?? []),
-    { ...provenance, kind: changeKind(before, after, moving), at: Date.now() },
+    {
+      ...provenance,
+      kind: changeKind(before, after, moving),
+      at: Date.now(),
+      ...lineStats(before, after),
+    },
   ].slice(-256);
 }

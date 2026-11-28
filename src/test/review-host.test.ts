@@ -286,6 +286,8 @@ test('host hunk actions open inline review and preserve accepted text across lat
   assert.equal(change.operations[0]!.kind, 'edit');
   assert.equal(change.operations[0]!.turnId, host.status()!.turns[0]!.id);
   assert.equal(change.operations[0]!.tool, 'write');
+  assert.equal(change.operations[0]!.added, 2);
+  assert.equal(change.operations[0]!.removed, 2);
   const [first, second] = change.hunks;
   assert.ok(first && second);
   await host.request({ type: 'hunkReview', id: change.id, hunkId: second.id });

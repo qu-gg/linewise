@@ -2,21 +2,15 @@ import { diffLines } from 'diff';
 import type { Change } from './review.js';
 import path from 'node:path';
 import { reviewHunks } from './review-hunks.js';
-import { changeKind } from './review-types.js';
+import { changeKind, lineStats as calculateLineStats } from './review-types.js';
 
-const lineStats = new WeakMap<Change, { added: number; removed: number }>();
+const lineStatsCache = new WeakMap<Change, { added: number; removed: number }>();
 
 export function changeLineStats(change: Change) {
-  let stats = lineStats.get(change);
+  let stats = lineStatsCache.get(change);
   if (!stats) {
-    const parts = diffLines(change.before ?? '', change.destination?.after ?? change.after ?? '');
-    stats = {
-      added: parts.filter((part) => part.added).reduce((sum, part) => sum + (part.count ?? 0), 0),
-      removed: parts
-        .filter((part) => part.removed)
-        .reduce((sum, part) => sum + (part.count ?? 0), 0),
-    };
-    lineStats.set(change, stats);
+    stats = calculateLineStats(change.before, change.destination?.after ?? change.after);
+    lineStatsCache.set(change, stats);
   }
   return stats;
 }
