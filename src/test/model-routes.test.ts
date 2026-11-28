@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   OpenRouterRoutes,
   openRouterModel,
+  optimalRoute,
   parseOpenRouterProviders,
   routeBaseModel,
   routeProvider,
@@ -35,6 +36,62 @@ const endpoints = {
       {
         provider_name: '<script>',
         tag: 'not a slug',
+      },
+    ],
+  },
+};
+
+const rankedEndpoints = {
+  data: {
+    endpoints: [
+      {
+        provider_name: 'BaseTen',
+        tag: 'baseten/slow',
+        status: 0,
+        throughput_last_30m: { p50: 20 },
+        pricing: { completion: '0.000001' },
+      },
+      {
+        provider_name: 'BaseTen',
+        tag: 'baseten/fast',
+        status: 0,
+        throughput_last_30m: { p50: 60 },
+        pricing: { completion: '0.000002' },
+      },
+      {
+        provider_name: 'Scalar',
+        tag: 'scalar/fp8',
+        status: 0,
+        throughput_last_30m: 30,
+        pricing: { completion: '0.000001' },
+      },
+      {
+        provider_name: 'Zeta',
+        tag: 'zeta/fp8',
+        status: 0,
+        throughput_last_30m: { p50: 30 },
+        pricing: { completion: '0.000001' },
+      },
+      {
+        provider_name: 'Offline',
+        tag: 'offline/fp8',
+        status: -5,
+        throughput_last_30m: { p50: 999 },
+        pricing: { completion: '0.0000001' },
+      },
+      {
+        provider_name: 'NoPrice',
+        tag: 'noprice/fp8',
+        status: 0,
+        throughput_last_30m: { p50: 5 },
+        pricing: { completion: null },
+      },
+      {
+        provider_name: 'Zero',
+        tag: 'zero/fp8',
+        status: 0,
+        throughput_last_30m: { p50: 0 },
+        pricing: { completion: '0.000001' },
       },
     ],
   },
@@ -89,6 +146,47 @@ test('provider parsing groups endpoints by slug and marks unavailable providers'
   assert.deepEqual(parseOpenRouterProviders({ data: { endpoints: [] } }), []);
   assert.throws(() => parseOpenRouterProviders({}), /Invalid/);
   assert.throws(() => parseOpenRouterProviders([]), /Invalid/);
+});
+
+test('Optimal ranking uses each provider best throughput per completion price', () => {
+  const parsed = parseOpenRouterProviders(rankedEndpoints);
+  const baseten = parsed.find((option) => option.value === 'baseten');
+  assert.ok(baseten);
+  assert.equal(baseten.throughput, 60);
+  assert.equal(baseten.completionPrice, 0.000002);
+  assert.equal(parsed.find((option) => option.value === 'offline')?.throughput, undefined);
+  assert.equal(parsed.find((option) => option.value === 'noprice')?.completionPrice, undefined);
+  assert.equal(parsed.find((option) => option.value === 'zero')?.throughput, undefined);
+
+  const optimal = optimalRoute(parsed);
+  assert.ok(optimal);
+  assert.equal(optimal.provider, 'scalar');
+  assert.equal(optimal.name, 'Scalar');
+  assert.equal(optimal.throughput, 30);
+  assert.equal(optimal.completionPrice, 0.000001);
+  assert.ok(Math.abs(optimal.score - 30_000_000) < 1);
+});
+
+test('Optimal ranking excludes missing metrics and breaks ties deterministically', () => {
+  assert.equal(optimalRoute([]), undefined);
+  assert.equal(optimalRoute([{ value: 'missing', name: 'Missing' }]), undefined);
+  assert.equal(
+    optimalRoute([{ value: 'zero', name: 'Zero', throughput: 0, completionPrice: 1 }]),
+    undefined,
+  );
+  assert.equal(
+    optimalRoute([{ value: 'bad', name: 'Bad', throughput: 1, completionPrice: Number.NaN }]),
+    undefined,
+  );
+  assert.equal(
+    optimalRoute([
+      { value: 'zeta', name: 'Zeta', throughput: 10, completionPrice: 0.000001 },
+      { value: 'beta', name: 'Beta', throughput: 10, completionPrice: 0.000002 },
+      { value: 'alpha', name: 'Alpha', throughput: 10, completionPrice: 0.000001 },
+      { value: 'alpha-2', name: 'Alpha', throughput: 10, completionPrice: 0.000001 },
+    ])?.provider,
+    'alpha',
+  );
 });
 
 test('provider fetch is bounded, cached, and refuses failed responses', async () => {

@@ -77,7 +77,7 @@ export function modelRoutePicker(state, { escape, working }) {
     (route.loading
       ? 'Loading OpenRouter providers...'
       : 'OpenRouter provider routing for this new chat');
-  return `<select id="model-route" class="model-route" data-route="1" aria-label="OpenRouter provider" title="${escape(title)}" ${working() ? 'disabled' : ''}>${route.options.map((option) => `<option value="${escape(option.value)}" title="${escape(option.description ?? option.name)}" ${option.value === route.value ? 'selected' : ''}>${escape(option.name)}</option>`).join('')}</select>`;
+  return `<select id="model-route" class="model-route" data-route="1" aria-label="OpenRouter provider" title="${escape(title)}" ${working() ? 'disabled' : ''}>${route.options.map((option) => `<option value="${escape(option.value)}" title="${escape(option.description ?? option.name)}" ${option.value === route.value ? 'selected' : ''} ${option.disabled ? 'disabled' : ''}>${escape(option.name)}</option>`).join('')}</select>`;
 }
 
 export function modelPickerPopover(state, { escape, icon }) {
