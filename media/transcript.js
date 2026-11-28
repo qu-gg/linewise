@@ -158,8 +158,13 @@ function noteTool(facts, block) {
     return;
   }
   if (visual.kind === 'search' && visual.target) {
-    facts.searches.add(visual.target);
-    facts.searchSteps += 1;
+    if (visual.searchKind === 'files') {
+      facts.patterns.add(visual.target);
+      facts.fileSearchSteps += 1;
+    } else {
+      facts.phrases.add(visual.target);
+      facts.textSearchSteps += 1;
+    }
     return;
   }
   facts.other += 1;
@@ -172,8 +177,10 @@ function toolChainFacts(blocks) {
     commands: 0,
     reads: new Set(),
     readSteps: 0,
-    searches: new Set(),
-    searchSteps: 0,
+    phrases: new Set(),
+    patterns: new Set(),
+    textSearchSteps: 0,
+    fileSearchSteps: 0,
     failed: 0,
     cancelled: 0,
     unfinished: 0,
@@ -219,13 +226,27 @@ function addReadLabel(labels, facts) {
     });
 }
 
-function addSearchLabel(labels, facts) {
-  if (facts.searches.size === 1)
-    labels.push({ text: 'Searched for 1 phrase', steps: facts.searchSteps });
-  else if (facts.searches.size > 1)
+function addPhraseLabel(labels, facts) {
+  if (facts.phrases.size === 1)
+    labels.push({ text: 'Searched for 1 phrase', steps: facts.textSearchSteps });
+  else if (facts.phrases.size > 1)
     labels.push({
-      text: countLabel(facts.searches.size, 'Searched for 1 phrase', 'Searched for {0} phrases'),
-      steps: facts.searchSteps,
+      text: countLabel(facts.phrases.size, 'Searched for 1 phrase', 'Searched for {0} phrases'),
+      steps: facts.textSearchSteps,
+    });
+}
+
+function addPatternLabel(labels, facts) {
+  if (facts.patterns.size === 1)
+    labels.push({ text: 'Searched for 1 file pattern', steps: facts.fileSearchSteps });
+  else if (facts.patterns.size > 1)
+    labels.push({
+      text: countLabel(
+        facts.patterns.size,
+        'Searched for 1 file pattern',
+        'Searched for {0} file patterns',
+      ),
+      steps: facts.fileSearchSteps,
     });
 }
 
@@ -238,7 +259,8 @@ function toolChainLabels(facts) {
   addEditLabel(labels, facts);
   addCommandLabel(labels, facts);
   addReadLabel(labels, facts);
-  addSearchLabel(labels, facts);
+  addPhraseLabel(labels, facts);
+  addPatternLabel(labels, facts);
   addOutcomeLabel(labels, facts.failed, '1 tool call failed', '{0} tool calls failed');
   addOutcomeLabel(labels, facts.cancelled, '1 tool call cancelled', '{0} tool calls cancelled');
   addOutcomeLabel(labels, facts.unfinished, '1 unfinished tool call', '{0} unfinished tool calls');
