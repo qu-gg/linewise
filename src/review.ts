@@ -3,7 +3,15 @@ import path from 'node:path';
 import { PathGuard } from './path-guard.js';
 import { hunkIdentities, resolveHunk, reviewHunks } from './review-hunks.js';
 import type { Approval, Change, Provenance } from './review-types.js';
-import { images, operationHistory, priorChange as reconcilePriorChange } from './review-types.js';
+import {
+  appliedText,
+  editedProposal,
+  editableProposal,
+  images,
+  operationHistory,
+  priorChange as reconcilePriorChange,
+  suggestionText,
+} from './review-types.js';
 export { PathGuard } from './path-guard.js';
 export type { Approval, Change } from './review-types.js';
 
@@ -196,6 +204,10 @@ export class ReviewJournal {
       for (const image of expected) await this.verifyImage(change, image);
     } else await this.applyImages(change, expected, signal);
     change.state = 'pending';
+    if (!change.destination) {
+      change.applied = change.after;
+      change.suggestion = change.after;
+    }
     if (change.destination) change.incomplete = false;
     if (images(change).every((image) => image.before === image.after))
       this.changes = this.changes.filter((candidate) => candidate.id !== change.id);
@@ -222,20 +234,97 @@ export class ReviewJournal {
     throw new Error('Save participants changed the file; inspect the conflict before continuing.');
   }
 
-  keep(id: string): Promise<void> {
+  keep(id: string, text?: string): Promise<void> {
     return this.serial(async () => {
       const change = this.find(id);
+      if (text !== undefined) await this.setProposal(change, text);
+      if (!change.destination && change.after !== null) {
+        const applied = appliedText(change);
+        if (applied === null) throw new Error('Review proposal is unavailable.');
+        const current = await this.files.read(change.path);
+        if (current !== applied) {
+          change.state = 'conflict';
+          await this.persist(this.list());
+          throw new Error('Cannot keep: the file has newer user or external changes.');
+        }
+        if (change.after !== applied) {
+          this.checkText(change.after);
+          await this.files.replace(change.path, applied, change.after);
+          if ((await this.files.read(change.path)) !== change.after) {
+            change.state = 'conflict';
+            await this.persist(this.list());
+            throw new Error('Keeping the proposal changed the file unexpectedly.');
+          }
+          change.applied = change.after;
+        }
+      }
       this.changes = this.changes.filter((candidate) => candidate.id !== change.id);
       await this.persist(this.list());
     });
   }
 
+  updateProposal(id: string, text: string): Promise<void> {
+    return this.serial(async () => {
+      const change = this.find(id);
+      await this.setProposal(change, text);
+      await this.persist(this.list());
+    });
+  }
+
+  resetProposal(id: string): Promise<void> {
+    return this.serial(async () => {
+      const change = this.find(id);
+      if (!editableProposal(change)) {
+        throw new Error('This change does not support editable proposals.');
+      }
+      const applied = appliedText(change);
+      if (applied === null) throw new Error('Review proposal is unavailable.');
+      const current = await this.files.read(change.path);
+      if (current !== applied) {
+        change.state = 'conflict';
+        await this.persist(this.list());
+        throw new Error('Cannot reset: the file has newer user or external changes.');
+      }
+      if (change.after === applied) return;
+      change.applied = applied;
+      change.suggestion = applied;
+      change.after = applied;
+      change.updatedAt = Date.now();
+      await this.persist(this.list());
+    });
+  }
+
+  private async setProposal(change: Change, text: string): Promise<void> {
+    if (!editableProposal(change)) {
+      throw new Error('This change does not support editable proposals.');
+    }
+    if (text === change.after) return;
+    this.checkText(text);
+    const applied = appliedText(change);
+    if (applied === null) throw new Error('Review proposal is unavailable.');
+    const current = await this.files.read(change.path);
+    if (current !== applied) {
+      change.state = 'conflict';
+      await this.persist(this.list());
+      throw new Error('Cannot edit: the file has newer user or external changes.');
+    }
+    change.applied = applied;
+    change.suggestion = suggestionText(change);
+    change.after = text;
+    change.updatedAt = Date.now();
+  }
+
   resolveHunk(id: string, hunkId: string, action: 'keep' | 'discard'): Promise<void> {
     return this.serial(async () => {
       const change = this.find(id);
+      if (editedProposal(change)) {
+        throw new Error('Reset to suggestion before resolving individual hunks.');
+      }
+      const applied = appliedText(change);
+      if (applied === null) throw new Error('Review hunk is unavailable.');
       const resolved = resolveHunk(change, hunkId, action);
       await this.revalidate(change.path, change.path);
-      if ((await this.files.read(change.path)) !== change.after) {
+      if ((await this.files.read(change.path)) !== applied) {
         change.state = 'conflict';
         await this.persist(this.list());
         throw new Error('Cannot resolve hunk: the file has newer user or external changes.');
@@ -243,15 +332,17 @@ export class ReviewJournal {
       change.hunkIntent = resolved;
       change.state = 'applying';
       await this.persist(this.list());
-      if (action === 'discard') await this.files.replace(change.path, change.after, resolved.after);
+      if (action === 'discard') await this.files.replace(change.path, applied, resolved.after);
       await this.verifyImage(change, {
         path: change.path,
-        before: change.after,
+        before: applied,
         after: resolved.after,
       });
       Object.assign(change, resolved);
       delete change.hunkIntent;
       change.state = 'pending';
+      change.applied = resolved.after;
+      change.suggestion = resolved.after;
       if (change.before === change.after)
         this.changes = this.changes.filter((candidate) => candidate.id !== id);
       await this.persist(this.list());
@@ -280,14 +371,14 @@ export class ReviewJournal {
       const change = this.find(id);
       if (change.destination) return this.discardMove(change);
       await this.revalidate(change.path, change.path);
+      const applied = appliedText(change);
       const current = await this.files.read(change.path);
-      if (current !== change.before && current !== change.after) {
+      if (current !== change.before && current !== applied) {
         change.state = 'conflict';
         await this.persist(this.list());
         throw new Error('Cannot discard: the file has newer user or external changes.');
       }
-      if (current === change.after)
-        await this.files.replace(change.path, change.after, change.before);
+      if (current === applied) await this.files.replace(change.path, applied, change.before);
       this.changes = this.changes.filter((candidate) => candidate.id !== change.id);
       await this.persist(this.list());
     });
@@ -402,6 +493,8 @@ export class ReviewJournal {
       path: target,
       before: prior ? prior.before : previous,
       after: content,
+      applied: content,
+      suggestion: content,
       state: 'applying',
       updatedAt: Date.now(),
       operations: operationHistory(prior, previous, content, provenance, moving),
@@ -426,15 +519,25 @@ export class ReviewJournal {
         return this.recoveredHunkState(change, current);
       }
       if (change.state === 'applying' && current === change.before) return null;
-      return current === change.after && change.state !== 'conflict' ? 'pending' : 'conflict';
+      const applied = appliedText(change);
+      if (current === applied) {
+        change.applied = applied;
+        change.suggestion ??= change.after;
+        if (change.state === 'conflict') return 'conflict';
+        return change.before === change.after ? null : 'pending';
+      }
+      return 'conflict';
     } catch {
       return 'conflict';
     }
   }
 
   private recoveredHunkState(change: Change, current: string | null): Change['state'] | null {
-    if (current === change.hunkIntent!.after) Object.assign(change, change.hunkIntent);
-    else if (current !== change.after) return 'conflict';
+    if (current === change.hunkIntent!.after) {
+      Object.assign(change, change.hunkIntent);
+      change.applied = change.hunkIntent!.after;
+      change.suggestion = change.hunkIntent!.after;
+    } else if (current !== change.after) return 'conflict';
     delete change.hunkIntent;
     return change.before === change.after ? null : 'pending';
   }

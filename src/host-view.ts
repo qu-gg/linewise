@@ -77,6 +77,16 @@ export class HostView {
       changes: () => this.journal.list(this.owner()),
       available: actions.available,
       dispatch: (request) => actions.perform(() => this.dispatch(request)),
+      edit: (id, text) =>
+        actions.idle('review', async () => {
+          this.change(id);
+          await this.journal.updateProposal(id, text);
+        }),
+      reset: (id) =>
+        actions.idle('review', async () => {
+          this.change(id);
+          await this.journal.resetProposal(id);
+        }),
     });
   }
 
@@ -369,7 +379,7 @@ export class HostView {
     await this.actions.idle('review', async () => {
       if (request.type === 'keep' || request.type === 'discard') {
         this.change(request.id);
-        if (request.type === 'keep') await this.journal.keep(request.id);
+        if (request.type === 'keep') await this.journal.keep(request.id, request.text);
         else await this.journal.discard(request.id);
         return;
       }

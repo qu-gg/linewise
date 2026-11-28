@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { randomBytes } from 'node:crypto';
 import path from 'node:path';
 import type { Change } from './review-types.js';
+import { editedProposal, editableProposal } from './review-types.js';
 import { inlineReview, reviewImages, reviewSummary } from './review-presentation.js';
 import { reviewHunks } from './review-hunks.js';
 
@@ -9,6 +10,8 @@ export interface EditorReviewHost {
   changes: () => readonly Change[];
   available: () => boolean;
   dispatch: (request: unknown) => Promise<void>;
+  edit: (id: string, text: string) => Promise<void>;
+  reset: (id: string) => Promise<void>;
 }
 
 interface ReviewFiles {
@@ -35,12 +38,13 @@ function reviewProblem(change?: Change): string | undefined {
   if (change.state === 'conflict') return 'File changed outside OMP.';
 }
 
-function reviewRequest(change: Change, keep: boolean, hunkId?: string) {
+function reviewRequest(change: Change, keep: boolean, hunkId?: string, text?: string) {
   return {
     v: 1,
     id: change.id,
     type: hunkId ? (keep ? 'hunkKeep' : 'hunkDiscard') : keep ? 'keep' : 'discard',
     ...(hunkId ? { hunkId } : {}),
+    ...(text !== undefined ? { text } : {}),
   };
 }
 
@@ -98,7 +102,7 @@ export class InlineReviewView implements vscode.CustomReadonlyEditorProvider, vs
         this.changed();
       }),
     );
-    webview.html = `<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; font-src ${webview.cspSource}; img-src ${webview.cspSource} data:; script-src 'nonce-${nonce}'; connect-src ${webview.cspSource}; worker-src blob:;"><link rel="stylesheet" href="${resource('inline-review.css')}"><title>Linewise Changes</title></head><body data-worker="${resource('inline-worker.js')}"><main id="editor"></main><div id="status" role="status" hidden></div><script nonce="${nonce}" src="${resource('inline-review.js')}"></script></body></html>`;
+    webview.html = `<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; font-src ${webview.cspSource}; img-src ${webview.cspSource} data:; script-src 'nonce-${nonce}'; connect-src ${webview.cspSource}; worker-src blob:;"><link rel="stylesheet" href="${resource('inline-review.css')}"><title>Linewise Changes</title></head><body data-worker="${resource('inline-worker.js')}"><div id="toolbar" role="toolbar" aria-label="Review actions" hidden></div><div id="surface"><main id="editor"></main><div id="overview" role="img" aria-label="Change overview"></div></div><div id="overview-summary" class="visually-hidden" role="status"></div><div id="status" role="status" hidden></div><script nonce="${nonce}" src="${resource('inline-review.js')}"></script></body></html>`;
     this.publish(entry, this.files.reviewSelections.get(document.uri.toString()));
     this.changed();
   }
@@ -133,6 +137,8 @@ export class InlineReviewView implements vscode.CustomReadonlyEditorProvider, vs
       revision: entry.revision,
       pending,
       available: Boolean(pending && this.host.available()),
+      editable: Boolean(pending && change && editableProposal(change)),
+      edited: Boolean(change && editedProposal(change)),
       language,
       extension: path.extname(entry.last.destination?.path ?? entry.last.path),
       ...(line ? { line } : {}),
@@ -151,8 +157,11 @@ export class InlineReviewView implements vscode.CustomReadonlyEditorProvider, vs
     if (data.type !== 'reviewAction' || !['keep', 'discard'].includes(String(data.operation)))
       return false;
     if (!this.host.available() || change.state !== 'pending') return false;
+    if (data.hunkId !== undefined && editedProposal(change)) return false;
     const hunks = reviewHunks(change);
-    return hunks.length ? hunks.some((hunk) => hunk.id === data.hunkId) : data.hunkId === undefined;
+    return data.hunkId === undefined
+      ? editedProposal(change) || hunks.length === 0
+      : hunks.some((hunk) => hunk.id === data.hunkId);
   }
 
   private packet(entry: OpenReview, message: unknown): Record<string, unknown> | undefined {
@@ -173,16 +182,61 @@ export class InlineReviewView implements vscode.CustomReadonlyEditorProvider, vs
       return;
     }
     if (this.cursor(entry, data)) return;
+    if (data.type === 'proposal') return this.proposal(entry, change, data);
+    if (data.type === 'reset') return this.reset(entry, change);
     if (!this.validAction(change, data)) {
       this.publish(entry);
       return;
     }
+    return this.action(entry, change, data);
+  }
+
+  private async proposal(
+    entry: OpenReview,
+    change: Change,
+    data: Record<string, unknown>,
+  ): Promise<void> {
+    if (
+      typeof data.text !== 'string' ||
+      data.text.length > 1_048_576 ||
+      !editableProposal(change)
+    ) {
+      this.publish(entry);
+      return;
+    }
+    try {
+      entry.problem = undefined;
+      await this.host.edit(change.id, data.text);
+    } catch (error) {
+      entry.problem = error instanceof Error ? error.message : 'Could not edit the proposal.';
+    } finally {
+      this.refresh();
+    }
+  }
+
+  private async reset(entry: OpenReview, change: Change): Promise<void> {
+    try {
+      entry.problem = undefined;
+      await this.host.reset(change.id);
+    } catch (error) {
+      entry.problem = error instanceof Error ? error.message : 'Could not reset the proposal.';
+    } finally {
+      this.refresh();
+    }
+  }
+
+  private async action(
+    entry: OpenReview,
+    change: Change,
+    data: Record<string, unknown>,
+  ): Promise<void> {
     try {
       await this.resolve(
         entry,
         change,
         data.operation === 'keep',
         data.hunkId as string | undefined,
+        typeof data.text === 'string' ? data.text : undefined,
       );
     } catch (error) {
       entry.problem = error instanceof Error ? error.message : 'Could not resolve change.';
@@ -196,9 +250,10 @@ export class InlineReviewView implements vscode.CustomReadonlyEditorProvider, vs
     change: Change,
     keep: boolean,
     hunkId?: string,
+    text?: string,
   ): Promise<void> {
     entry.problem = undefined;
-    await this.host.dispatch(reviewRequest(change, keep, hunkId));
+    await this.host.dispatch(reviewRequest(change, keep, hunkId, text));
     if (this.current(entry.document.uri)?.state === 'pending' || !this.opened.has(entry.panel))
       return;
     await this.revealFile(entry, change);
@@ -234,6 +289,8 @@ export class InlineReviewView implements vscode.CustomReadonlyEditorProvider, vs
     const change = this.current(entry.document.uri);
     if (!change || !this.available)
       throw new Error('Select an idle, current OMP change to review.');
+    if (editedProposal(change))
+      throw new Error('Reset to suggestion before resolving individual hunks.');
     const hunks = inlineReview(change).hunks;
     const index = hunks.reduce(
       (selected, hunk, position) => (hunk.line <= entry.line ? position : selected),

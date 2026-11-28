@@ -4,17 +4,17 @@ OMP owns the agent loop/provider/session implementation. Linewise owns public VS
 
 ## Ownership
 
-| Layer                 | Examples                                                                                                       | Responsibility                                                   |
-| --------------------- | -------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| Extension composition | [extension.ts](../src/extension.ts), [host-view.ts](../src/host-view.ts)                                       | Public commands, lifecycle, adapter ownership                    |
-| Protocol/runtime      | [omp-guard.ts](../src/omp-guard.ts)                                                                            | Pinned allowlist and mediated OMP capability routes              |
-| Host tools            | [host-tools.ts](../src/host-tools.ts)                                                                          | Validated dispatch and consent, not webview authority            |
-| Command policy        | [terminal-policy.ts](../src/terminal-policy.ts), [host-permissions.ts](../src/host-permissions.ts)             | User-only literal rules and revocable workbench-window elevation |
-| Process ownership     | [terminal.ts](../src/terminal.ts)                                                                              | Owned command capture/limits/cleanup, unsandboxed host effects   |
-| Workspace review      | [workspace.ts](../src/workspace.ts), [review-hunks.ts](../src/review-hunks.ts)                                 | Journaled exact preimages and selective accepted baselines       |
-| Review presentation   | [review-presentation.ts](../src/review-presentation.ts), [inline-review-view.ts](../src/inline-review-view.ts) | Readonly public custom editor and stale-owner validation         |
-| Storage               | [storage-files.ts](../src/storage-files.ts), [state.ts](../src/state.ts)                                       | Bounded private state/artifacts and conservative recovery        |
-| Chat/webview          | [chat-view.ts](../src/chat-view.ts), [media/main.js](../media/main.js)                                         | Presentation/messages, never filesystem or approval authority    |
+| Layer                 | Examples                                                                                                       | Responsibility                                                             |
+| --------------------- | -------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| Extension composition | [extension.ts](../src/extension.ts), [host-view.ts](../src/host-view.ts)                                       | Public commands, lifecycle, adapter ownership                              |
+| Protocol/runtime      | [omp-guard.ts](../src/omp-guard.ts)                                                                            | Pinned allowlist and mediated OMP capability routes                        |
+| Host tools            | [host-tools.ts](../src/host-tools.ts)                                                                          | Validated dispatch and consent, not webview authority                      |
+| Command policy        | [terminal-policy.ts](../src/terminal-policy.ts), [host-permissions.ts](../src/host-permissions.ts)             | User-only literal rules and revocable workbench-window elevation           |
+| Process ownership     | [terminal.ts](../src/terminal.ts)                                                                              | Owned command capture/limits/cleanup, unsandboxed host effects             |
+| Workspace review      | [workspace.ts](../src/workspace.ts), [review-hunks.ts](../src/review-hunks.ts)                                 | Journaled exact preimages and selective accepted baselines                 |
+| Review presentation   | [review-presentation.ts](../src/review-presentation.ts), [inline-review-view.ts](../src/inline-review-view.ts) | Editable proposal surface, overview navigation, and stale-owner validation |
+| Storage               | [storage-files.ts](../src/storage-files.ts), [state.ts](../src/state.ts)                                       | Bounded private state/artifacts and conservative recovery                  |
+| Chat/webview          | [chat-view.ts](../src/chat-view.ts), [media/main.js](../media/main.js)                                         | Presentation/messages, never filesystem or approval authority              |
 
 ## Mutation And Consent
 

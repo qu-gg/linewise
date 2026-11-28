@@ -1,10 +1,15 @@
 import * as monaco from 'monaco-editor/editor/editor.api.js';
 import 'monaco-editor/basic-languages/monaco.contribution.js';
+import { overviewGeometry, scrollTopForOverview } from './review-overview.js';
 import './inline-review.css';
 
+const LINE_HEIGHT = 22;
 const host = acquireVsCodeApi();
 const root = document.getElementById('editor');
 const status = document.getElementById('status');
+const toolbar = document.getElementById('toolbar');
+const overview = document.getElementById('overview');
+const overviewSummary = document.getElementById('overview-summary');
 let worker;
 globalThis.MonacoEnvironment = {
   async getWorker() {
@@ -27,12 +32,23 @@ const editor = monaco.editor.create(root, {
   links: false,
   colorDecorators: false,
   padding: { top: 16, bottom: 24 },
-  lineHeight: 22,
+  lineHeight: LINE_HEIGHT,
+  wordWrap: 'on',
+  wrappingIndent: 'same',
 });
 const decorations = editor.createDecorationsCollection();
 const zones = [];
+const deletedZones = [];
 const controls = [];
 let state;
+let applying = false;
+let pendingText;
+let forceSync = false;
+let proposalTimer;
+
+function token(styles, name, fallback) {
+  return styles.getPropertyValue(name).trim() || fallback;
+}
 
 function theme() {
   const styles = getComputedStyle(document.body);
@@ -41,17 +57,35 @@ function theme() {
     inherit: true,
     rules: [],
     colors: {
-      'editor.background':
-        styles.getPropertyValue('--vscode-editor-background').trim() || '#1e1e1e',
-      'editor.foreground':
-        styles.getPropertyValue('--vscode-editor-foreground').trim() || '#d4d4d4',
+      'editor.background': token(styles, '--vscode-editor-background', '#1e1e1e'),
+      'editor.foreground': token(styles, '--vscode-editor-foreground', '#d4d4d4'),
+      'editor.selectionBackground': token(styles, '--vscode-editor-selectionBackground', '#264f78'),
+      'editor.inactiveSelectionBackground': token(
+        styles,
+        '--vscode-editor-inactiveSelectionBackground',
+        '#3a3d41',
+      ),
+      'editor.lineHighlightBackground': token(
+        styles,
+        '--vscode-editor-lineHighlightBackground',
+        '#00000000',
+      ),
+      'editorGutter.background': token(styles, '--vscode-editorGutter-background', '#1e1e1e'),
+      'editorOverviewRuler.border': token(
+        styles,
+        '--vscode-editorOverviewRuler-border',
+        '#00000000',
+      ),
     },
   });
   monaco.editor.setTheme('omp-review');
   editor.updateOptions({
-    fontFamily: styles.getPropertyValue('--vscode-editor-font-family').trim() || 'monospace',
-    fontSize: Number.parseInt(styles.getPropertyValue('--vscode-editor-font-size'), 10) || 13,
+    fontFamily: token(styles, '--vscode-editor-font-family', 'monospace'),
+    fontSize: Number.parseInt(token(styles, '--vscode-editor-font-size', '13'), 10) || 13,
+    wordWrap: 'on',
+    wrappingIndent: 'same',
   });
+  drawOverview();
 }
 
 function deletedLines(part, accessor) {
@@ -69,14 +103,45 @@ function deletedLines(part, accessor) {
     row.append(number, code);
     node.append(row);
   }
-  zones.push(
-    accessor.addZone({
-      afterLineNumber: part.line - 1,
-      heightInLines: part.count,
-      domNode: node,
-      suppressMouseDown: false,
-    }),
-  );
+  const entry = { part, node, id: '', top: 0, height: part.count * LINE_HEIGHT, zone: undefined };
+  entry.zone = {
+    afterLineNumber: part.line - 1,
+    heightInLines: part.count,
+    domNode: node,
+    suppressMouseDown: false,
+    onDomNodeTop: (top) => {
+      entry.top = top;
+      drawOverview();
+    },
+  };
+  entry.id = accessor.addZone(entry.zone);
+  zones.push(entry.id);
+  deletedZones.push(entry);
+  if (typeof requestAnimationFrame === 'function')
+    requestAnimationFrame(() => fitDeletedZone(entry));
+}
+
+function fitDeletedZone(entry) {
+  if (!entry.id || !entry.node.isConnected) return;
+  const measured = Math.max(entry.part.count * LINE_HEIGHT, entry.node.scrollHeight || 0);
+  if (measured <= entry.height + 1) return;
+  entry.height = measured;
+  const previous = entry.id;
+  editor.changeViewZones((accessor) => {
+    accessor.removeZone(previous);
+    entry.id = accessor.addZone({
+      ...entry.zone,
+      heightInLines: undefined,
+      heightInPx: measured,
+    });
+    const index = zones.indexOf(previous);
+    if (index >= 0) zones[index] = entry.id;
+  });
+  drawOverview();
+}
+
+function refitDeletedZones() {
+  for (const entry of deletedZones) fitDeletedZone(entry);
 }
 
 function moveControls() {
@@ -86,15 +151,19 @@ function moveControls() {
   }
 }
 
+function glyph(label, icon) {
+  const symbol = document.createElement('span');
+  symbol.className = `codicon codicon-${icon}`;
+  symbol.setAttribute('aria-hidden', 'true');
+  return [symbol, document.createTextNode(label)];
+}
+
 function button(control, operation, label, icon) {
   const element = document.createElement('button');
   element.type = 'button';
   element.setAttribute('aria-label', `${label} change`);
   element.title = `${label} change`;
-  const symbol = document.createElement('span');
-  symbol.className = `codicon codicon-${icon}`;
-  symbol.setAttribute('aria-hidden', 'true');
-  element.append(symbol, document.createTextNode(label));
+  element.append(...glyph(label, icon));
   element.disabled = !state.available;
   element.onclick = () => {
     for (const item of controls)
@@ -155,6 +224,190 @@ function controlSpace(control) {
   });
 }
 
+function actionButton(label, icon, action, description) {
+  const element = document.createElement('button');
+  element.type = 'button';
+  element.dataset.action = action;
+  element.title = description;
+  element.append(...glyph(label, icon));
+  return element;
+}
+
+const keepFile = actionButton('Keep file', 'check', 'keepFile', 'Keep the edited proposal');
+const undoFile = actionButton('Undo file', 'discard', 'undoFile', 'Undo the whole change');
+const resetFile = actionButton(
+  'Reset to suggestion',
+  'history',
+  'resetFile',
+  'Restore the agent proposal',
+);
+if (toolbar) toolbar.append(keepFile, undoFile, resetFile);
+
+function disableActions() {
+  for (const element of [keepFile, undoFile, resetFile]) element.disabled = true;
+  for (const control of controls)
+    for (const child of control.node.querySelectorAll('button')) child.disabled = true;
+}
+
+function syncToolbar(editing) {
+  toolbar.hidden = !editing;
+  const enabled = Boolean(state?.pending && state?.available && state?.editable);
+  keepFile.disabled = !enabled;
+  undoFile.disabled = !enabled;
+  resetFile.disabled = !enabled;
+}
+
+function currentText() {
+  return editor.getModel().getValue();
+}
+
+function cancelProposal() {
+  clearTimeout(proposalTimer);
+  pendingText = undefined;
+}
+
+keepFile.onclick = () => {
+  if (!state) return;
+  disableActions();
+  cancelProposal();
+  pendingText = currentText();
+  host.postMessage({
+    type: 'reviewAction',
+    changeId: state.changeId,
+    revision: state.revision,
+    operation: 'keep',
+    text: pendingText,
+  });
+};
+undoFile.onclick = () => {
+  if (!state) return;
+  disableActions();
+  cancelProposal();
+  host.postMessage({
+    type: 'reviewAction',
+    changeId: state.changeId,
+    revision: state.revision,
+    operation: 'discard',
+  });
+};
+resetFile.onclick = () => {
+  if (!state) return;
+  disableActions();
+  cancelProposal();
+  forceSync = true;
+  host.postMessage({ type: 'reset', changeId: state.changeId, revision: state.revision });
+};
+
+function overviewMetrics() {
+  const model = editor.getModel();
+  const total =
+    typeof editor.getScrollHeight === 'function'
+      ? editor.getScrollHeight()
+      : model.getLineCount() * LINE_HEIGHT;
+  const layout = typeof editor.getLayoutInfo === 'function' ? editor.getLayoutInfo() : undefined;
+  const viewport = layout?.height ?? root.clientHeight;
+  const scroll = typeof editor.getScrollTop === 'function' ? editor.getScrollTop() : 0;
+  return { total, viewport, scroll, model };
+}
+
+function drawOverview() {
+  if (!state || !overview) return;
+  const { total, viewport, scroll, model } = overviewMetrics();
+  const lineTop = (line) =>
+    typeof editor.getTopForLineNumber === 'function'
+      ? editor.getTopForLineNumber(line, true)
+      : (Math.max(1, line) - 1) * LINE_HEIGHT;
+  const lineBottom = (line) =>
+    typeof editor.getBottomForLineNumber === 'function'
+      ? editor.getBottomForLineNumber(line)
+      : lineTop(line) + LINE_HEIGHT;
+  const markers = [];
+  for (const part of state.parts ?? []) {
+    if (part.kind === 'added') {
+      const top = lineTop(part.line);
+      const last = Math.min(part.line + part.count - 1, model.getLineCount());
+      markers.push({ kind: 'added', top, height: Math.max(LINE_HEIGHT, lineBottom(last) - top) });
+    } else {
+      const entry = deletedZones.find((candidate) => candidate.part === part);
+      const height = entry?.height ?? part.count * LINE_HEIGHT;
+      const measured = entry && entry.top > -1_000_000;
+      const top = measured ? entry.top + scroll : lineTop(part.line) - height;
+      markers.push({ kind: 'removed', top: Math.max(0, top), height });
+    }
+  }
+  const geometry = overviewGeometry(markers, total, viewport, scroll);
+  const fragment = document.createDocumentFragment();
+  for (const marker of geometry.markers) {
+    const element = document.createElement('div');
+    element.className = `overview-marker ${marker.kind}`;
+    element.style.top = `${marker.top * 100}%`;
+    element.style.height = `${marker.height * 100}%`;
+    element.title = `${marker.kind} change`;
+    fragment.append(element);
+  }
+  const thumb = document.createElement('div');
+  thumb.className = 'overview-thumb';
+  thumb.style.top = `${geometry.thumb.top * 100}%`;
+  thumb.style.height = `${geometry.thumb.height * 100}%`;
+  fragment.append(thumb);
+  overview.replaceChildren(fragment);
+  const added = geometry.markers.filter((marker) => marker.kind === 'added').length;
+  const removed = geometry.markers.filter((marker) => marker.kind === 'removed').length;
+  if (overviewSummary)
+    overviewSummary.textContent = `${added} added regions, ${removed} removed regions.`;
+}
+
+function overviewRatio(event) {
+  const box = overview.getBoundingClientRect();
+  return box.height ? (event.clientY - box.top) / box.height : 0;
+}
+
+function overviewScroll(event) {
+  const { total, viewport } = overviewMetrics();
+  editor.setScrollTop(scrollTopForOverview(overviewRatio(event), total, viewport));
+}
+
+let dragging = false;
+overview?.addEventListener('pointerdown', (event) => {
+  if (event.button !== 0) return;
+  dragging = true;
+  overview.setPointerCapture?.(event.pointerId);
+  overviewScroll(event);
+  event.preventDefault();
+});
+overview?.addEventListener('pointermove', (event) => {
+  if (dragging) overviewScroll(event);
+});
+overview?.addEventListener('pointerup', (event) => {
+  dragging = false;
+  overview.releasePointerCapture?.(event.pointerId);
+});
+overview?.addEventListener('pointercancel', () => {
+  dragging = false;
+});
+overview?.addEventListener(
+  'wheel',
+  (event) => {
+    event.preventDefault();
+    const scroll = typeof editor.getScrollTop === 'function' ? editor.getScrollTop() : 0;
+    editor.setScrollTop(Math.max(0, scroll + event.deltaY));
+  },
+  { passive: false },
+);
+
+function scheduleProposal() {
+  clearTimeout(proposalTimer);
+  proposalTimer = setTimeout(() => {
+    if (!state || pendingText === undefined) return;
+    host.postMessage({
+      type: 'proposal',
+      changeId: state.changeId,
+      revision: state.revision,
+      text: pendingText,
+    });
+  }, 180);
+}
+
 function render(next) {
   state = next;
   status.textContent = next.problem ?? '';
@@ -166,16 +419,34 @@ function render(next) {
   });
   for (const control of controls) editor.removeOverlayWidget(control.widget);
   controls.length = 0;
+  deletedZones.length = 0;
   const model = editor.getModel();
-  if (model.getValue() !== next.text) model.setValue(next.text);
+  const local = model.getValue();
+  const syncText =
+    local !== next.text && (forceSync || pendingText === undefined || next.text === pendingText);
+  if (syncText) {
+    applying = true;
+    model.setValue(next.text);
+    applying = false;
+  }
+  if (model.getValue() === next.text) pendingText = undefined;
+  forceSync = false;
+  const editing = Boolean(next.edited || pendingText !== undefined);
+  editor.updateOptions({
+    readOnly: !(next.pending && next.available && next.editable),
+    domReadOnly: !(next.pending && next.available && next.editable),
+  });
+  syncToolbar(editing);
   setLanguage(model, next);
   decorate(next.parts);
-  if (next.pending) {
+  if (next.pending && !editing) {
     for (const hunk of reviewControls(next)) floating(hunk);
   }
   if (previous) editor.restoreViewState(previous);
   if (next.line) editor.revealLineInCenter(Math.min(next.line, model.getLineCount()));
   moveControls();
+  drawOverview();
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(refitDeletedZones);
 }
 
 function setLanguage(model, next) {
@@ -210,8 +481,23 @@ function reviewControls(next) {
   return next.hunks.length ? next.hunks : [{ line: next.parts[0]?.line ?? 1 }];
 }
 
-editor.onDidScrollChange(moveControls);
-editor.onDidLayoutChange(moveControls);
+editor.onDidChangeModelContent(() => {
+  if (applying || !state?.editable || !state.pending || !state.available) return;
+  pendingText = currentText();
+  state.edited = true;
+  syncToolbar(true);
+  for (const control of controls) control.node.hidden = true;
+  scheduleProposal();
+});
+editor.onDidScrollChange(() => {
+  moveControls();
+  drawOverview();
+});
+editor.onDidLayoutChange(() => {
+  moveControls();
+  drawOverview();
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(refitDeletedZones);
+});
 editor.onDidChangeCursorPosition(({ position }) => {
   if (state)
     host.postMessage({
@@ -229,6 +515,7 @@ window.addEventListener('message', ({ data }) => {
   if (data?.type === 'inlineReview') render(data);
 });
 window.addEventListener('unload', () => {
+  clearTimeout(proposalTimer);
   editor.getModel()?.dispose();
   editor.dispose();
   worker?.then((url) => URL.revokeObjectURL(url));

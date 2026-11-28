@@ -1,7 +1,40 @@
 {
   "version": 1,
   "profile": "unit",
-  "exceptions": {},
+  "exceptions": {
+    "media/inline-review.js": {
+      "reason": "UX-12 adds the bounded inline review overview, wrapping, and editable proposal controls; the editor entrypoint remains a single webview surface.",
+      "max": { "fileLines": 524 }
+    },
+    "media/inline-review.js::drawOverview#1": {
+      "reason": "UX-12 overview rendering combines added, removed view-zone, and viewport geometry after review mutations.",
+      "max": { "cyclomatic": 12 }
+    },
+    "media/inline-review.js::render#1": {
+      "reason": "UX-12 render synchronizes text, editability, view zones, hunk controls, toolbar state, and overview without replacing the webview.",
+      "max": { "cyclomatic": 19 }
+    },
+    "src/inline-review-view.ts::InlineReviewView.snapshot#1": {
+      "reason": "UX-12 snapshots combine pending/editability flags with the existing bounded review presentation.",
+      "max": { "cyclomatic": 12 }
+    },
+    "src/review.ts": {
+      "reason": "UX-12 keeps editable proposal, reset, hunk, and exact-preimage journal paths in one serialized review owner.",
+      "max": { "fileLines": 582 }
+    },
+    "src/review.ts::ReviewJournal.commit#1": {
+      "reason": "UX-12 commit distinguishes move commits, normal image application, edited proposal baselines, and no-op records.",
+      "max": { "cyclomatic": 11 }
+    },
+    "src/review.ts::ReviewJournal.recoveredState#1": {
+      "reason": "UX-12 recovery distinguishes edited proposals, hunk intent, moves, conflicts, and unreadable files.",
+      "max": { "cyclomatic": 11 }
+    },
+    "src/state.ts": {
+      "reason": "UX-12 persists bounded applied and suggestion proposal images alongside the existing review schema.",
+      "max": { "fileLines": 503 }
+    }
+  },
   "coverageFloors": {
     "media/accessibility.js": {
       "min": 98.85,

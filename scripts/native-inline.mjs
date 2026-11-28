@@ -63,6 +63,9 @@ export async function driveInlineReview(page, workspace, output, capture) {
   const inline = await approvalFrame(page, `[data-hunk-id="${hunks[0]}"]`);
   assert.equal(await page.locator('.monaco-diff-editor').count(), 0);
   assert.equal(await inline.locator('.review-controls').count(), 2);
+  assert.ok((await inline.locator('.overview-marker.added').count()) > 0);
+  assert.ok((await inline.locator('.overview-marker.removed').count()) > 0);
+  await inline.locator('.overview-thumb').waitFor({ state: 'visible' });
   await inline
     .locator('.review-deleted .review-old-code')
     .filter({ hasText: 'Header:' })
@@ -74,6 +77,15 @@ export async function driveInlineReview(page, workspace, output, capture) {
   await controlsClearCode(inline);
   await capture(page, output, 'inline-review-editor');
   await narrowReview(page, inline, output, capture);
+  await inline.locator('.monaco-editor').click();
+  await page.keyboard.press('Control+End');
+  await page.keyboard.type('\n// native review edit');
+  await inline.locator('#toolbar').waitFor({ state: 'visible' });
+  assert.equal(await inline.locator('.review-controls:visible').count(), 0);
+  await capture(page, output, 'inline-review-editable');
+  await inline.getByRole('button', { name: 'Reset to suggestion', exact: true }).click();
+  await inline.locator('#toolbar').waitFor({ state: 'hidden' });
+  await inline.locator('.review-controls:visible').first().waitFor({ state: 'visible' });
   await checkpoint(workspace, 'previewed');
   await keep.click();
   await frame.waitForFunction(

@@ -12,6 +12,7 @@ export default [
       '.spike/**',
       '.local-dev/**',
       '.quality-build/**',
+      'media/**/*.d.ts',
     ],
   },
   js.configs.recommended,
