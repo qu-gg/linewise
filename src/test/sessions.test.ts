@@ -404,6 +404,37 @@ test('session list reports last activity and pending-review line totals', () => 
   assert.equal(listed.removed, 1);
 });
 
+test('conflict and identical records do not appear as actionable review totals', () => {
+  const data: StateStore['data'] = {
+    version: 1,
+    sessions: [{ id: 'saved', root: 'file:///workspace', label: 'Saved', turns: [] }],
+    changes: [
+      {
+        id: 'conflict',
+        sessionId: 'saved',
+        path: '/workspace/file.ts',
+        before: 'old\n',
+        after: 'new\n',
+        state: 'conflict',
+        updatedAt: 1,
+      },
+      {
+        id: 'identical',
+        sessionId: 'saved',
+        path: '/workspace/same.ts',
+        before: 'same\n',
+        after: 'same\n',
+        state: 'pending',
+        updatedAt: 1,
+      },
+    ],
+  };
+  const listed = sessionList(data)[0]!;
+  assert.equal(listed.pendingReview, false);
+  assert.equal(listed.added, 0);
+  assert.equal(listed.removed, 0);
+});
+
 function recalled(
   id: string,
   root: string,

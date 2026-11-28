@@ -1,4 +1,5 @@
 import { changeLineStats } from './review-presentation.js';
+import { actionableChange } from './review-actionable.js';
 import { sessionTitle, type SavedSession, type StateStore } from './state.js';
 
 export function reconcileActiveSession(data: StateStore['data']): void {
@@ -89,6 +90,7 @@ export function sessionList(
   const reviewed = new Set<string>();
   const totals: ChangeTotals = new Map();
   for (const change of data.changes) {
+    if (!actionableChange(change)) continue;
     reviewed.add(change.sessionId);
     const stats = changeLineStats(change);
     const total = totals.get(change.sessionId) ?? { added: 0, removed: 0 };

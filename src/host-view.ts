@@ -6,6 +6,7 @@ import { PathGuard, ReviewJournal } from './review.js';
 import { webviewMessage, type Attachment, type SavedSession, type StateStore } from './state.js';
 import { ReviewEditor, WorkspaceFiles } from './workspace.js';
 import { reviewSummary } from './review-presentation.js';
+import { actionableChange } from './review-actionable.js';
 import { promptRecents } from './session-presentation.js';
 import {
   OMP_TESTED_VERSION,
@@ -274,6 +275,7 @@ export class HostView {
     this.editor.refresh();
     return this.journal
       .list(this.store.data.activeSessionId)
+      .filter(actionableChange)
       .map((change) =>
         reviewSummary(
           change,
@@ -373,7 +375,7 @@ export class HostView {
       }
       const session = this.active();
       if (!session) throw new Error('Select a session before resolving its changes.');
-      for (const change of this.journal.list(session.id)) {
+      for (const change of this.journal.list(session.id).filter(actionableChange)) {
         if (request.type === 'keepAll') await this.journal.keep(change.id);
         else await this.journal.discard(change.id);
       }
