@@ -54,8 +54,11 @@
   text-align: right;
 }
 .start-over {
-  display: block;
-  margin: 0 auto 18px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin: 0 0 18px;
   padding: 3px 8px;
   border: 0;
   border-radius: 3px;
@@ -64,8 +67,13 @@
   font: inherit;
   font-size: 11px;
 }
+.start-over::before,
+.start-over::after {
+  content: '';
+  flex: 1;
+  border-top: 1px solid var(--vscode-widget-border);
+}
 .start-over:hover {
-  background: var(--vscode-toolbar-hoverBackground);
   color: var(--vscode-foreground);
 }
 .start-over[hidden] {

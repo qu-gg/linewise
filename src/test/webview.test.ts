@@ -57,7 +57,7 @@ test('permission control opens an inline menu, confirms elevation and disables u
     element('.memory-status'),
   );
   for (const [permissions, label] of [
-    ['rules', 'Rules'],
+    ['rules', 'Default permissions'],
     ['ask', 'Ask'],
     ['all', 'Allow All'],
     ['yolo', 'YOLO'],

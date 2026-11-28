@@ -42,10 +42,15 @@ const warnings = {
 
 let display = { open: false, pending: undefined, session: undefined };
 
-const labels = { ask: 'Ask', rules: 'Rules', all: 'Allow All', yolo: 'YOLO' };
+const labels = {
+  ask: 'Ask',
+  rules: 'Default permissions',
+  all: 'Allow All',
+  yolo: 'YOLO',
+};
 
 function triggerLabel(mode) {
-  return labels[mode] ?? 'Rules';
+  return labels[mode] ?? 'Default permissions';
 }
 
 function close(render, restore = true) {
