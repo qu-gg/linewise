@@ -2,6 +2,8 @@
 
 Linewise keeps agent-owned work inside the same review and command authority as the chat.
 
+Linewise appends a small trusted baseline to every agent session, independent of workspace files. A repository `AGENTS.md`, `.omp/AGENTS.md`, or Copilot instruction file is appended after it, so the read fallback also works in a fresh repository with no agent file.
+
 ## Review Recovery
 
 An external formatter, Git checkout, or editor save can change a file while a review is pending. If disk content returns to the review baseline, the next agent edit supersedes the stale pending record instead of blocking. **Discard** is a no-op when disk already matches the baseline; genuinely different user content still causes a conflict.
