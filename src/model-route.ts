@@ -2,8 +2,10 @@ import type { OmpClient } from './acp.js';
 import { safeError } from './acp.js';
 import {
   openRouterModel,
+  optimalRoute,
   routeBaseModel,
   routeSelector,
+  type OptimalRoute,
   type RouteOption,
 } from './model-routes.js';
 import type { SavedSession } from './state.js';
@@ -41,6 +43,35 @@ export interface LaunchRoute extends AppliedRoute {
 
 type ModelClient = Pick<OmpClient, 'configOptions'>;
 
+const AUTO_ROUTE = 'auto';
+const OPTIMAL_ROUTE = 'optimal';
+const NO_OPTIMAL = 'No provider reports both 30-minute throughput and completion price.';
+const AUTO_OPTION: RouteOption = {
+  value: AUTO_ROUTE,
+  name: 'Auto (OpenRouter)',
+  description: 'OpenRouter default routing',
+};
+
+function optimalDescription(route: OptimalRoute): string {
+  const price = (route.completionPrice * 1_000_000).toFixed(2);
+  return `${route.name} · ${route.throughput.toFixed(1)} tok/s · $${price}/M completion`.slice(
+    0,
+    200,
+  );
+}
+
+function optimalOption(providers: readonly RouteOption[]): RouteOption {
+  const optimal = optimalRoute(providers);
+  if (optimal)
+    return { value: OPTIMAL_ROUTE, name: 'Optimal', description: optimalDescription(optimal) };
+  return { value: OPTIMAL_ROUTE, name: 'Optimal', description: NO_OPTIMAL, disabled: true };
+}
+
+function routeOptions(providers: RouteOption[] | undefined): RouteOption[] {
+  if (!providers) return [AUTO_OPTION];
+  return [AUTO_OPTION, optimalOption(providers), ...providers];
+}
+
 export function emptyRouteCatalog(): RouteCatalog {
   return { model: '', loading: false, error: '', options: [] };
 }
@@ -67,17 +98,15 @@ export function routePresentation(
   changes: number,
 ): RoutePresentation {
   if (!routeEligible(session, model, changes))
-    return { visible: false, value: 'auto', options: [], loading: false, error: '' };
-  const loading = catalog.model === model && catalog.loading;
-  const error = catalog.model === model ? catalog.error : '';
-  const options = [
-    { value: 'auto', name: 'Auto (OpenRouter)', description: 'OpenRouter default routing' },
-    ...(catalog.model === model ? catalog.options : []),
-  ];
+    return { visible: false, value: AUTO_ROUTE, options: [], loading: false, error: '' };
+  const loaded = catalog.model === model;
+  const providers = loaded ? catalog.options : undefined;
+  const loading = loaded && catalog.loading;
+  const error = loaded ? catalog.error : '';
   return {
-    visible: !error && catalog.model === model && catalog.options.length > 0,
-    value: pending?.model === model ? pending.provider : 'auto',
-    options,
+    visible: !error && Boolean(providers?.length),
+    value: pending?.model === model ? pending.provider : AUTO_ROUTE,
+    options: routeOptions(providers),
     loading,
     error,
   };
@@ -125,6 +154,14 @@ export class ModelRoutes {
       throw new Error('OpenRouter provider routing is only available for a new chat.');
     if (value === 'auto') {
       this.pendingRoute = undefined;
+      return;
+    }
+    if (value === OPTIMAL_ROUTE) {
+      if (!this.optimal())
+        throw new Error(
+          'Optimal routing is unavailable: OpenRouter returned no throughput and completion price.',
+        );
+      this.pendingRoute = { model, provider: OPTIMAL_ROUTE, label: 'Optimal' };
       return;
     }
     const option =
@@ -186,6 +223,19 @@ export class ModelRoutes {
       this.publish();
       return undefined;
     }
+    if (pending.provider === OPTIMAL_ROUTE) {
+      const optimal = this.optimal();
+      if (!optimal)
+        throw new Error(
+          'Optimal routing is unavailable: OpenRouter returned no throughput and completion price. Choose Auto or a provider.',
+        );
+      return {
+        selector: routeSelector(pending.model, optimal.provider),
+        provider: optimal.provider,
+        label: `Optimal · ${optimal.name}`,
+        replace: session,
+      };
+    }
     return {
       selector: routeSelector(pending.model, pending.provider),
       provider: pending.provider,
@@ -199,6 +249,12 @@ export class ModelRoutes {
     const model = routeBaseModel(selector);
     if (current !== model) throw new Error('OMP did not start on the selected OpenRouter model.');
     return model;
+  }
+
+  private optimal(): OptimalRoute | undefined {
+    const model = this.model() ?? '';
+    if (this.catalog.model !== model) return undefined;
+    return optimalRoute(this.catalog.options);
   }
 
   private model(): string | undefined {

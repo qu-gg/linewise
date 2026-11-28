@@ -12,6 +12,11 @@ const model = {
 
 const routes = [
   { value: 'auto', name: 'Auto (OpenRouter)', description: 'OpenRouter default routing' },
+  {
+    value: 'optimal',
+    name: 'Optimal',
+    description: 'BaseTen · 60.0 tok/s · $2.00/M completion',
+  },
   { value: 'baseten', name: 'BaseTen', description: 'baseten, baseten/fast' },
   { value: 'nebius', name: 'Nebius', description: 'nebius/fp4' },
 ];
@@ -32,9 +37,12 @@ test('new-chat route picker renders providers and sends the selected pin', () =>
   assert.equal(select.value, 'auto');
   assert.deepEqual(
     [...select.options].map((option) => option.value),
-    ['auto', 'baseten', 'nebius'],
+    ['auto', 'optimal', 'baseten', 'nebius'],
   );
   assert.match(select.title, /OpenRouter default routing/);
+  select.value = 'optimal';
+  select.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+  assert.deepEqual(messages.at(-1), { v: 1, type: 'modelRoute', value: 'optimal' });
   select.value = 'baseten';
   select.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
   assert.deepEqual(messages.at(-1), { v: 1, type: 'modelRoute', value: 'baseten' });
@@ -50,6 +58,34 @@ test('new-chat route picker renders providers and sends the selected pin', () =>
   });
   assert.match(element('#model-picker').textContent!, /via BaseTen/);
   assert.equal(element('#model-route').getAttribute('title'), 'baseten, baseten/fast');
+});
+
+test('Optimal is disabled when no provider metrics are available', () => {
+  update({
+    configs: [model],
+    modelRoute: {
+      visible: true,
+      value: 'auto',
+      options: [
+        routes[0],
+        {
+          value: 'optimal',
+          name: 'Optimal',
+          description: 'No provider reports both 30-minute throughput and completion price.',
+          disabled: true,
+        },
+        routes[2],
+      ],
+      loading: false,
+      error: '',
+    },
+  });
+  const select = element<HTMLSelectElement>('#model-route');
+  const optimal = [...select.options].find((option) => option.value === 'optimal');
+  assert.ok(optimal);
+  assert.equal(optimal.disabled, true);
+  assert.match(optimal.title, /No provider reports both/);
+  assert.equal(select.value, 'auto');
 });
 
 test('route picker is disabled while working and hidden when provider lookup fails', () => {
@@ -81,10 +117,10 @@ test('route picker is disabled while working and hidden when provider lookup fai
 
 test('an applied route stays visible on the model control after the first turn', () => {
   update({
-    configs: [{ ...model, route: { provider: 'baseten', label: 'BaseTen' } }],
+    configs: [{ ...model, route: { provider: 'baseten', label: 'Optimal · BaseTen' } }],
     turns: [turn()],
     modelRoute: { visible: false, value: 'auto', options: [], loading: false, error: '' },
   });
-  assert.match(element('#model-picker').textContent!, /via BaseTen/);
+  assert.match(element('#model-picker').textContent!, /via Optimal · BaseTen/);
   assert.equal(dom.window.document.querySelector('#model-route'), null);
 });
