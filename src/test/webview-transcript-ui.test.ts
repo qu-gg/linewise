@@ -217,6 +217,25 @@ test('tool chains distinguish text and file searches', () => {
   );
 });
 
+test('tool chains include blocked, skipped and denied outcomes', () => {
+  update({
+    turns: [
+      turn([
+        { id: 'blocked', kind: 'tool', toolName: 'Read', status: 'blocked' },
+        { id: 'skipped', kind: 'tool', toolName: 'Read', status: 'skipped' },
+        { id: 'denied', kind: 'tool', toolName: 'Write', status: 'denied' },
+      ]),
+    ],
+  });
+  assert.equal(
+    element('.tool-chain-label').textContent,
+    '1 tool call blocked, 1 tool call skipped, 1 tool call denied',
+  );
+  assert.equal(element('.tool[data-tool-status="blocked"] .tool-status').textContent, 'Blocked');
+  assert.equal(element('.tool[data-tool-status="skipped"] .tool-status').textContent, 'Skipped');
+  assert.equal(element('.tool[data-tool-status="denied"] .tool-status').textContent, 'Denied');
+});
+
 test('tool chains fall back to Finished with N steps', () => {
   update({
     turns: [
