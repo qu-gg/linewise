@@ -126,8 +126,20 @@ function baseName(target) {
 }
 
 function noteStatus(facts, status) {
+  if (status.key === 'blocked') {
+    facts.blocked += 1;
+    return true;
+  }
   if (status.key === 'failed') {
     facts.failed += 1;
+    return true;
+  }
+  if (status.key === 'skipped') {
+    facts.skipped += 1;
+    return true;
+  }
+  if (status.key === 'denied') {
+    facts.denied += 1;
     return true;
   }
   if (status.key === 'cancelled') {
@@ -181,7 +193,10 @@ function toolChainFacts(blocks) {
     patterns: new Set(),
     textSearchSteps: 0,
     fileSearchSteps: 0,
+    blocked: 0,
     failed: 0,
+    skipped: 0,
+    denied: 0,
     cancelled: 0,
     unfinished: 0,
     other: 0,
@@ -261,7 +276,10 @@ function toolChainLabels(facts) {
   addReadLabel(labels, facts);
   addPhraseLabel(labels, facts);
   addPatternLabel(labels, facts);
+  addOutcomeLabel(labels, facts.blocked, '1 tool call blocked', '{0} tool calls blocked');
   addOutcomeLabel(labels, facts.failed, '1 tool call failed', '{0} tool calls failed');
+  addOutcomeLabel(labels, facts.skipped, '1 tool call skipped', '{0} tool calls skipped');
+  addOutcomeLabel(labels, facts.denied, '1 tool call denied', '{0} tool calls denied');
   addOutcomeLabel(labels, facts.cancelled, '1 tool call cancelled', '{0} tool calls cancelled');
   addOutcomeLabel(labels, facts.unfinished, '1 unfinished tool call', '{0} unfinished tool calls');
   return labels;

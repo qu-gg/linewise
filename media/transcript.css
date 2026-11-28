@@ -140,26 +140,40 @@
 .tool > summary .tool-status {
   margin-left: 2px;
 }
-.tool-status.failed {
+.tool-status.failed,
+.tool-status.denied {
   color: var(--vscode-errorForeground);
 }
-.tool-status.cancelled {
+.tool-status.blocked {
+  color: var(--vscode-editorWarning-foreground);
+}
+.tool-status.cancelled,
+.tool-status.skipped {
   color: var(--vscode-descriptionForeground);
 }
 .tool-status.running {
   color: var(--vscode-progressBar-background, var(--vscode-focusBorder));
 }
-.tool.status-failed > summary {
+.tool.status-failed > summary,
+.tool.status-denied > summary {
   color: var(--vscode-errorForeground);
 }
-.tool.status-failed > summary .tool-status {
+.tool.status-failed > summary .tool-status,
+.tool.status-denied > summary .tool-status {
   color: var(--vscode-errorForeground);
+}
+.tool.status-blocked > summary .tool-status {
+  color: var(--vscode-editorWarning-foreground);
 }
 .tool > summary > .codicon:first-child {
   color: var(--vscode-descriptionForeground);
 }
-.tool.status-failed > summary > .codicon:first-child {
+.tool.status-failed > summary > .codicon:first-child,
+.tool.status-denied > summary > .codicon:first-child {
   color: var(--vscode-errorForeground);
+}
+.tool.status-blocked > summary > .codicon:first-child {
+  color: var(--vscode-editorWarning-foreground);
 }
 .tool.status-running > summary > .codicon:first-child {
   color: var(--vscode-progressBar-background, var(--vscode-focusBorder));

@@ -5,6 +5,9 @@ const toolStates = {
   completed: { key: 'passed', label: 'Passed', icon: 'pass' },
   failed: { key: 'failed', label: 'Failed', icon: 'error' },
   cancelled: { key: 'cancelled', label: 'Cancelled', icon: 'close' },
+  blocked: { key: 'blocked', label: 'Blocked', icon: 'warning' },
+  skipped: { key: 'skipped', label: 'Skipped', icon: 'circle-slash' },
+  denied: { key: 'denied', label: 'Denied', icon: 'error' },
 };
 
 export function toolStatus(block) {
