@@ -53,6 +53,24 @@
   pointer-events: auto;
   text-align: right;
 }
+.start-over {
+  display: block;
+  margin: 0 auto 18px;
+  padding: 3px 8px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--vscode-descriptionForeground);
+  font: inherit;
+  font-size: 11px;
+}
+.start-over:hover {
+  background: var(--vscode-toolbar-hoverBackground);
+  color: var(--vscode-foreground);
+}
+.start-over[hidden] {
+  display: none;
+}
 .activity-label {
   color: var(--vscode-descriptionForeground);
   font-weight: 600;
