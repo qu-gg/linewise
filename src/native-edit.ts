@@ -332,7 +332,13 @@ function registerEditTool(
         throw error;
       }
       const { outcome, mutations } = result;
-      await commitOutcome(outcome, mutations, signal, toolCallId);
+      try {
+        await commitOutcome(outcome, mutations, signal, toolCallId);
+      } catch (error) {
+        for (const target of capture.before.keys()) store.invalidate(target);
+        pendingReads.delete(id);
+        throw error;
+      }
       return {
         content: [{ type: 'text', text: outcome.text }],
         isError: outcome.isError,

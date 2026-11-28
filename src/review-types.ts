@@ -80,3 +80,87 @@ export function operationHistory(
     },
   ].slice(-256);
 }
+
+export type PriorAction = 'reuse' | 'drop' | 'conflict';
+
+export function reconcilePrior(prior: Change, previous: string | null): PriorAction {
+  if (prior.after === previous) return 'reuse';
+  if (previous === prior.before) return 'drop';
+  return 'conflict';
+}
+
+function findPrior(changes: Change[], sessionId: string, target: string): Change | undefined {
+  return changes.find(
+    (change) =>
+      images(change).some((image) => image.path === target) && change.sessionId === sessionId,
+  );
+}
+
+function assertPrior(
+  changes: Change[],
+  prior: Change | undefined,
+  sessionId: string,
+  target: string,
+): void {
+  if (prior?.destination) throw new Error('Resolve the paired move before editing either path.');
+  if (
+    changes.some(
+      (change) =>
+        images(change).some((image) => image.path === target) && change.sessionId !== sessionId,
+    )
+  ) {
+    throw new Error(
+      'Resolve this file in its owning session before editing it from another session.',
+    );
+  }
+  if (prior?.hunkIntent) throw new Error('Recover the interrupted hunk operation before editing.');
+}
+
+async function dropPrior(
+  changes: Change[],
+  prior: Change,
+  persist: (changes: readonly Change[]) => Promise<void>,
+): Promise<void> {
+  const index = changes.findIndex((change) => change.id === prior.id);
+  if (index >= 0) changes.splice(index, 1);
+  await persist(changes);
+}
+
+async function conflictPrior(
+  prior: Change,
+  persist: (changes: readonly Change[]) => Promise<void>,
+): Promise<never> {
+  prior.state = 'conflict';
+  await persist([prior]);
+  throw new Error('File has newer changes; resolve its pending review first.');
+}
+
+async function reusePrior(
+  prior: Change,
+  persist: (changes: readonly Change[]) => Promise<void>,
+): Promise<Change> {
+  if (prior.state === 'conflict') {
+    prior.state = 'pending';
+    await persist([prior]);
+  }
+  return prior;
+}
+
+export async function priorChange(
+  changes: Change[],
+  sessionId: string,
+  target: string,
+  previous: string | null,
+  persist: (changes: readonly Change[]) => Promise<void>,
+): Promise<Change | undefined> {
+  const prior = findPrior(changes, sessionId, target);
+  assertPrior(changes, prior, sessionId, target);
+  if (!prior) return undefined;
+  const action = reconcilePrior(prior, previous);
+  if (action === 'drop') {
+    await dropPrior(changes, prior, persist);
+    return undefined;
+  }
+  if (action === 'conflict') await conflictPrior(prior, persist);
+  return reusePrior(prior, persist);
+}

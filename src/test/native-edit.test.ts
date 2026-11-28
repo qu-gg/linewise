@@ -42,10 +42,12 @@ async function setup(context: TestContext) {
   await writeFile(source, 'before');
   const native = { cwd: root, sessionManager: { getSessionId: () => 'durable' } };
   const results: Mutation[] = [];
+  let failCommit = false;
   const broker = new MutationBroker(
     path.join(artifacts, 'mutations'),
     async (mutation) => {
       results.push(mutation);
+      if (failCommit) throw new Error('commit failed');
       return null;
     },
     new AbortController().signal,
@@ -70,7 +72,20 @@ async function setup(context: TestContext) {
       await handlers.get('tool_result')!({ ...event, toolName: 'edit', toolCallId: id }, native);
     }
   };
-  return { root, source, native, handlers, event, execute, results, tool, api };
+  return {
+    root,
+    source,
+    native,
+    handlers,
+    event,
+    execute,
+    results,
+    tool,
+    api,
+    failCommit: (value: boolean) => {
+      failCommit = value;
+    },
+  };
 }
 
 test('native adapter captures write/delete/move without granting the parser filesystem ownership', async (context) => {
@@ -225,4 +240,15 @@ test('a fresh read refreshes a stale snapshot after an external change', async (
   const mutation = current.results.at(-1)!;
   if (mutation.op !== 'write') assert.fail('expected a write mutation');
   assert.equal(mutation.before, 'newer');
+});
+
+test('a failed host commit invalidates the native snapshot for a clean retry', async (context) => {
+  const current = await setup(context);
+  runtime.invalidatedSnapshots.length = 0;
+  current.failCommit(true);
+  await assert.rejects(current.execute({ op: 'update', content: 'after' }), /commit failed/);
+  assert.deepEqual(runtime.invalidatedSnapshots, [current.source]);
+  current.failCommit(false);
+  await current.handlers.get('tool_result')!(current.event, current.native);
+  assert.equal((await current.execute({ op: 'update', content: 'after' })).isError, false);
 });

@@ -12,7 +12,7 @@ export default {
       from: {
         path: '^(src/(?!test/)|media/)',
         pathNot:
-          '^src/(extension|workspace|host-tools|host-permissions|host-inspect|host-search|host-questions|host-rename|host-code-actions|host-notebook|host-image-context|host-tasks|host-terminals|chat-view|inline-review-view|storage-view|host-view|host-activation|integrated-browser)\\.ts$',
+          '^src/(extension|workspace|host-tools|host-permissions|host-inspect|host-search|host-questions|host-rename|host-code-actions|host-notebook|host-image-context|host-tasks|host-terminals|chat-view|inline-review-view|storage-view|host-view|host-activation|integrated-browser|pr-prepare)\\.ts$',
       },
       to: { path: '^vscode$' },
     },
@@ -75,7 +75,10 @@ export default {
     {
       name: 'process-creation-is-confined',
       severity: 'error',
-      from: { path: '^(src/|media/)', pathNot: '^src/(acp|extension|terminal)\\.ts$' },
+      from: {
+        path: '^(src/|media/)',
+        pathNot: '^src/(acp|extension|terminal|pr-evidence)\\.ts$|^src/test/',
+      },
       to: { path: '^(node:)?child_process$' },
     },
   ],

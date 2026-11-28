@@ -3,7 +3,7 @@ import path from 'node:path';
 import { PathGuard } from './path-guard.js';
 import { hunkIdentities, resolveHunk, reviewHunks } from './review-hunks.js';
 import type { Approval, Change, Provenance } from './review-types.js';
-import { images, operationHistory } from './review-types.js';
+import { images, operationHistory, priorChange as reconcilePriorChange } from './review-types.js';
 export { PathGuard } from './path-guard.js';
 export type { Approval, Change } from './review-types.js';
 
@@ -280,12 +280,14 @@ export class ReviewJournal {
       const change = this.find(id);
       if (change.destination) return this.discardMove(change);
       await this.revalidate(change.path, change.path);
-      if ((await this.files.read(change.path)) !== change.after) {
+      const current = await this.files.read(change.path);
+      if (current !== change.before && current !== change.after) {
         change.state = 'conflict';
         await this.persist(this.list());
         throw new Error('Cannot discard: the file has newer user or external changes.');
       }
-      await this.files.replace(change.path, change.after, change.before);
+      if (current === change.after)
+        await this.files.replace(change.path, change.after, change.before);
       this.changes = this.changes.filter((candidate) => candidate.id !== change.id);
       await this.persist(this.list());
     });
@@ -408,30 +410,10 @@ export class ReviewJournal {
     return change;
   }
 
-  private async priorChange(sessionId: string, target: string, previous: string | null) {
-    const prior = this.changes.find(
-      (change) =>
-        images(change).some((image) => image.path === target) && change.sessionId === sessionId,
+  private priorChange(sessionId: string, target: string, previous: string | null) {
+    return reconcilePriorChange(this.changes, sessionId, target, previous, (changes) =>
+      this.persist(changes),
     );
-    if (prior?.destination) throw new Error('Resolve the paired move before editing either path.');
-    if (
-      this.changes.some(
-        (change) =>
-          images(change).some((image) => image.path === target) && change.sessionId !== sessionId,
-      )
-    ) {
-      throw new Error(
-        'Resolve this file in its owning session before editing it from another session.',
-      );
-    }
-    if (prior && (prior.after !== previous || prior.state === 'conflict')) {
-      prior.state = 'conflict';
-      await this.persist(this.list());
-      throw new Error('File has newer changes; resolve its pending review first.');
-    }
-    if (prior?.hunkIntent)
-      throw new Error('Recover the interrupted hunk operation before editing.');
-    return prior;
   }
 
   private async recoveredState(change: Change): Promise<Change['state'] | null> {
