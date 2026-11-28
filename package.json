@@ -145,6 +145,10 @@
       {
         "command": "omp.cleanupStorage",
         "title": "Linewise: Clean Orphaned Storage"
+      },
+      {
+        "command": "omp.preparePr",
+        "title": "Linewise: Prepare Pull Request"
       }
     ],
     "menus": {
@@ -225,6 +229,17 @@
           "type": "boolean",
           "default": true,
           "description": "Offer the active editor as optional context beside the composer. File contents are captured only after an explicit click."
+        },
+        "omp.shell.nodeRuntime": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "host",
+            "system"
+          ],
+          "default": "auto",
+          "scope": "machine",
+          "markdownDescription": "Node runtime for agent-owned shell commands. `host` uses the Node runtime bundled with VS Code; `system` uses the inherited `node`; `auto` uses the host runtime when `.nvmrc`, `.node-version`, or `package.json` declares a supported newer major. This never changes the user's integrated terminal."
         },
         "omp.browser.executablePath": {
           "type": "string",

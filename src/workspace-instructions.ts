@@ -1,6 +1,7 @@
 import { realpath, rm, stat, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
+import { AGENT_INSTRUCTIONS } from './agent-instructions.js';
 
 export function instructionArguments(instructions?: string): string[] {
   return [
@@ -22,6 +23,7 @@ export async function workspaceInstructions(
   read: (target: string) => Promise<string | null>,
 ): Promise<string> {
   const canonical = await realpath(root);
+  let workspace = '';
   for (const name of ['.omp/AGENTS.md', '.github/copilot-instructions.md', 'AGENTS.md']) {
     const target = path.join(canonical, name);
     try {
@@ -34,12 +36,13 @@ export async function workspaceInstructions(
       if (text === null) continue;
       if (Buffer.byteLength(text, 'utf8') > 65536)
         throw new Error('Workspace instruction buffers must not exceed 64 KiB.');
-      return `Workspace instructions (${name}); file references are literal, not automatic imports.\n\n${text}`;
+      workspace = `Workspace instructions (${name}); file references are literal, not automatic imports.\n\n${text}`;
+      break;
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
     }
   }
-  return '';
+  return [AGENT_INSTRUCTIONS, workspace].filter(Boolean).join('\n\n');
 }
 
 export async function withInstructionSnapshot<Result>(

@@ -29,7 +29,7 @@ export class PtyTerminal implements ManagedTerminal {
   ) {
     this.child = spawn(command.command, command.args, {
       cwd: command.cwd,
-      env: environment(command.env),
+      env: environment(command.env, command.cwd),
       name: 'xterm-256color',
       cols: 80,
       rows: 24,

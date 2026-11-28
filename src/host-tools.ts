@@ -19,6 +19,8 @@ import { checkedPath, checkedReadPath, hasShebang } from './file-policy.js';
 import { commandDecision } from './terminal-policy.js';
 import { CommandPermissions, permissionSetting } from './host-permissions.js';
 import { executeShell } from './shell.js';
+import type { NodeRuntimeMode } from './host-runtime.js';
+import { setNodeRuntimeMode } from './runtime-mode.js';
 import { createTerminalManager, pickOwnedTerminal } from './host-terminals.js';
 import { inspectEditor } from './host-inspect.js';
 import { renameWorkspace } from './host-rename.js';
@@ -75,6 +77,7 @@ export class HostTools {
     private readonly requestQuestions: RequestQuestions = askQuestions,
   ) {}
   begin(scope: ToolScope): void {
+    setNodeRuntimeMode(this.nodeRuntime());
     if (this.scope || this.closing || this.failed)
       throw new Error('Previous tool scope has not closed safely.');
     const abort = new AbortController();
@@ -188,6 +191,11 @@ export class HostTools {
       () => this.assertCurrent(scope),
       (terminal) => scope.observeTerminal?.(terminal),
     ));
+  }
+
+  private nodeRuntime(): NodeRuntimeMode {
+    const value = vscode.workspace.getConfiguration('omp').get<string>('shell.nodeRuntime');
+    return value === 'host' || value === 'system' ? value : 'auto';
   }
 
   async pickTerminal(onCancel?: (sessionId: string) => void): Promise<void> {

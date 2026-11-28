@@ -21,10 +21,12 @@ test('workspace instructions use bounded canonical sources and private immutable
   const root = path.join(directory, 'root');
   await mkdir(root);
   const read = (target: string) => readFile(target, 'utf8');
-  assert.equal(await workspaceInstructions(root, read), '');
+  assert.match(await workspaceInstructions(root, read), /Linewise agent guide/);
+  assert.match(await workspaceInstructions(root, read), /read tool rejects/);
   assert.deepEqual(instructionArguments(), ['--no-context-files', '--no-rules', '--no-skills']);
   await writeFile(path.join(root, 'AGENTS.md'), 'ROOT @../outside.md');
   const initial = await workspaceInstructions(root, read);
+  assert.match(initial, /Linewise agent guide[\s\S]*ROOT/);
   await mkdir(path.join(root, '.github'));
   await writeFile(path.join(root, '.github/copilot-instructions.md'), 'COPILOT');
   assert.match(await workspaceInstructions(root, read), /COPILOT/);
@@ -32,7 +34,7 @@ test('workspace instructions use bounded canonical sources and private immutable
   const native = path.join(root, '.omp/AGENTS.md');
   await writeFile(native, 'NATIVE');
   assert.match(await workspaceInstructions(root, read), /NATIVE/);
-  assert.equal(await workspaceInstructions(root, async () => null), '');
+  assert.match(await workspaceInstructions(root, async () => null), /Linewise agent guide/);
   let capture = '';
   await withInstructionSnapshot(directory, initial, async (file) => {
     capture = file;

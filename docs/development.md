@@ -15,6 +15,8 @@ npm run build
 
 `npm run check` performs formatting, lint, strict types, quality-tool self-tests, fresh deterministic coverage, complexity budgets, and architecture checks. It does not require credentials or paid inference. See [QUALITY.md](../QUALITY.md).
 
+Agent-owned command runtime, review recovery, and PR preparation are described in [Agent workflow](agent-workflow.md).
+
 Press F5 to open a development workbench. Open a disposable fixture folder and run **Linewise: Open Chat**. Keep development user-data/extensions/workspace directories separate from your everyday profile. Do not import real logins or private settings into fixtures.
 
 ## Updating The OMP Pin

@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { preparePullRequest } from './pr-prepare.js';
 import type { Attachment, SavedSession, StateStore } from './state.js';
 
 interface Application {
@@ -44,6 +45,7 @@ export function registerHostCommands(
       application.perform(() => application.cancel()),
     ),
     vscode.commands.registerCommand('omp.showOutput', () => output.show()),
+    vscode.commands.registerCommand('omp.preparePr', () => preparePullRequest(output)),
     vscode.commands.registerCommand('omp.closeBrowser', () =>
       application.perform(() => application.closeBrowser()),
     ),

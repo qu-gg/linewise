@@ -123,7 +123,7 @@ Open the permission menu beside Memory to choose **Command Rules**, **Ask Every 
 
 Follow streamed replies with collapsible activity, thinking, and tool records, separate final answers, and the agent's structured Todos. Model/thinking controls, a new-chat OpenRouter route picker, and provider-reported context usage stay close to the composer; Linewise does not invent reasoning or billing figures.
 
-Keep per-session drafts and queue follow-up prompts while work is running. Queued prompts run in order after cleanup, pause on failure, and clear on Stop or ownership changes; they are not in-flight steering or Autopilot. Local memory, owned terminal/browser controls, and approved editor/task integrations round out the workflow. See [usage](docs/usage.md) for the details and limits.
+Keep per-session drafts and queue follow-up prompts while work is running. Queued prompts run in order after cleanup, pause on failure, and clear on Stop or ownership changes; they are not in-flight steering or Autopilot. Local memory, owned terminal/browser controls, and approved editor/task integrations round out the workflow. See [usage](docs/usage.md) and [agent workflow](docs/agent-workflow.md) for the details and limits.
 
 ## Keep What You Want
 

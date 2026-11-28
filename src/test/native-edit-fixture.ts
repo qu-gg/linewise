@@ -12,6 +12,8 @@ interface Plan {
 
 export const recordedSnapshots: Array<{ target: string; seenLines?: number[] | null }> = [];
 
+export const invalidatedSnapshots: string[] = [];
+
 export class EditStore {
   private readonly contents = new Map<string, string>();
   headText(target: string): string | undefined {
@@ -34,6 +36,11 @@ export class EditStore {
   }
   seenLines(target: string, _tag?: string): number[] | null {
     return this.seen.get(target) ?? null;
+  }
+  invalidate(target: string): void {
+    invalidatedSnapshots.push(target);
+    this.contents.delete(target);
+    this.seen.delete(target);
   }
   recordSeenLinesFromBody(): void {}
 }

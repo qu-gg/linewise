@@ -17,6 +17,9 @@ import { reserveCommands } from './terminal-reservation.js';
 import type { TerminalCommand, ReservedTerminals } from './terminal-reservation.js';
 export type { TerminalCommand, ReservedTerminals } from './terminal-reservation.js';
 
+import { agentRuntimeEnvironment } from './host-runtime.js';
+import { nodeRuntimeMode } from './runtime-mode.js';
+
 const text = z
   .string()
   .max(32_768)
@@ -102,11 +105,14 @@ function abortable<Result>(task: Promise<Result>, signal: AbortSignal): Promise<
   });
 }
 
-export function environment(overrides: Record<string, string>): NodeJS.ProcessEnv {
+export function environment(overrides: Record<string, string>, cwd: string): NodeJS.ProcessEnv {
   const inherited = Object.entries(process.env).filter(([name]) =>
     /^(PATH|HOME|USER|LOGNAME|SHELL|LANG|LC_[A-Z_]+|TERM|TMPDIR)$/.test(name),
   );
-  return { ...Object.fromEntries(inherited), ...overrides };
+  const runtime = Object.fromEntries(
+    agentRuntimeEnvironment(nodeRuntimeMode(), cwd).map(({ name, value }) => [name, value]),
+  );
+  return { ...Object.fromEntries(inherited), ...runtime, ...overrides };
 }
 
 export class RunningTerminal {
@@ -129,7 +135,7 @@ export class RunningTerminal {
   ) {
     this.child = spawn(command.command, command.args, {
       cwd: command.cwd,
-      env: environment(command.env),
+      env: environment(command.env, command.cwd),
       detached: true,
       shell: false,
       stdio: ['ignore', 'pipe', 'pipe'],

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { TestContext } from 'node:test';
 import { register } from 'node:module';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { randomUUID } from 'node:crypto';
@@ -340,5 +340,15 @@ test('managed jobs are terminated when the owning prompt ends and cannot cross p
   await current.tools.run(current.scope, async () => {
     await assert.rejects(current.execute({ action: 'stop', jobId }), /released/);
     await assert.rejects(current.execute({ action: 'wait', jobId }), /released/);
+  });
+});
+
+test('managed shell resolves node through the host runtime shim', async (context) => {
+  const current = await setup(context);
+  await writeFile(path.join(current.cwd, '.nvmrc'), '24\n');
+  await current.tools.run(current.scope, async () => {
+    const result = await current.execute({ command: 'node -p process.versions.node' });
+    assert.equal(result.isError, false);
+    assert.equal(result.output.trim(), process.versions.node);
   });
 });
