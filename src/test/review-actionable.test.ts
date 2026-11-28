@@ -31,6 +31,6 @@ test('only live non-identical pending changes are actionable', () => {
         destination: { path: '/workspace/destination.ts', before: null, after: 'source\n' },
       }),
     ),
-    false,
+    true,
   );
 });

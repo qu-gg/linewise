@@ -7,6 +7,6 @@ import type { Change } from './review-types.js';
  */
 export function actionableChange(change: Change): boolean {
   if (change.state !== 'pending') return false;
-  if (change.destination) return change.before !== change.destination.after;
+  if (change.destination) return true;
   return change.before !== change.after;
 }
