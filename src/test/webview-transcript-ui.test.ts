@@ -234,6 +234,30 @@ test('activity shows only unambiguous per-turn change totals', () => {
   assert.notEqual(element('[data-turn-id="turn"]'), before);
 });
 
+test('per-turn stats sum exact operation totals and ignore whole-change fallbacks', () => {
+  const current = turn(tools());
+  update({ turns: [current] });
+  update({
+    turns: [current],
+    changes: [
+      {
+        id: 'multi',
+        name: 'multi.ts',
+        state: 'pending',
+        added: 99,
+        removed: 99,
+        operations: [
+          { turnId: 'turn', added: 2, removed: 1 },
+          { turnId: 'turn', added: 3, removed: 2 },
+          { turnId: 'other', added: 8, removed: 8 },
+        ],
+      },
+    ],
+  });
+  assert.match(element('.activity > summary').textContent!, /\+5 -3/);
+  assert.doesNotMatch(element('.activity > summary').textContent!, /\+99/);
+});
+
 test('activity and thought disclosures stay collapsed across streamed updates', async () => {
   const thought = { id: 'disclosure-thought', kind: 'thought', text: 'Streaming thought' };
   update({ turns: [{ ...turn([thought]), status: 'running' }] });

@@ -65,16 +65,47 @@ function activityOpen(expanded, current) {
   return expanded[current.id] ?? current.status === 'running';
 }
 
+function operationMatches(operation, turnId) {
+  return (
+    operation.turnId === turnId &&
+    Number.isFinite(operation.added) &&
+    Number.isFinite(operation.removed)
+  );
+}
+
+function operationTotals(change, turnId) {
+  let added = 0;
+  let removed = 0;
+  let matched = false;
+  for (const operation of change.operations ?? []) {
+    if (!operationMatches(operation, turnId)) continue;
+    added += operation.added;
+    removed += operation.removed;
+    matched = true;
+  }
+  return matched ? { added, removed } : undefined;
+}
+
+function singleOperationFallback(change, turnId) {
+  const operations = change.operations ?? [];
+  if (operations.length !== 1 || operations[0].turnId !== turnId) return undefined;
+  if (!Number.isFinite(change.added) || !Number.isFinite(change.removed)) return undefined;
+  return { added: change.added, removed: change.removed };
+}
+
+function operationStats(change, turnId) {
+  return operationTotals(change, turnId) ?? singleOperationFallback(change, turnId);
+}
+
 function activityDiff(current, changes) {
   let added = 0;
   let removed = 0;
   let files = 0;
   for (const change of changes ?? []) {
-    const operations = change.operations ?? [];
-    if (operations.length !== 1 || operations[0].turnId !== current.id) continue;
-    if (!Number.isFinite(change.added) || !Number.isFinite(change.removed)) continue;
-    added += change.added;
-    removed += change.removed;
+    const stats = operationStats(change, current.id);
+    if (!stats) continue;
+    added += stats.added;
+    removed += stats.removed;
     files += 1;
   }
   if (files === 0) return { suffix: '', html: '' };

@@ -119,6 +119,8 @@ const change = z.object({
       z.object({
         kind: z.enum(['create', 'edit', 'delete', 'rename']),
         at: z.number(),
+        added: z.number().int().nonnegative().optional(),
+        removed: z.number().int().nonnegative().optional(),
         turnId: z.string().optional(),
         toolCallId: z.string().optional(),
         tool: z.enum(['write', 'edit', 'rename', 'code_action', 'notebook_edit']).optional(),
